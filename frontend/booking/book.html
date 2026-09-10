@@ -36,6 +36,27 @@
           Return location
           <select class="form-select" name="dropoff"></select>
         </label>
+        <label class="field">
+          Pickup time
+          <input class="form-control" name="pickupTime" type="time" value="09:00" required>
+        </label>
+        <label class="field">
+          Return time
+          <input class="form-control" name="returnTime" type="time" value="09:00" required>
+        </label>
+        <label class="field">
+          Number of passengers
+          <input class="form-control" name="numberOfPassengers" type="number" min="1" max="15" value="1" required>
+        </label>
+        <label class="field">
+          Fuel before rent
+          <select class="form-select" name="fuelBeforeRent">
+            <option>Full</option>
+            <option>3/4</option>
+            <option>1/2</option>
+            <option>1/4</option>
+          </select>
+        </label>
       </div>
 
       <p class="eyebrow" style="margin-top:1rem">How will you drive?</p>
@@ -55,6 +76,11 @@
           </span>
         </label>
       </div>
+
+      <label class="field" id="driver-select-wrap" hidden>
+        Professional driver
+        <select class="form-select" name="driverDetailsId"></select>
+      </label>
 
       <div id="self-drive-fields" class="driver-fields">
         <p class="eyebrow">Driver’s license</p>
@@ -126,12 +152,12 @@
   <div id="toast-host"></div>
   <script src="../shared/js/security.js"></script>
   <script src="../shared/js/store.js"></script>
-  <script src="../shared/js/validation.js?v=3"></script>
-  <script src="../shared/js/routes.js"></script>
-  <script src="../shared/js/domain.js?v=3"></script>
-  <script src="../auth/auth.js"></script>
-  <script src="../shared/js/ui.js"></script>
-  <script src="./booking.js?v=4"></script>
+  <script src="../shared/js/validation.js?v=11"></script>
+  <script src="../shared/js/routes.js?v=11"></script>
+  <script src="../shared/js/domain.js?v=11"></script>
+  <script src="../auth/auth.js?v=11"></script>
+  <script src="../shared/js/ui.js?v=11"></script>
+  <script src="./booking.js?v=11"></script>
   <script src="../shared/js/app.js"></script>
 </body>
 </html>

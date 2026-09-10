@@ -33,10 +33,67 @@
     }, 3200);
   }
 
-  function logoSvg() {
+  function askYesNo(message, options) {
+    options = options || {};
+    var title = options.title || "Confirm";
+    var yesLabel = options.yes || "Yes";
+    var noLabel = options.no || "No";
+
+    return new Promise(function (resolve) {
+      var existing = document.getElementById("confirm-overlay");
+      if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+
+      var overlay = document.createElement("div");
+      overlay.id = "confirm-overlay";
+      overlay.className = "confirm-overlay";
+      overlay.innerHTML =
+        '<div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">' +
+        '<p class="eyebrow" id="confirm-title">' +
+        NS.security.escapeHtml(title) +
+        "</p>" +
+        "<h3>" +
+        NS.security.escapeHtml(message) +
+        "</h3>" +
+        '<div class="confirm-actions">' +
+        '<button type="button" class="btn btn-ghost" data-answer="no">' +
+        NS.security.escapeHtml(noLabel) +
+        "</button>" +
+        '<button type="button" class="btn btn-gold" data-answer="yes">' +
+        NS.security.escapeHtml(yesLabel) +
+        "</button>" +
+        "</div></div>";
+
+      function close(answer) {
+        document.removeEventListener("keydown", onKey);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(!!answer);
+      }
+
+      function onKey(e) {
+        if (e.key === "Escape") close(false);
+        if (e.key === "Enter") close(true);
+      }
+
+      overlay.addEventListener("click", function (e) {
+        if (e.target === overlay) close(false);
+        var answer = e.target.getAttribute("data-answer");
+        if (answer === "yes") close(true);
+        if (answer === "no") close(false);
+      });
+
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(overlay);
+      var yesBtn = overlay.querySelector('[data-answer="yes"]');
+      if (yesBtn) yesBtn.focus();
+    });
+  }
+
+  function logoSvg(fill) {
     return (
       '<svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">' +
-      '<rect width="40" height="40" rx="10" fill="#7842F5"/>' +
+      '<rect width="40" height="40" rx="10" fill="' +
+      (fill || "#7842F5") +
+      '"/>' +
       '<text x="20" y="26" text-anchor="middle" fill="#fff" font-size="18" font-family="Plus Jakarta Sans, Segoe UI, sans-serif" font-weight="800">i</text>' +
       "</svg>"
     );
@@ -48,8 +105,25 @@
     return '<a class="nav-link' + cls + '" href="' + href + '">' + label + "</a>";
   }
 
-  function mountChrome() {
-    var me = NS.auth.current();
+  function bindNavChrome() {
+    var toggle = document.getElementById("nav-toggle");
+    var siteNav = document.getElementById("site-nav");
+    if (toggle && siteNav) {
+      toggle.addEventListener("click", function () {
+        siteNav.classList.toggle("open");
+      });
+    }
+    var logoutBtn = document.getElementById("logout-btn");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", function () {
+        NS.auth.logout();
+        location.href = NS.routes.href("home");
+      });
+    }
+  }
+
+  function mountCustomerChrome(me) {
+    document.body.classList.remove("desk-mode");
     var nav = document.getElementById("app-nav");
     if (nav) {
       var account = me
@@ -61,9 +135,6 @@
           "<span>" +
           NS.security.escapeHtml(me.firstName) +
           "</span></a>" +
-          (NS.auth.hasRole("staff")
-            ? '<a class="btn btn-dark" href="' + NS.routes.href("adminHome") + '">Desk</a>'
-            : "") +
           '<button class="btn btn-gold" id="logout-btn" type="button">Sign out</button>' +
           "</div>"
         : '<div class="nav-user">' +
@@ -80,31 +151,16 @@
         '<a class="brand" href="' +
         NS.routes.href("home") +
         '">' +
-        logoSvg() +
+        logoSvg("#7842F5") +
         "<span><strong>iDrive</strong> CDO<span class=\"brand-sub\">Car Rental</span></span></a>" +
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
         '<nav class="site-nav" id="site-nav">' +
         navLink(NS.routes.href("home"), "Home", "home") +
-        navLink(NS.routes.href("fleet"), "Select Vehicle", "fleet") +
-        navLink(NS.routes.href("book"), "Make Booking", "book") +
+        navLink(NS.routes.href("fleet"), "Available Cars", "fleet") +
         navLink(NS.routes.href("myBookings"), "View Booking Status", "bookings") +
         account +
         "</nav></header>";
-
-      var toggle = document.getElementById("nav-toggle");
-      var siteNav = document.getElementById("site-nav");
-      if (toggle && siteNav) {
-        toggle.addEventListener("click", function () {
-          siteNav.classList.toggle("open");
-        });
-      }
-      var logoutBtn = document.getElementById("logout-btn");
-      if (logoutBtn) {
-        logoutBtn.addEventListener("click", function () {
-          NS.auth.logout();
-          location.href = NS.routes.href("home");
-        });
-      }
+      bindNavChrome();
     }
 
     var footer = document.getElementById("app-footer");
@@ -113,26 +169,131 @@
         '<footer class="site-footer">' +
         '<div class="footer-grid">' +
         '<div><div class="brand">' +
-        logoSvg() +
+        logoSvg("#7842F5") +
         "<span><strong>iDrive</strong> CDO</span></div>" +
         "<p>Self-drive and chauffeur car hire in Cagayan de Oro. Airport, downtown, and city-wide delivery.</p></div>" +
         "<div><h4>Visit</h4><p>2F Limketkai Drive<br>Cagayan de Oro City 9000<br>Misamis Oriental</p></div>" +
         "<div><h4>Hours</h4><p>Desk: 7:00 AM – 9:00 PM daily<br>Airport night desk on request</p></div>" +
         "<div><h4>Contact</h4><p>088 856 2100<br>hello@idrivecdo.ph</p></div>" +
         "</div>" +
-        '<p class="fineprint">Frontend-only demo. Payments are simulated and never sent to a server. Card numbers stay in this browser session.</p>' +
+        '<p class="fineprint">Frontend-only demo. Payments are simulated and never sent to a server.</p>' +
         "</footer>";
     }
   }
 
-  function statusBadge(status) {
-    return '<span class="badge badge-' + NS.security.escapeHtml(status) + '">' + NS.security.escapeHtml(status) + "</span>";
+  function mountDeskChrome(me) {
+    document.body.classList.add("desk-mode");
+    var unread = 0;
+    try {
+      unread = NS.domain.staffUnreadCount ? NS.domain.staffUnreadCount() : 0;
+    } catch (e) {
+      unread = 0;
+    }
+    var inboxLabel = "Inbox" + (unread ? " (" + unread + ")" : "");
+    var roleLabel = me.role === "admin" ? "Admin" : "Rental-Incharge";
+    var nav = document.getElementById("app-nav");
+    if (nav) {
+      nav.innerHTML =
+        '<header class="desk-header">' +
+        '<a class="brand desk-brand" href="' +
+        NS.routes.href("adminHome") +
+        '">' +
+        logoSvg("#7842F5") +
+        "<span><strong>iDrive</strong> Desk<span class=\"brand-sub\">Operations</span></span></a>" +
+        '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
+        '<nav class="desk-nav" id="site-nav">' +
+        navLink(NS.routes.href("adminHome"), "Overview", "adminHome") +
+        navLink(NS.routes.href("adminInbox"), inboxLabel, "adminInbox") +
+        navLink(NS.routes.href("adminBookings"), "Bookings", "adminBookings") +
+        (NS.auth.hasRole("admin")
+          ? navLink(NS.routes.href("adminVehicles"), "Fleet", "adminVehicles") +
+            navLink(NS.routes.href("adminCustomers"), "Customers", "adminCustomers")
+          : "") +
+        navLink(NS.routes.href("adminReports"), "Reports", "adminReports") +
+        '<div class="nav-user">' +
+        '<span class="role-pill">' +
+        roleLabel +
+        "</span>" +
+        '<a class="btn btn-ghost" href="' +
+        NS.routes.href("home") +
+        '">Guest site</a>' +
+        '<button class="btn btn-gold" id="logout-btn" type="button">Sign out</button>' +
+        "</div></nav></header>";
+      bindNavChrome();
+    }
+
+    var footer = document.getElementById("app-footer");
+    if (footer) {
+      footer.innerHTML =
+        '<footer class="desk-footer">' +
+        "<p><strong>iDrive Desk</strong> · Admin / Rental-Incharge console for bookings, fleet, drivers, and payments.</p>" +
+        "<p>Signed in as " +
+        NS.security.escapeHtml(me.firstName + " " + me.lastName) +
+        " · " +
+        NS.security.escapeHtml(me.email) +
+        "</p></footer>";
+    }
   }
 
-  function vehicleCard(v) {
-    var link = NS.routes.href("car", "?id=" + encodeURIComponent(v.id));
+  function mountChrome() {
+    var me = NS.auth.current();
+    if (me && NS.auth.hasRole("staff")) mountDeskChrome(me);
+    else mountCustomerChrome(me);
+  }
+
+  function statusBadge(status) {
+    var labels = { return_requested: "return requested" };
+    var label = labels[status] || status;
     return (
-      '<article class="vehicle-card">' +
+      '<span class="badge badge-' +
+      NS.security.escapeHtml(status) +
+      '">' +
+      NS.security.escapeHtml(label) +
+      "</span>"
+    );
+  }
+
+  function starsDisplay(average, count, options) {
+    options = options || {};
+    var avg = Number(average) || 0;
+    var n = Number(count) || 0;
+    if (!n && !options.force) return '<span class="rating-summary muted">No ratings yet</span>';
+    var full = Math.round(avg);
+    var glyphs = "";
+    for (var i = 1; i <= 5; i++) {
+      glyphs += '<span class="star' + (i <= full ? " on" : "") + '" aria-hidden="true">★</span>';
+    }
+    if (options.compact) {
+      return '<span class="rating-summary" title="' + avg.toFixed(1) + ' of 5">' + glyphs + "</span>";
+    }
+    return (
+      '<span class="rating-summary" title="' +
+      avg.toFixed(1) +
+      ' of 5">' +
+      glyphs +
+      " <strong>" +
+      avg.toFixed(1) +
+      "</strong> · " +
+      n +
+      (n === 1 ? " rating" : " ratings") +
+      "</span>"
+    );
+  }
+
+  function vehicleCard(v, options) {
+    options = options || {};
+    var query = options.query || "";
+    var link = NS.routes.href("car", "?id=" + encodeURIComponent(v.id) + (query ? "&" + query.replace(/^\?/, "") : ""));
+    var bookLink = NS.routes.href(
+      "book",
+      "?vehicle=" + encodeURIComponent(v.id) + (query ? "&" + query.replace(/^\?/, "") : "")
+    );
+    var free = options.dateAvailable !== false && v.status === "available";
+    var rating = NS.domain.vehicleRatingSummary ? NS.domain.vehicleRatingSummary(v.id) : { average: 0, count: 0 };
+    return (
+      '<article class="vehicle-card' +
+      (free ? " is-available" : " is-busy") +
+      '">' +
       '<a class="vehicle-photo" href="' +
       link +
       '">' +
@@ -141,6 +302,9 @@
       '" alt="' +
       NS.security.escapeHtml(v.name) +
       '">' +
+      (free
+        ? '<span class="avail-chip">Available</span>'
+        : '<span class="avail-chip avail-busy">Unavailable</span>') +
       "</a>" +
       '<div class="vehicle-body">' +
       '<p class="eyebrow">' +
@@ -151,6 +315,7 @@
       "<h3>" +
       NS.security.escapeHtml(v.name) +
       "</h3>" +
+      (rating.count ? '<p class="card-rating">' + starsDisplay(rating.average, rating.count) + "</p>" : "") +
       '<ul class="mini-specs"><li>' +
       v.seats +
       " seats</li><li>" +
@@ -161,9 +326,10 @@
       '<div class="vehicle-cta"><strong>' +
       peso(v.dailyRate) +
       "<span>/day</span></strong>" +
-      '<a class="btn btn-gold" href="' +
-      link +
-      '">View</a></div></div></article>'
+      (free
+        ? '<a class="btn btn-gold" href="' + bookLink + '">Book</a>'
+        : '<a class="btn btn-ghost" href="' + link + '">View</a>') +
+      "</div></div></article>"
     );
   }
 
@@ -270,18 +436,132 @@
     reader.readAsDataURL(file);
   }
 
+  function downloadReceipt(booking) {
+    if (!booking) throw new Error("Booking not found.");
+    var vehicle = NS.domain.getVehicle(booking.vehicleId);
+    var me = NS.auth.current();
+    var info = booking.driverInfo || {};
+    var payment = booking.payment || null;
+    var driveMode = booking.driveMode === "chauffeur" ? "Chauffeur" : "Self-drive";
+    var paymentLine = "Unpaid";
+    if (payment) {
+      if (payment.method === "cashless") {
+        paymentLine = "Cashless · " + payment.brand + " ·••" + payment.last4 + " · " + payment.authCode;
+      } else if (payment.method === "cash") {
+        paymentLine = "Cash · " + payment.authCode;
+      } else {
+        paymentLine = (payment.brand || "Paid") + " · " + (payment.authCode || "");
+      }
+    }
+    var driverBlock =
+      booking.driveMode === "chauffeur"
+        ? "<tr><th>Valid ID</th><td>" +
+          NS.security.escapeHtml((info.idType || "") + " · " + (info.idNumber || "")) +
+          "</td></tr>"
+        : "<tr><th>License</th><td>" +
+          NS.security.escapeHtml((info.licenseName || "") + " · " + (info.licenseNo || "")) +
+          "</td></tr>" +
+          "<tr><th>License expiry</th><td>" +
+          NS.security.escapeHtml(info.licenseExpiry || "") +
+          "</td></tr>" +
+          "<tr><th>Emergency</th><td>" +
+          NS.security.escapeHtml(info.emergencyPhone || "") +
+          "</td></tr>";
+
+    var html =
+      "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>" +
+      "<title>Receipt " +
+      NS.security.escapeHtml(booking.ref) +
+      "</title>" +
+      "<style>" +
+      "body{font-family:Segoe UI,Arial,sans-serif;max-width:720px;margin:32px auto;color:#111827;padding:0 16px}" +
+      "h1{margin:0 0 4px;font-size:28px}h2{margin:24px 0 8px;font-size:18px}" +
+      ".muted{color:#6b7280}.total{font-size:28px;font-weight:800;color:#6430e0;margin:12px 0}" +
+      "table{width:100%;border-collapse:collapse;margin-top:12px}" +
+      "th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top}" +
+      "th{width:34%;color:#6b7280;font-weight:600}.brand{font-weight:800;color:#7842f5}" +
+      "@media print{body{margin:0}}" +
+      "</style></head><body>" +
+      "<p class='brand'>iDrive CDO</p>" +
+      "<h1>Payment receipt</h1>" +
+      "<p class='muted'>Generated " +
+      NS.security.escapeHtml(new Date().toLocaleString()) +
+      "</p>" +
+      "<p class='total'>" +
+      peso(booking.total) +
+      "</p>" +
+      "<table>" +
+      "<tr><th>Booking ref</th><td>" +
+      NS.security.escapeHtml(booking.ref) +
+      "</td></tr>" +
+      "<tr><th>Customer</th><td>" +
+      NS.security.escapeHtml(me ? me.firstName + " " + me.lastName + " · " + me.email : "") +
+      "</td></tr>" +
+      "<tr><th>Vehicle</th><td>" +
+      NS.security.escapeHtml(vehicle ? vehicle.name : "Vehicle") +
+      "</td></tr>" +
+      "<tr><th>Drive mode</th><td>" +
+      driveMode +
+      "</td></tr>" +
+      driverBlock +
+      "<tr><th>Pickup</th><td>" +
+      NS.security.escapeHtml(booking.pickup) +
+      "</td></tr>" +
+      "<tr><th>Return</th><td>" +
+      NS.security.escapeHtml(booking.dropoff) +
+      "</td></tr>" +
+      "<tr><th>Dates</th><td>" +
+      fmtDate(booking.startDate) +
+      " – " +
+      fmtDate(booking.endDate) +
+      " (" +
+      booking.days +
+      " day(s))</td></tr>" +
+      "<tr><th>Payment</th><td>" +
+      NS.security.escapeHtml(paymentLine) +
+      "</td></tr>" +
+      "<tr><th>Payment status</th><td>" +
+      NS.security.escapeHtml(booking.paymentStatus || "") +
+      "</td></tr>" +
+      "<tr><th>Booking status</th><td>" +
+      NS.security.escapeHtml(booking.status || "") +
+      "</td></tr>" +
+      (booking.notes
+        ? "<tr><th>Notes</th><td>" + NS.security.escapeHtml(booking.notes) + "</td></tr>"
+        : "") +
+      "</table>" +
+      "<p class='muted'>iDrive CDO · Limketkai Drive, Cagayan de Oro · Frontend demo receipt</p>" +
+      "</body></html>";
+
+    var blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "iDrive-receipt-" + String(booking.ref || booking.id).replace(/[^\w-]+/g, "_") + ".html";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
+    return true;
+  }
+
   NS.ui = {
     peso: peso,
     fmtDate: fmtDate,
     qs: qs,
     toast: toast,
+    askYesNo: askYesNo,
     mountChrome: mountChrome,
     statusBadge: statusBadge,
+    starsDisplay: starsDisplay,
     vehicleCard: vehicleCard,
     bindCsrf: bindCsrf,
     fieldError: fieldError,
     clearErrors: clearErrors,
     avatarHtml: avatarHtml,
-    readImageAsAvatar: readImageAsAvatar
+    readImageAsAvatar: readImageAsAvatar,
+    downloadReceipt: downloadReceipt
   };
 })(window);

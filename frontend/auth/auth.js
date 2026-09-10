@@ -47,6 +47,8 @@
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone,
+      address: user.address || "",
+      department: user.department || "",
       licenseNo: user.licenseNo,
       licenseExpiry: user.licenseExpiry,
       avatar: user.avatar || "",
@@ -197,13 +199,22 @@
         var licenseExpiry = NS.security.sanitizeText(patch.licenseExpiry, 10);
         if (!firstName || !lastName) throw new Error("Name is required.");
         if (!NS.validation.phMobile(phone)) throw new Error("Invalid mobile number.");
-        if (!NS.validation.license(licenseNo)) throw new Error("Invalid license number.");
-        if (!NS.validation.futureDate(licenseExpiry)) throw new Error("License expiry must be in the future.");
+        if (list[i].role === "customer") {
+          if (!NS.validation.license(licenseNo)) throw new Error("Invalid license number.");
+          if (!NS.validation.futureDate(licenseExpiry)) throw new Error("License expiry must be in the future.");
+          list[i].licenseNo = licenseNo;
+          list[i].licenseExpiry = licenseExpiry;
+        } else {
+          if (licenseNo) list[i].licenseNo = licenseNo;
+          if (licenseExpiry) list[i].licenseExpiry = licenseExpiry;
+        }
         list[i].firstName = firstName;
         list[i].lastName = lastName;
         list[i].phone = phone;
-        list[i].licenseNo = licenseNo;
-        list[i].licenseExpiry = licenseExpiry;
+        list[i].address = NS.security.sanitizeText(patch.address || "", 120);
+        if (list[i].role === "staff" || list[i].role === "admin") {
+          list[i].department = NS.security.sanitizeText(patch.department || list[i].department || "", 60);
+        }
         if (Object.prototype.hasOwnProperty.call(patch, "avatar")) {
           list[i].avatar = normalizeAvatar(patch.avatar);
         }

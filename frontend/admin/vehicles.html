@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="../shared/css/styles.css">
+  <link rel="stylesheet" href="../shared/css/styles.css?v=10">
 </head>
 <body data-page="adminVehicles" data-auth="staff" data-base="../">
   <div id="app-nav"></div>
@@ -25,7 +25,9 @@
           <div class="col-md-3"><label class="field">Model <input class="form-control" name="model" required></label></div>
         </div>
         <div class="row g-2">
-          <div class="col-md-2"><label class="field">Year <input class="form-control" name="year" type="number"></label></div>
+          <div class="col-md-2"><label class="field">Year model <input class="form-control" name="year" type="number"></label></div>
+          <div class="col-md-2"><label class="field">Year purchased <input class="form-control" name="yearPurchased" type="number"></label></div>
+          <div class="col-md-2"><label class="field">Mileage <input class="form-control" name="mileage" type="number"></label></div>
           <div class="col-md-2"><label class="field">Type
             <select class="form-select" name="type"><option>Sedan</option><option>SUV</option><option>Van</option><option>Pickup</option></select>
           </label></div>
@@ -35,20 +37,20 @@
           <div class="col-md-2"><label class="field">Fuel
             <select class="form-select" name="fuel"><option>Gasoline</option><option>Diesel</option></select>
           </label></div>
-          <div class="col-md-2"><label class="field">Seats <input class="form-control" name="seats" type="number"></label></div>
-          <div class="col-md-2"><label class="field">Bags <input class="form-control" name="luggage" type="number"></label></div>
         </div>
         <div class="row g-2">
-          <div class="col-md-3"><label class="field">Daily rate <input class="form-control" name="dailyRate" type="number" required></label></div>
-          <div class="col-md-3"><label class="field">Plate <input class="form-control" name="plate" required></label></div>
-          <div class="col-md-3"><label class="field">Status
+          <div class="col-md-2"><label class="field">Capacity / seats <input class="form-control" name="seats" type="number"></label></div>
+          <div class="col-md-2"><label class="field">Bags <input class="form-control" name="luggage" type="number"></label></div>
+          <div class="col-md-2"><label class="field">Daily rate <input class="form-control" name="dailyRate" type="number" required></label></div>
+          <div class="col-md-2"><label class="field">Plate <input class="form-control" name="plate" required></label></div>
+          <div class="col-md-2"><label class="field">Status
             <select class="form-select" name="status"><option value="available">available</option><option value="maintenance">maintenance</option></select>
           </label></div>
-          <div class="col-md-3"><label class="field">Image URL <input class="form-control" name="image"></label></div>
+          <div class="col-md-2"><label class="field">Image URL <input class="form-control" name="image"></label></div>
         </div>
         <label class="field">Features (comma separated) <input class="form-control" name="features"></label>
         <label class="field">Description <textarea class="form-control" name="description"></textarea></label>
-        <button class="btn btn-gold" type="submit">Save vehicle</button>
+        <button class="btn btn-gold" type="submit">Save edit</button>
       </form>
       <table class="table">
         <thead><tr><th>Name</th><th>Plate</th><th>Rate</th><th>Status</th><th></th></tr></thead>

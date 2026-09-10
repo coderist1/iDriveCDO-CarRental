@@ -24,7 +24,12 @@
     adminVehicles: "admin/vehicles.html",
     adminBookings: "admin/bookings.html",
     adminCustomers: "admin/customers.html",
-    adminReports: "admin/reports.html"
+    adminReports: "admin/reports.html",
+    adminSecurityLog: "admin/security-log.html",
+    adminDrivers: "admin/drivers.html",
+    adminFleetOps: "admin/fleet-ops.html",
+    adminPayments: "admin/payments.html",
+    adminInbox: "admin/inbox.html"
   };
 
   function base() {

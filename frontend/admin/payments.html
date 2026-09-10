@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payments — iDrive CDO</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/css/styles.css?v=11">
+</head>
+<body data-page="adminPayments" data-auth="staff" data-base="../">
+  <div id="app-nav"></div>
+  <div class="admin-shell">
+    <div id="admin-side"></div>
+    <section>
+      <p class="eyebrow">payment</p>
+      <h1>Payments</h1>
+      <p>Payment records linked to bookings (Admin and Rental-Incharge).</p>
+      <div id="payments-list" class="panel"></div>
+    </section>
+  </div>
+  <div id="app-footer"></div>
+  <div id="toast-host"></div>
+  <script src="../shared/js/security.js"></script>
+  <script src="../shared/js/store.js"></script>
+  <script src="../shared/js/validation.js"></script>
+  <script src="../shared/js/routes.js?v=11"></script>
+  <script src="../shared/js/domain.js?v=11"></script>
+  <script src="../auth/auth.js?v=11"></script>
+  <script src="../shared/js/ui.js?v=11"></script>
+  <script src="./admin.js?v=11"></script>
+  <script src="../shared/js/app.js"></script>
+</body>
+</html>

@@ -127,8 +127,13 @@
       var mode = driveMode();
       var selfFields = document.getElementById("self-drive-fields");
       var chauffeurFields = document.getElementById("chauffeur-fields");
+      var driverWrap = document.getElementById("driver-select-wrap");
       if (selfFields) selfFields.hidden = mode !== "self";
       if (chauffeurFields) chauffeurFields.hidden = mode !== "chauffeur";
+      if (driverWrap) {
+        driverWrap.hidden = mode !== "chauffeur";
+        if (form.driverDetailsId) form.driverDetailsId.required = mode === "chauffeur";
+      }
 
       var driverRow = addonsHost.querySelector('[data-addon="driver"]');
       var driverInput = driverRow ? driverRow.querySelector('input[name="addon"]') : null;
@@ -154,6 +159,22 @@
       chauffeurInputs.forEach(function (name) {
         if (form[name]) form[name].required = mode === "chauffeur";
       });
+    }
+
+    if (form.driverDetailsId) {
+      form.driverDetailsId.innerHTML =
+        '<option value="">Select driver</option>' +
+        (NS.domain.activeDrivers ? NS.domain.activeDrivers() : [])
+          .map(function (d) {
+            return (
+              '<option value="' +
+              d.id +
+              '">' +
+              NS.security.escapeHtml(d.fullName + " · " + d.driverLicense) +
+              "</option>"
+            );
+          })
+          .join("");
     }
 
     function selectedAddons() {
@@ -255,55 +276,63 @@
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       if (busy) return;
-      busy = true;
-      showAlert(form, "", "ok");
-      var btn = form.querySelector('button[type="submit"]');
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = "Creating booking…";
-      }
-      try {
-        if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-        var csrfInput = form.querySelector('input[name="csrf"]');
-        var mode = driveMode();
-        var driverInfo =
-          mode === "chauffeur"
-            ? {
-                idType: form.idType.value,
-                idNumber: form.idNumber.value
-              }
-            : {
-                licenseName: form.licenseName.value,
-                licenseNo: form.licenseNo.value,
-                licenseExpiry: form.licenseExpiry.value,
-                licenseAddress: form.licenseAddress.value,
-                emergencyPhone: form.emergencyPhone.value
-              };
-        var booking = NS.domain.createBooking(
-          {
-            vehicleId: form.vehicleId.value,
-            startDate: form.startDate.value,
-            endDate: form.endDate.value,
-            pickup: form.pickup.value,
-            dropoff: form.dropoff.value,
-            driveMode: mode,
-            driverInfo: driverInfo,
-            addons: selectedAddons(),
-            notes: form.notes.value
-          },
-          csrfInput ? csrfInput.value : ""
-        );
-        showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
-        location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));
-      } catch (err) {
-        busy = false;
+      NS.ui.askYesNo("Save this booking and continue to payment?", { title: "Save edit" }).then(function (ok) {
+        if (!ok) return;
+        busy = true;
+        showAlert(form, "", "ok");
+        var btn = form.querySelector('button[type="submit"]');
         if (btn) {
-          btn.disabled = false;
-          btn.textContent = "Continue to payment";
+          btn.disabled = true;
+          btn.textContent = "Creating booking…";
         }
-        if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-        showAlert(form, err.message || "Could not create booking.", "err");
-      }
+        try {
+          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+          var csrfInput = form.querySelector('input[name="csrf"]');
+          var mode = driveMode();
+          var driverInfo =
+            mode === "chauffeur"
+              ? {
+                  idType: form.idType.value,
+                  idNumber: form.idNumber.value
+                }
+              : {
+                  licenseName: form.licenseName.value,
+                  licenseNo: form.licenseNo.value,
+                  licenseExpiry: form.licenseExpiry.value,
+                  licenseAddress: form.licenseAddress.value,
+                  emergencyPhone: form.emergencyPhone.value
+                };
+          var booking = NS.domain.createBooking(
+            {
+              vehicleId: form.vehicleId.value,
+              startDate: form.startDate.value,
+              endDate: form.endDate.value,
+              pickupTime: form.pickupTime ? form.pickupTime.value : "09:00",
+              returnTime: form.returnTime ? form.returnTime.value : "09:00",
+              numberOfPassengers: form.numberOfPassengers ? form.numberOfPassengers.value : 1,
+              fuelBeforeRent: form.fuelBeforeRent ? form.fuelBeforeRent.value : "Full",
+              pickup: form.pickup.value,
+              dropoff: form.dropoff.value,
+              driveMode: mode,
+              driverDetailsId: form.driverDetailsId ? form.driverDetailsId.value : "",
+              driverInfo: driverInfo,
+              addons: selectedAddons(),
+              notes: form.notes.value
+            },
+            csrfInput ? csrfInput.value : ""
+          );
+          showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
+          location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));
+        } catch (err) {
+          busy = false;
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Continue to payment";
+          }
+          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+          showAlert(form, err.message || "Could not create booking.", "err");
+        }
+      });
     });
     syncDriveMode();
     refresh();
@@ -312,31 +341,85 @@
   NS.pages.bookings = function myBookings() {
     var host = document.getElementById("bookings-list");
     if (!host) return;
-    var list = NS.domain.myBookings().slice().reverse();
-    host.innerHTML = list.length
-      ? list
-          .map(function (b) {
-            var v = NS.domain.getVehicle(b.vehicleId);
-            return (
-              '<article class="booking-card"><div><p class="eyebrow">' +
-              NS.security.escapeHtml(b.ref) +
-              "</p><h3>" +
-              NS.security.escapeHtml(v ? v.name : "Vehicle") +
-              "</h3><p>" +
-              NS.ui.fmtDate(b.startDate) +
-              " → " +
-              NS.ui.fmtDate(b.endDate) +
-              "</p></div><div>" +
-              NS.ui.statusBadge(b.status) +
-              "<p>" +
-              NS.ui.peso(b.total) +
-              '</p><a class="btn btn-ghost" href="' +
-              NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(b.id)) +
-              '">Open</a></div></article>'
-            );
-          })
-          .join("")
-      : "<p class='notice'>You have no bookings yet. <a href='" + NS.routes.href("book") + "'>Make a booking</a>.</p>";
+    var me = NS.auth.current();
+    function render() {
+      var list = NS.domain.myBookings().slice().reverse();
+      host.innerHTML = list.length
+        ? list
+            .map(function (b) {
+              var v = NS.domain.getVehicle(b.vehicleId);
+              var canReturn =
+                me &&
+                me.role === "customer" &&
+                (b.status === "confirmed" || b.status === "ongoing");
+              var returnBtn = canReturn
+                ? '<button class="btn btn-gold btn-sm" type="button" data-return="' +
+                  b.id +
+                  '">Return vehicle</button> '
+                : "";
+              var waiting =
+                b.status === "return_requested"
+                  ? "<p class='fineprint'>Waiting for desk to accept return</p>"
+                  : "";
+              var canRate =
+                me &&
+                me.role === "customer" &&
+                b.status === "completed" &&
+                !b.rating &&
+                !NS.domain.getRatingForBooking(b.id);
+              var rateBtn = canRate
+                ? '<a class="btn btn-gold btn-sm" href="' +
+                  NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(b.id)) +
+                  '">Rate car</a> '
+                : "";
+              var ratedNote =
+                b.rating || NS.domain.getRatingForBooking(b.id)
+                  ? "<p class='fineprint'>You rated this car</p>"
+                  : "";
+              return (
+                '<article class="booking-card"><div><p class="eyebrow">' +
+                NS.security.escapeHtml(b.ref) +
+                "</p><h3>" +
+                NS.security.escapeHtml(v ? v.name : "Vehicle") +
+                "</h3><p>" +
+                NS.ui.fmtDate(b.startDate) +
+                " → " +
+                NS.ui.fmtDate(b.endDate) +
+                "</p>" +
+                waiting +
+                ratedNote +
+                "</div><div>" +
+                NS.ui.statusBadge(b.status) +
+                "<p>" +
+                NS.ui.peso(b.total) +
+                '</p><div class="btn-row">' +
+                returnBtn +
+                rateBtn +
+                '<a class="btn btn-ghost btn-sm" href="' +
+                NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(b.id)) +
+                '">Open</a></div></div></article>'
+              );
+            })
+            .join("")
+        : "<p class='notice'>You have no bookings yet. <a href='" + NS.routes.href("book") + "'>Make a booking</a>.</p>";
+    }
+    host.addEventListener("click", function (e) {
+      var id = e.target.getAttribute("data-return");
+      if (!id) return;
+      NS.ui
+        .askYesNo("Return this vehicle to the desk now?", { title: "Return vehicle", yes: "Yes", no: "No" })
+        .then(function (ok) {
+          if (!ok) return;
+          try {
+            NS.domain.requestVehicleReturn(id, "", NS.security.getCsrf());
+            NS.ui.toast("Return request sent. Staff will accept it at the desk.", "ok");
+            render();
+          } catch (err) {
+            NS.ui.toast(err.message, "err");
+          }
+        });
+    });
+    render();
   };
 
   NS.pages.detail = function bookingDetail() {
@@ -365,6 +448,78 @@
       booking.status === "pending" || booking.status === "confirmed"
         ? '<button class="btn btn-ghost" id="cancel-booking" type="button">Cancel trip</button>'
         : "";
+    var canReturn =
+      me &&
+      me.role === "customer" &&
+      booking.userId === me.id &&
+      (booking.status === "confirmed" || booking.status === "ongoing");
+    var returnBtn = canReturn
+      ? '<button class="btn btn-gold" id="return-vehicle-btn" type="button">Return vehicle</button>'
+      : "";
+    var staffAccept =
+      me &&
+      NS.auth.hasRole("staff") &&
+      booking.status === "return_requested"
+        ? '<button class="btn btn-gold" id="accept-return-btn" type="button">Accept return</button>'
+        : "";
+    var returnPending =
+      booking.status === "return_requested"
+        ? me && me.role === "customer"
+          ? "<p class='notice'>Return requested. Waiting for the desk to accept the vehicle.</p>"
+          : "<p class='notice'>Customer requested vehicle return. Accept it when the car is back at the desk.</p>"
+        : "";
+    var existingRating = NS.domain.getRatingForBooking(booking.id) || booking.rating || null;
+    var canRate =
+      me &&
+      me.role === "customer" &&
+      booking.userId === me.id &&
+      booking.status === "completed" &&
+      !existingRating;
+    var ratingBlock = "";
+    if (canRate) {
+      ratingBlock =
+        '<div class="rating-panel" id="rating-panel">' +
+        "<h2>Rate this car</h2>" +
+        "<p>How was your trip with " +
+        NS.security.escapeHtml(v ? v.name : "this vehicle") +
+        "?</p>" +
+        '<form id="rating-form">' +
+        '<div class="star-picker" role="radiogroup" aria-label="Star rating">' +
+        [5, 4, 3, 2, 1]
+          .map(function (n) {
+            return (
+              '<input type="radio" name="stars" id="star-' +
+              n +
+              '" value="' +
+              n +
+              '" required>' +
+              '<label for="star-' +
+              n +
+              '" title="' +
+              n +
+              ' stars">★</label>'
+            );
+          })
+          .join("") +
+        "</div>" +
+        '<label class="field">Comment (optional)<textarea class="form-control" name="comment" maxlength="280" rows="3" placeholder="Cleanliness, comfort, pickup experience…"></textarea></label>' +
+        '<div class="btn-row">' +
+        '<button class="btn btn-gold" type="submit">Submit rating</button>' +
+        '<a class="btn btn-ghost" href="' +
+        NS.routes.href("myBookings") +
+        '">Back</a></div></form></div>';
+    } else if (existingRating && booking.status === "completed") {
+      ratingBlock =
+        '<div class="rating-panel">' +
+        "<h2>Your rating</h2>" +
+        NS.ui.starsDisplay(existingRating.stars, 1, { compact: true }) +
+        (existingRating.comment
+          ? "<p>" + NS.security.escapeHtml(existingRating.comment) + "</p>"
+          : "") +
+        '<div class="btn-row"><a class="btn btn-ghost" href="' +
+        NS.routes.href("myBookings") +
+        '">Back</a></div></div>';
+    }
     var info = booking.driverInfo || {};
     var driveModeLabel = booking.driveMode === "chauffeur" ? "Chauffeur" : "Self-drive";
     var driverRows =
@@ -393,16 +548,38 @@
       NS.ui.statusBadge(booking.status) +
       " " +
       NS.ui.statusBadge(booking.paymentStatus) +
+      returnPending +
       "<dl class='spec-grid'>" +
       "<div><dt>Drive mode</dt><dd>" +
       driveModeLabel +
       "</dd></div>" +
+      (booking.driverDetailsId
+        ? "<div><dt>Assigned driver</dt><dd>" +
+          NS.security.escapeHtml(
+            (function () {
+              var d = NS.domain.getDriver(booking.driverDetailsId);
+              return d ? d.fullName + " · " + d.driverLicense : booking.driverDetailsId;
+            })()
+          ) +
+          "</dd></div>"
+        : "") +
       driverRows +
+      "<div><dt>Passengers</dt><dd>" +
+      NS.security.escapeHtml(String(booking.numberOfPassengers || 1)) +
+      "</dd></div>" +
       "<div><dt>Pickup</dt><dd>" +
       NS.security.escapeHtml(booking.pickup) +
+      (booking.pickupTime ? " · " + NS.security.escapeHtml(booking.pickupTime) : "") +
       "</dd></div>" +
       "<div><dt>Return</dt><dd>" +
       NS.security.escapeHtml(booking.dropoff) +
+      (booking.returnTime ? " · " + NS.security.escapeHtml(booking.returnTime) : "") +
+      "</dd></div>" +
+      "<div><dt>Fuel before</dt><dd>" +
+      NS.security.escapeHtml(booking.fuelBeforeRent || "—") +
+      "</dd></div>" +
+      "<div><dt>Fuel upon return</dt><dd>" +
+      NS.security.escapeHtml(booking.fuelUponReturn || "—") +
       "</dd></div>" +
       "<div><dt>Dates</dt><dd>" +
       NS.ui.fmtDate(booking.startDate) +
@@ -417,29 +594,134 @@
       "</dd></div>" +
       "<div><dt>Payment</dt><dd>" +
       (booking.payment
-        ? NS.security.escapeHtml(booking.payment.brand + " " + booking.payment.last4 + " · " + booking.payment.authCode)
+        ? NS.security.escapeHtml(
+            (booking.payment.method === "cashless" ? "Cashless · " : "Cash · ") +
+              booking.payment.brand +
+              (booking.payment.method === "cash"
+                ? " · " + booking.payment.authCode
+                : " ·••" + booking.payment.last4 + " · " + booking.payment.authCode)
+          )
         : "Unpaid") +
       "</dd></div>" +
       "</dl>" +
       (info.licenseAddress
         ? "<p>License address: " + NS.security.escapeHtml(info.licenseAddress) + "</p>"
         : "") +
+      (booking.returnNotes
+        ? "<p>Return notes: " + NS.security.escapeHtml(booking.returnNotes) + "</p>"
+        : "") +
       (booking.notes ? "<p>Notes: " + NS.security.escapeHtml(booking.notes) + "</p>" : "") +
+      ratingBlock +
       '<div class="btn-row">' +
       pay +
+      returnBtn +
+      staffAccept +
       cancel +
+      (booking.paymentStatus === "paid"
+        ? '<button class="btn btn-gold" id="save-receipt-btn" type="button">Save receipt</button>'
+        : "") +
       '<button class="btn btn-dark" type="button" onclick="window.print()">Print receipt</button></div></div>';
+
+    var ratingForm = document.getElementById("rating-form");
+    if (ratingForm) {
+      NS.ui.bindCsrf(ratingForm);
+      ratingForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var starsEl = ratingForm.querySelector('input[name="stars"]:checked');
+        var stars = starsEl ? starsEl.value : "";
+        NS.ui
+          .askYesNo("Submit your " + stars + "-star rating for this car?", {
+            title: "Rate car",
+            yes: "Yes",
+            no: "No"
+          })
+          .then(function (ok) {
+            if (!ok) return;
+            try {
+              NS.domain.rateBooking(
+                booking.id,
+                stars,
+                ratingForm.comment.value,
+                ratingForm.csrf ? ratingForm.csrf.value : NS.security.getCsrf()
+              );
+              NS.ui.toast("Thanks — your rating was saved.", "ok");
+              location.reload();
+            } catch (err) {
+              NS.ui.bindCsrf(ratingForm);
+              NS.ui.toast(err.message, "err");
+            }
+          });
+      });
+    }
+
+    var saveBtn = document.getElementById("save-receipt-btn");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", function () {
+        NS.ui.askYesNo("Save this receipt to your device?", { title: "Save edit" }).then(function (ok) {
+          if (!ok) return;
+          try {
+            NS.ui.downloadReceipt(booking);
+            NS.ui.toast("Receipt saved to your downloads.", "ok");
+          } catch (err) {
+            NS.ui.toast(err.message || "Could not save receipt.", "err");
+          }
+        });
+      });
+    }
+
+    var returnVehicleBtn = document.getElementById("return-vehicle-btn");
+    if (returnVehicleBtn) {
+      returnVehicleBtn.addEventListener("click", function () {
+        NS.ui
+          .askYesNo("Return this vehicle to the desk now?", { title: "Return vehicle", yes: "Yes", no: "No" })
+          .then(function (ok) {
+            if (!ok) return;
+            try {
+              NS.domain.requestVehicleReturn(booking.id, "", NS.security.getCsrf());
+              NS.ui.toast("Return request sent. Staff will accept it at the desk.", "ok");
+              location.reload();
+            } catch (err) {
+              NS.ui.toast(err.message, "err");
+            }
+          });
+      });
+    }
+
+    var acceptReturnBtn = document.getElementById("accept-return-btn");
+    if (acceptReturnBtn) {
+      acceptReturnBtn.addEventListener("click", function () {
+        NS.ui
+          .askYesNo("Accept this vehicle return and complete the trip?", {
+            title: "Accept return",
+            yes: "Yes",
+            no: "No"
+          })
+          .then(function (ok) {
+            if (!ok) return;
+            try {
+              NS.domain.acceptVehicleReturn(booking.id, NS.security.getCsrf());
+              NS.ui.toast("Return accepted. Trip completed.", "ok");
+              location.reload();
+            } catch (err) {
+              NS.ui.toast(err.message, "err");
+            }
+          });
+      });
+    }
 
     var cancelBtn = document.getElementById("cancel-booking");
     if (cancelBtn) {
       cancelBtn.addEventListener("click", function () {
-        try {
-          NS.domain.setBookingStatus(booking.id, "cancelled", NS.security.getCsrf());
-          NS.ui.toast("Booking cancelled.", "ok");
-          location.reload();
-        } catch (err) {
-          NS.ui.toast(err.message, "err");
-        }
+        NS.ui.askYesNo("Cancel this booking?", { title: "Save edit" }).then(function (ok) {
+          if (!ok) return;
+          try {
+            NS.domain.setBookingStatus(booking.id, "cancelled", NS.security.getCsrf());
+            NS.ui.toast("Booking cancelled.", "ok");
+            location.reload();
+          } catch (err) {
+            NS.ui.toast(err.message, "err");
+          }
+        });
       });
     }
   };

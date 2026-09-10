@@ -9,21 +9,26 @@
   }
 
   NS.pages.home = function home() {
+    var available = NS.domain.availableVehicles
+      ? NS.domain.availableVehicles()
+      : NS.domain.vehicles().filter(function (v) {
+          return v.status === "available";
+        });
+
     var count = document.getElementById("avail-count");
-    var available = NS.domain.vehicles().filter(function (v) {
-      return v.status === "available";
-    }).length;
-    if (count) count.textContent = available + " vehicles available now";
+    if (count) count.textContent = available.length + " vehicles available now";
 
     var host = document.getElementById("featured-grid");
     if (host) {
-      host.innerHTML = NS.domain
-        .vehicles()
+      host.innerHTML = available
         .slice(0, 6)
         .map(function (v) {
-          return NS.ui.vehicleCard(v);
+          return NS.ui.vehicleCard(v, { dateAvailable: true });
         })
         .join("");
+      if (!available.length) {
+        host.innerHTML = "<p class='notice'>No cars are available right now. Please check back soon.</p>";
+      }
     }
 
     var form = document.getElementById("home-search");
@@ -41,6 +46,10 @@
     form.endDate.value = localISO(end);
     form.startDate.min = localISO(today);
     form.endDate.min = localISO(start);
+
+    form.addEventListener("change", function () {
+      form.endDate.min = form.startDate.value || localISO(today);
+    });
 
     form.addEventListener("submit", function (e) {
       e.preventDefault();

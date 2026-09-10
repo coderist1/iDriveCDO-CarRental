@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="../shared/css/styles.css">
+  <link rel="stylesheet" href="../shared/css/styles.css?v=10">
 </head>
 <body data-page="adminReports" data-auth="staff" data-base="../">
   <div id="app-nav"></div>
@@ -17,20 +17,12 @@
     <section>
       <p class="eyebrow">Pulse</p>
       <h1>Reports</h1>
+      <p>Paid revenue and booking mix for the desk. Security events live under <a href="security-log.html">Security log</a>.</p>
+      <div id="kpi-row"></div>
       <h2>Paid revenue by type</h2>
       <div id="revenue-bars" class="panel"></div>
       <h2>Booking mix</h2>
       <p id="status-pills"></p>
-      <div class="row g-3">
-        <div class="col-lg-6">
-          <h2>Security log</h2>
-          <ul id="audit-list" class="panel"></ul>
-        </div>
-        <div class="col-lg-6">
-          <h2>Contact inbox</h2>
-          <ul id="inbox-list" class="panel"></ul>
-        </div>
-      </div>
     </section>
   </div>
   <div id="app-footer"></div>
@@ -38,11 +30,11 @@
   <script src="../shared/js/security.js"></script>
   <script src="../shared/js/store.js"></script>
   <script src="../shared/js/validation.js"></script>
-  <script src="../shared/js/routes.js"></script>
-  <script src="../shared/js/domain.js"></script>
+  <script src="../shared/js/routes.js?v=10"></script>
+  <script src="../shared/js/domain.js?v=10"></script>
   <script src="../auth/auth.js"></script>
-  <script src="../shared/js/ui.js"></script>
-  <script src="./admin.js"></script>
+  <script src="../shared/js/ui.js?v=10"></script>
+  <script src="./admin.js?v=10"></script>
   <script src="../shared/js/app.js"></script>
 </body>
 </html>

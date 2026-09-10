@@ -53,7 +53,12 @@
 
     try {
       if (NS.auth && NS.auth.current && NS.auth.current()) {
-        location.replace(NS.routes.href("account"));
+        var already = NS.auth.current();
+        location.replace(
+          already.role === "staff" || already.role === "admin"
+            ? NS.routes.href("adminHome")
+            : NS.routes.href("account")
+        );
         return;
       }
     } catch (e) {
@@ -80,8 +85,13 @@
         var user = NS.auth.login(val(form, "email"), val(form, "password"), csrfEl ? csrfEl.value : "");
         showAlert(form, "Welcome back, " + user.firstName + ".", "ok");
         var next = NS.ui.qs("next");
+        var dest = NS.routes.isSafeNext(next)
+          ? NS.routes.base() + next
+          : user.role === "staff" || user.role === "admin"
+            ? NS.routes.href("adminHome")
+            : NS.routes.href("account");
         setTimeout(function () {
-          location.href = NS.routes.isSafeNext(next) ? NS.routes.base() + next : NS.routes.href("account");
+          location.href = dest;
         }, 150);
       } catch (err) {
         if (btn) {
@@ -109,7 +119,12 @@
 
     try {
       if (NS.auth && NS.auth.current && NS.auth.current()) {
-        location.replace(NS.routes.href("account"));
+        var alreadyReg = NS.auth.current();
+        location.replace(
+          alreadyReg.role === "staff" || alreadyReg.role === "admin"
+            ? NS.routes.href("adminHome")
+            : NS.routes.href("account")
+        );
         return;
       }
     } catch (e) {
