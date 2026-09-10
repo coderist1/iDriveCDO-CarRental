@@ -189,7 +189,6 @@
     } catch (e) {
       unread = 0;
     }
-    var inboxLabel = "Inbox" + (unread ? " (" + unread + ")" : "");
     var roleLabel = me.role === "admin" ? "Admin" : "Rental-Incharge";
     var nav = document.getElementById("app-nav");
     if (nav) {
@@ -199,17 +198,12 @@
         NS.routes.href("adminHome") +
         '">' +
         logoSvg("#7842F5") +
-        "<span><strong>iDrive</strong> Desk<span class=\"brand-sub\">Operations</span></span></a>" +
+        "<span><strong>iDrive</strong> Desk<span class=\"brand-sub\">Workspace</span></span></a>" +
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
         '<nav class="desk-nav" id="site-nav">' +
         navLink(NS.routes.href("adminHome"), "Overview", "adminHome") +
-        navLink(NS.routes.href("adminInbox"), inboxLabel, "adminInbox") +
+        navLink(NS.routes.href("adminInbox"), unread ? "Inbox · " + unread : "Inbox", "adminInbox") +
         navLink(NS.routes.href("adminBookings"), "Bookings", "adminBookings") +
-        (NS.auth.hasRole("admin")
-          ? navLink(NS.routes.href("adminVehicles"), "Fleet", "adminVehicles") +
-            navLink(NS.routes.href("adminCustomers"), "Customers", "adminCustomers")
-          : "") +
-        navLink(NS.routes.href("adminReports"), "Reports", "adminReports") +
         '<div class="nav-user">' +
         '<span class="role-pill">' +
         roleLabel +

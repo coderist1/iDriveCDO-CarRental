@@ -8,50 +8,80 @@
     var host = document.getElementById("admin-side");
     if (!host) return;
     var page = document.body.getAttribute("data-page");
+    var me = NS.auth.current();
     var unread = 0;
+    var returns = 0;
     try {
       unread = NS.domain.staffUnreadCount ? NS.domain.staffUnreadCount() : 0;
+      returns = NS.domain.pendingReturns ? NS.domain.pendingReturns().length : 0;
     } catch (e) {
       unread = 0;
     }
-    var inboxLabel = "Inbox" + (unread ? " (" + unread + ")" : "");
-    var links = [
-      ["index.html", "Overview", "adminHome"],
-      ["inbox.html", inboxLabel, "adminInbox"],
-      ["bookings.html", "Bookings", "adminBookings"],
-      ["payments.html", "Payments", "adminPayments"],
-      ["vehicles.html", "Fleet desk", "adminVehicles"],
-      ["fleet-ops.html", "Fleet ops", "adminFleetOps"],
-      ["drivers.html", "Drivers", "adminDrivers"],
-      ["customers.html", "Users", "adminCustomers"],
-      ["reports.html", "Reports", "adminReports"],
-      ["security-log.html", "Security log", "adminSecurityLog"]
-    ];
-    if (!NS.auth.hasRole("admin")) {
-      links = links.filter(function (l) {
-        return l[2] !== "adminCustomers";
-      });
+    var isAdmin = NS.auth.hasRole("admin");
+    function icon(d) {
+      return (
+        '<svg class="side-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+        d +
+        "</svg>"
+      );
     }
+    function link(href, label, key, ico, count) {
+      return (
+        '<a class="side-link' +
+        (page === key ? " active" : "") +
+        '" href="' +
+        href +
+        '">' +
+        ico +
+        "<span>" +
+        label +
+        "</span>" +
+        (count
+          ? '<em class="nav-count">' + count + "</em>"
+          : "") +
+        "</a>"
+      );
+    }
+    function group(title, html) {
+      return '<div class="side-group"><p class="side-label">' + title + "</p>" + html + "</div>";
+    }
+    var desk =
+      link("index.html", "Overview", "adminHome", icon('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>')) +
+      link("inbox.html", "Inbox", "adminInbox", icon('<path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/>'), unread) +
+      link("bookings.html", "Bookings", "adminBookings", icon('<path d="M8 7V5h8v2"/><rect x="5" y="7" width="14" height="13" rx="2"/>'), returns) +
+      link("payments.html", "Payments", "adminPayments", icon('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>'));
+    var fleet =
+      link("vehicles.html", "Vehicles", "adminVehicles", icon('<path d="M5 16h14l-1.5-7h-11z"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/>')) +
+      link("fleet-ops.html", "Registration & service", "adminFleetOps", icon('<path d="M12 3v4"/><circle cx="12" cy="14" r="7"/><path d="M12 11v3l2 2"/>')) +
+      link("drivers.html", "Drivers", "adminDrivers", icon('<circle cx="12" cy="8" r="3"/><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5"/>'));
+    var people = isAdmin
+      ? group(
+          "People",
+          link("customers.html", "Users", "adminCustomers", icon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'))
+        )
+      : "";
+    var insights =
+      link("reports.html", "Reports", "adminReports", icon('<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-6"/><path d="M12 16V8"/><path d="M16 16v-3"/>')) +
+      link("security-log.html", "Security log", "adminSecurityLog", icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'));
     host.innerHTML =
-      '<aside class="admin-side"><p class="eyebrow">' +
-      (NS.auth.hasRole("admin") ? "Admin" : "Rental-Incharge") +
+      '<aside class="admin-side">' +
+      '<div class="side-head">' +
+      '<p class="eyebrow">' +
+      (isAdmin ? "Admin" : "Rental-Incharge") +
       "</p>" +
-      links
-        .map(function (l) {
-          return (
-            '<a class="' +
-            (page === l[2] ? "active" : "") +
-            '" href="' +
-            l[0] +
-            '">' +
-            l[1] +
-            "</a>"
-          );
-        })
-        .join("") +
-      '<a href="' +
-      NS.routes.href("profile") +
-      '">My profile</a></aside>';
+      "<strong>" +
+      NS.security.escapeHtml(me ? me.firstName + " " + me.lastName : "Desk") +
+      "</strong>" +
+      "<span>" +
+      NS.security.escapeHtml(me ? me.email : "") +
+      "</span></div>" +
+      group("Desk", desk) +
+      group("Fleet", fleet) +
+      people +
+      group("Insights", insights) +
+      '<div class="side-foot">' +
+      link(NS.routes.href("profile"), "My profile", "profile", icon('<circle cx="12" cy="8" r="3"/><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5"/>')) +
+      "</div></aside>";
   }
 
   function adminHome() {
@@ -73,6 +103,16 @@
       '<div class="stat"><span>' +
       NS.ui.peso(r.revenue) +
       "</span>paid revenue</div>";
+    var shortcuts = document.getElementById("desk-shortcuts");
+    if (shortcuts) {
+      shortcuts.innerHTML =
+        '<a class="desk-shortcut" href="inbox.html"><strong>Inbox</strong><span>Messages & returns</span></a>' +
+        '<a class="desk-shortcut" href="bookings.html"><strong>Bookings</strong><span>Confirm and complete trips</span></a>' +
+        '<a class="desk-shortcut" href="payments.html"><strong>Payments</strong><span>Cash and cashless records</span></a>' +
+        '<a class="desk-shortcut" href="vehicles.html"><strong>Fleet</strong><span>Cars, plates, and rates</span></a>' +
+        '<a class="desk-shortcut" href="drivers.html"><strong>Drivers</strong><span>Chauffeur roster</span></a>' +
+        '<a class="desk-shortcut" href="reports.html"><strong>Reports</strong><span>Revenue and mix</span></a>';
+    }
     var recentHost = document.getElementById("admin-recent");
     recentHost.innerHTML = incoming.length
       ? incoming
@@ -149,47 +189,38 @@
 
   function adminVehicles() {
     mountAdminNav();
-    if (!NS.auth.hasRole("admin")) {
-      document.getElementById("vehicle-desk").innerHTML = "<p class='notice'>Only admins can edit the fleet. Staff may view bookings instead.</p>";
-      return;
-    }
+    var desk = document.getElementById("vehicle-desk");
+    if (!desk) return;
+    var isAdmin = NS.auth.hasRole("admin");
     var form = document.getElementById("vehicle-form");
-    NS.ui.bindCsrf(form);
-    function render() {
-      document.getElementById("vehicle-table").innerHTML = NS.domain
-        .vehicles()
-        .map(function (v) {
-          return (
-            "<tr><td>" +
-            NS.security.escapeHtml(v.name) +
-            "</td><td>" +
-            NS.security.escapeHtml(v.plate) +
-            "</td><td>" +
-            NS.ui.peso(v.dailyRate) +
-            "</td><td>" +
-            NS.ui.statusBadge(v.status) +
-            '</td><td><button class="btn btn-ghost btn-sm" data-edit="' +
-            v.id +
-            '">Edit</button> <button class="btn btn-ghost btn-sm" data-del="' +
-            v.id +
-            '">Remove</button></td></tr>'
-          );
-        })
-        .join("");
+    var editor = document.getElementById("vehicle-editor");
+    var formTitle = document.getElementById("vehicle-form-title");
+    var grid = document.getElementById("vehicle-fleet-grid");
+    var stats = document.getElementById("fleet-stats");
+    var heroActions = document.getElementById("fleet-hero-actions");
+    var filterStatus = document.getElementById("fleet-filter");
+    var filterType = document.getElementById("fleet-type-filter");
+
+    if (heroActions) {
+      heroActions.innerHTML = isAdmin
+        ? '<button class="btn btn-gold" type="button" id="fleet-add-btn">Add vehicle</button>' +
+          '<a class="btn btn-ghost" href="fleet-ops.html">Fleet ops</a>'
+        : '<a class="btn btn-ghost" href="fleet-ops.html">View fleet ops</a>';
     }
-    render();
-    document.getElementById("vehicle-table").addEventListener("click", function (e) {
-      var edit = e.target.getAttribute("data-edit");
-      var del = e.target.getAttribute("data-del");
-      if (edit) {
-        var v = NS.domain.getVehicle(edit);
+
+    function openEditor(v) {
+      if (!isAdmin || !editor || !form) return;
+      editor.hidden = false;
+      NS.ui.bindCsrf(form);
+      if (v) {
+        formTitle.textContent = "Edit vehicle";
         form.vehicleId.value = v.id;
         form.name.value = v.name;
         form.brand.value = v.brand;
         form.model.value = v.model;
         form.year.value = v.year;
-        if (form.yearPurchased) form.yearPurchased.value = v.yearPurchased || v.year;
-        if (form.mileage) form.mileage.value = v.mileage || 0;
+        form.yearPurchased.value = v.yearPurchased || v.year;
+        form.mileage.value = v.mileage || 0;
         form.type.value = v.type;
         form.transmission.value = v.transmission;
         form.fuel.value = v.fuel;
@@ -197,18 +228,183 @@
         form.luggage.value = v.luggage;
         form.dailyRate.value = v.dailyRate;
         form.plate.value = v.plate;
-        form.image.value = v.image;
-        form.description.value = v.description;
+        form.image.value = v.image || "";
+        form.description.value = v.description || "";
         form.features.value = (v.features || []).join(", ");
         form.status.value = v.status;
-        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        formTitle.textContent = "Add vehicle";
+        form.reset();
+        form.vehicleId.value = "";
+        form.status.value = "available";
+        NS.ui.bindCsrf(form);
+      }
+      editor.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function closeEditor() {
+      if (!editor || !form) return;
+      editor.hidden = true;
+      form.reset();
+      form.vehicleId.value = "";
+      NS.ui.bindCsrf(form);
+    }
+
+    function renderStats(list) {
+      if (!stats) return;
+      var available = list.filter(function (v) {
+        return v.status === "available";
+      }).length;
+      var maintenance = list.filter(function (v) {
+        return v.status === "maintenance";
+      }).length;
+      stats.innerHTML =
+        '<div class="stat"><span>' +
+        list.length +
+        "</span>vehicles</div>" +
+        '<div class="stat"><span>' +
+        available +
+        "</span>available</div>" +
+        '<div class="stat"><span>' +
+        maintenance +
+        "</span>maintenance</div>" +
+        '<div class="stat"><span>' +
+        list.filter(function (v) {
+          return v.type === "SUV" || v.type === "Van";
+        }).length +
+        "</span>group cars</div>";
+    }
+
+    function render() {
+      var all = NS.domain.vehicles();
+      renderStats(all);
+      var statusVal = filterStatus ? filterStatus.value : "";
+      var typeVal = filterType ? filterType.value : "";
+      var list = all.filter(function (v) {
+        if (statusVal && v.status !== statusVal) return false;
+        if (typeVal && v.type !== typeVal) return false;
+        return true;
+      });
+      grid.innerHTML = list.length
+        ? list
+            .map(function (v) {
+              return (
+                '<article class="fleet-admin-card">' +
+                '<div class="fleet-admin-photo">' +
+                (v.image
+                  ? '<img src="' + NS.security.escapeHtml(v.image) + '" alt="' + NS.security.escapeHtml(v.name) + '">'
+                  : '<div class="fleet-admin-photo-empty">No photo</div>') +
+                NS.ui.statusBadge(v.status) +
+                "</div>" +
+                '<div class="fleet-admin-body">' +
+                '<p class="eyebrow">' +
+                NS.security.escapeHtml(v.type) +
+                " · " +
+                NS.security.escapeHtml(v.transmission) +
+                "</p>" +
+                "<h3>" +
+                NS.security.escapeHtml(v.name) +
+                "</h3>" +
+                '<p class="fleet-admin-meta">' +
+                NS.security.escapeHtml(v.plate) +
+                " · " +
+                NS.security.escapeHtml(v.fuel || "") +
+                " · " +
+                (v.seats || 0) +
+                " seats" +
+                (v.mileage ? " · " + Number(v.mileage).toLocaleString() + " km" : "") +
+                "</p>" +
+                '<div class="fleet-admin-foot">' +
+                "<strong>" +
+                NS.ui.peso(v.dailyRate) +
+                "<span>/day</span></strong>" +
+                (isAdmin
+                  ? '<div class="btn-row"><button class="btn btn-ghost btn-sm" type="button" data-edit="' +
+                    v.id +
+                    '">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-del="' +
+                    v.id +
+                    '">Remove</button></div>'
+                  : "") +
+                "</div></div></article>"
+              );
+            })
+            .join("")
+        : "<p class='notice'>No vehicles match those filters.</p>";
+    }
+
+    if (!isAdmin && editor) editor.hidden = true;
+
+    if (isAdmin && form) {
+      NS.ui.bindCsrf(form);
+      var addBtn = document.getElementById("fleet-add-btn");
+      if (addBtn) addBtn.addEventListener("click", function () {
+        openEditor(null);
+      });
+      var cancelBtn = document.getElementById("vehicle-form-cancel");
+      if (cancelBtn) cancelBtn.addEventListener("click", closeEditor);
+      var resetBtn = document.getElementById("vehicle-form-reset");
+      if (resetBtn) {
+        resetBtn.addEventListener("click", function () {
+          form.reset();
+          form.vehicleId.value = "";
+          formTitle.textContent = "Add vehicle";
+          NS.ui.bindCsrf(form);
+        });
+      }
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var isEdit = !!form.vehicleId.value;
+        NS.ui
+          .askYesNo(isEdit ? "Save these vehicle edits?" : "Save this new vehicle?", { title: "Save edit" })
+          .then(function (ok) {
+            if (!ok) return;
+            try {
+              NS.domain.saveVehicle(
+                {
+                  id: form.vehicleId.value || undefined,
+                  name: form.name.value,
+                  brand: form.brand.value,
+                  model: form.model.value,
+                  year: form.year.value,
+                  yearPurchased: form.yearPurchased.value,
+                  mileage: form.mileage.value,
+                  type: form.type.value,
+                  transmission: form.transmission.value,
+                  fuel: form.fuel.value,
+                  seats: form.seats.value,
+                  luggage: form.luggage.value,
+                  dailyRate: form.dailyRate.value,
+                  plate: form.plate.value,
+                  image: form.image.value,
+                  description: form.description.value,
+                  features: form.features.value.split(","),
+                  status: form.status.value
+                },
+                form.csrf.value
+              );
+              closeEditor();
+              render();
+              NS.ui.toast("Fleet updated.", "ok");
+            } catch (err) {
+              NS.ui.bindCsrf(form);
+              NS.ui.toast(err.message, "err");
+            }
+          });
+      });
+    }
+
+    grid.addEventListener("click", function (e) {
+      var edit = e.target.getAttribute("data-edit");
+      var del = e.target.getAttribute("data-del");
+      if (edit) {
+        openEditor(NS.domain.getVehicle(edit));
       }
       if (del) {
         NS.ui.askYesNo("Remove this vehicle from the fleet?", { title: "Save edit" }).then(function (ok) {
           if (!ok) return;
           try {
             NS.domain.removeVehicle(del, NS.security.getCsrf());
-            NS.ui.bindCsrf(form);
+            if (form && form.vehicleId.value === del) closeEditor();
             render();
             NS.ui.toast("Vehicle removed.", "ok");
           } catch (err) {
@@ -217,48 +413,10 @@
         });
       }
     });
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var isEdit = !!form.vehicleId.value;
-      NS.ui
-        .askYesNo(isEdit ? "Save these vehicle edits?" : "Save this new vehicle?", { title: "Save edit" })
-        .then(function (ok) {
-          if (!ok) return;
-          try {
-            NS.domain.saveVehicle(
-              {
-                id: form.vehicleId.value || undefined,
-                name: form.name.value,
-                brand: form.brand.value,
-                model: form.model.value,
-                year: form.year.value,
-                yearPurchased: form.yearPurchased ? form.yearPurchased.value : form.year.value,
-                mileage: form.mileage ? form.mileage.value : 0,
-                type: form.type.value,
-                transmission: form.transmission.value,
-                fuel: form.fuel.value,
-                seats: form.seats.value,
-                luggage: form.luggage.value,
-                dailyRate: form.dailyRate.value,
-                plate: form.plate.value,
-                image: form.image.value,
-                description: form.description.value,
-                features: form.features.value.split(","),
-                status: form.status.value
-              },
-              form.csrf.value
-            );
-            form.reset();
-            form.vehicleId.value = "";
-            NS.ui.bindCsrf(form);
-            render();
-            NS.ui.toast("Fleet updated.", "ok");
-          } catch (err) {
-            NS.ui.bindCsrf(form);
-            NS.ui.toast(err.message, "err");
-          }
-        });
-    });
+
+    if (filterStatus) filterStatus.addEventListener("change", render);
+    if (filterType) filterType.addEventListener("change", render);
+    render();
   }
 
   function adminBookings() {
