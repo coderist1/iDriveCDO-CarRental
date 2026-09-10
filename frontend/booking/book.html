@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book — iDrive CDO</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/css/styles.css?v=3">
+</head>
+<body data-page="book" data-auth="user" data-base="../">
+  <div id="app-nav"></div>
+  <section class="layout">
+    <form id="book-form" class="form-card" novalidate>
+      <p class="eyebrow">Reservation</p>
+      <h1>Make a booking</h1>
+      <div id="form-alert" class="notice" hidden></div>
+
+      <div class="form-grid">
+        <label class="field field-span-2">
+          Vehicle
+          <select class="form-select" name="vehicleId"></select>
+        </label>
+        <label class="field">
+          Pickup date
+          <input class="form-control" name="startDate" type="date" required>
+        </label>
+        <label class="field">
+          Return date
+          <input class="form-control" name="endDate" type="date" required>
+        </label>
+        <label class="field">
+          Pickup location
+          <select class="form-select" name="pickup"></select>
+        </label>
+        <label class="field">
+          Return location
+          <select class="form-select" name="dropoff"></select>
+        </label>
+      </div>
+
+      <p class="eyebrow" style="margin-top:1rem">How will you drive?</p>
+      <div class="drive-mode" role="radiogroup" aria-label="Drive mode">
+        <label class="drive-option">
+          <input type="radio" name="driveMode" value="self" checked>
+          <span>
+            <strong>Self-drive</strong>
+            <small>You drive. Driver’s license and details required.</small>
+          </span>
+        </label>
+        <label class="drive-option">
+          <input type="radio" name="driveMode" value="chauffeur">
+          <span>
+            <strong>Chauffeur</strong>
+            <small>Our driver handles the trip. Valid ID only.</small>
+          </span>
+        </label>
+      </div>
+
+      <div id="self-drive-fields" class="driver-fields">
+        <p class="eyebrow">Driver’s license</p>
+        <div class="form-grid">
+          <label class="field field-span-2">
+            Full name on license
+            <input class="form-control" name="licenseName" maxlength="60" autocomplete="name">
+          </label>
+          <label class="field">
+            License number
+            <input class="form-control" name="licenseNo" maxlength="20" placeholder="N04-12-345678">
+          </label>
+          <label class="field">
+            License expiry
+            <input class="form-control" name="licenseExpiry" type="date">
+          </label>
+          <label class="field field-span-2">
+            Address on license
+            <input class="form-control" name="licenseAddress" maxlength="120" autocomplete="street-address">
+          </label>
+          <label class="field field-span-2">
+            Emergency contact mobile
+            <input class="form-control" name="emergencyPhone" maxlength="15" placeholder="09171234567" inputmode="tel">
+          </label>
+        </div>
+      </div>
+
+      <div id="chauffeur-fields" class="driver-fields" hidden>
+        <p class="eyebrow">Valid ID</p>
+        <div class="form-grid">
+          <label class="field">
+            ID type
+            <select class="form-select" name="idType">
+              <option value="National ID">National ID</option>
+              <option value="Passport">Passport</option>
+              <option value="UMID">UMID</option>
+              <option value="Postal ID">Postal ID</option>
+              <option value="Company ID">Company ID</option>
+              <option value="Student ID">Student ID</option>
+            </select>
+          </label>
+          <label class="field">
+            ID number
+            <input class="form-control" name="idNumber" maxlength="30" placeholder="ID number">
+          </label>
+        </div>
+        <p class="fineprint">Chauffeur bookings include the professional driver fee.</p>
+      </div>
+
+      <p class="eyebrow" style="margin-top:1rem">Add-ons</p>
+      <div id="addons" class="addon-list"></div>
+
+      <label class="field">
+        Notes for the desk
+        <textarea class="form-control" name="notes" maxlength="240" placeholder="Flight number, hotel, special request"></textarea>
+      </label>
+
+      <button class="btn btn-gold" type="submit">Continue to payment</button>
+    </form>
+    <aside id="book-summary" class="panel book-summary">
+      <div id="book-summary-photo" class="book-summary-photo is-empty" aria-hidden="true"></div>
+      <div id="book-summary-body" class="book-summary-body">
+        <h3>Trip estimate</h3>
+        <p class="notice">Choose a vehicle and dates to see the total.</p>
+      </div>
+    </aside>
+  </section>
+  <div id="app-footer"></div>
+  <div id="toast-host"></div>
+  <script src="../shared/js/security.js"></script>
+  <script src="../shared/js/store.js"></script>
+  <script src="../shared/js/validation.js?v=3"></script>
+  <script src="../shared/js/routes.js"></script>
+  <script src="../shared/js/domain.js?v=3"></script>
+  <script src="../auth/auth.js"></script>
+  <script src="../shared/js/ui.js"></script>
+  <script src="./booking.js?v=4"></script>
+  <script src="../shared/js/app.js"></script>
+</body>
+</html>
