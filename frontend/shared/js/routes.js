@@ -29,7 +29,8 @@
     adminDrivers: "admin/drivers.html",
     adminFleetOps: "admin/fleet-ops.html",
     adminPayments: "admin/payments.html",
-    adminInbox: "admin/inbox.html"
+    adminInbox: "admin/inbox.html",
+    driverHome: "driver/index.html"
   };
 
   function base() {

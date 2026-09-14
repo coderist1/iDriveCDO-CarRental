@@ -684,34 +684,58 @@
     var isAdmin = NS.auth.hasRole("admin");
     var formWrap = document.getElementById("driver-form-wrap");
     var listHost = document.getElementById("drivers-list");
+    var pillsHost = document.getElementById("status-pills");
+
+    function dutyOf(d) {
+      return d.dutyStatus === "on_call" ? "on_call" : "regular";
+    }
 
     function render() {
-      listHost.innerHTML = NS.domain
-        .drivers()
-        .map(function (d) {
-          return (
-            '<article class="booking-card"><div><p class="eyebrow">' +
-            NS.security.escapeHtml(d.typeDriverLicense || "Driver") +
-            "</p><h3>" +
-            NS.security.escapeHtml(d.fullName) +
-            "</h3><p>" +
-            NS.security.escapeHtml(d.driverLicense) +
-            " · expires " +
-            NS.security.escapeHtml(d.licenseExpiry) +
-            (d.phone ? "<br>" + NS.security.escapeHtml(d.phone) : "") +
-            "</p></div><div>" +
-            NS.ui.statusBadge(d.status) +
-            (isAdmin
-              ? '<div class="btn-row"><button class="btn btn-ghost btn-sm" data-edit="' +
-                d.id +
-                '">Edit</button><button class="btn btn-ghost btn-sm" data-del="' +
-                d.id +
-                '">Remove</button></div>'
-              : "") +
-            "</div></article>"
-          );
-        })
-        .join("") || "<p class='notice'>No drivers yet.</p>";
+      var list = NS.domain.drivers();
+      var regular = 0;
+      var onCall = 0;
+      list.forEach(function (d) {
+        if (dutyOf(d) === "on_call") onCall++;
+        else regular++;
+      });
+      if (pillsHost) {
+        pillsHost.innerHTML =
+          NS.ui.statusBadge("regular") +
+          " " +
+          regular +
+          "  " +
+          NS.ui.statusBadge("on_call") +
+          " " +
+          onCall;
+      }
+
+      listHost.innerHTML =
+        list
+          .map(function (d) {
+            return (
+              '<article class="booking-card"><div><p class="eyebrow">' +
+              NS.security.escapeHtml(d.typeDriverLicense || "Driver") +
+              "</p><h3>" +
+              NS.security.escapeHtml(d.fullName) +
+              "</h3><p>" +
+              NS.security.escapeHtml(d.driverLicense) +
+              " · expires " +
+              NS.security.escapeHtml(d.licenseExpiry) +
+              (d.phone ? "<br>" + NS.security.escapeHtml(d.phone) : "") +
+              "</p></div><div class=\"driver-card-badges\">" +
+              NS.ui.statusBadge(dutyOf(d)) +
+              NS.ui.statusBadge(d.status) +
+              (isAdmin
+                ? '<div class="btn-row"><button class="btn btn-ghost btn-sm" data-edit="' +
+                  d.id +
+                  '">Edit</button><button class="btn btn-ghost btn-sm" data-del="' +
+                  d.id +
+                  '">Remove</button></div>'
+                : "") +
+              "</div></article>"
+            );
+          })
+          .join("") || "<p class='notice'>No drivers yet.</p>";
     }
 
     if (isAdmin) {
@@ -723,8 +747,9 @@
         '<div class="col-md-6"><label class="field">Phone <input class="form-control" name="phone"></label></div>' +
         '<div class="col-md-4"><label class="field">License no. <input class="form-control" name="driverLicense" required></label></div>' +
         '<div class="col-md-4"><label class="field">License type <input class="form-control" name="typeDriverLicense" value="Professional"></label></div>' +
-        '<div class="col-md-2"><label class="field">Expiry <input class="form-control" name="licenseExpiry" type="date" required></label></div>' +
-        '<div class="col-md-2"><label class="field">Status <select class="form-select" name="status"><option value="active">active</option><option value="inactive">inactive</option></select></label></div>' +
+        '<div class="col-md-4"><label class="field">Expiry <input class="form-control" name="licenseExpiry" type="date" required></label></div>' +
+        '<div class="col-md-4"><label class="field">Roster <select class="form-select" name="status"><option value="active">active</option><option value="inactive">inactive</option></select></label></div>' +
+        '<div class="col-md-4"><label class="field">Duty status <select class="form-select" name="dutyStatus"><option value="regular">Regular</option><option value="on_call">On call</option></select></label></div>' +
         "</div>" +
         '<button class="btn btn-gold" type="submit">Save driver</button></form>';
       var form = document.getElementById("driver-form");
@@ -742,7 +767,8 @@
                 driverLicense: form.driverLicense.value,
                 typeDriverLicense: form.typeDriverLicense.value,
                 licenseExpiry: form.licenseExpiry.value,
-                status: form.status.value
+                status: form.status.value,
+                dutyStatus: form.dutyStatus.value
               },
               form.csrf.value
             );
@@ -770,6 +796,7 @@
           form.typeDriverLicense.value = d.typeDriverLicense;
           form.licenseExpiry.value = d.licenseExpiry;
           form.status.value = d.status;
+          form.dutyStatus.value = dutyOf(d);
           window.scrollTo({ top: 0, behavior: "smooth" });
         }
         if (del) {

@@ -229,14 +229,55 @@
     }
   }
 
+  function mountDriverChrome(me) {
+    document.body.classList.add("desk-mode");
+    var nav = document.getElementById("app-nav");
+    if (nav) {
+      nav.innerHTML =
+        '<header class="desk-header">' +
+        '<a class="brand desk-brand" href="' +
+        NS.routes.href("driverHome") +
+        '">' +
+        logoSvg("#7842F5") +
+        "<span><strong>iDrive</strong> Driver<span class=\"brand-sub\">Workspace</span></span></a>" +
+        '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
+        '<nav class="desk-nav" id="site-nav">' +
+        navLink(NS.routes.href("driverHome"), "My trips", "driverHome") +
+        '<div class="nav-user">' +
+        '<span class="role-pill">' +
+        NS.security.escapeHtml(me.firstName || "Driver") +
+        "</span>" +
+        '<button class="btn btn-gold" id="logout-btn" type="button">Sign out</button>' +
+        "</div></nav></header>";
+      bindNavChrome();
+    }
+
+    var footer = document.getElementById("app-footer");
+    if (footer) {
+      footer.innerHTML =
+        '<footer class="desk-footer">' +
+        "<p><strong>iDrive Driver</strong> · Assigned trips, fuel logs, and trip status only.</p>" +
+        "<p>Signed in as " +
+        NS.security.escapeHtml(me.firstName + " " + me.lastName) +
+        " · " +
+        NS.security.escapeHtml(me.email) +
+        "</p></footer>";
+    }
+  }
+
   function mountChrome() {
     var me = NS.auth.current();
-    if (me && NS.auth.hasRole("staff")) mountDeskChrome(me);
+    if (me && me.role === "driver") mountDriverChrome(me);
+    else if (me && NS.auth.hasRole("staff")) mountDeskChrome(me);
     else mountCustomerChrome(me);
   }
 
   function statusBadge(status) {
-    var labels = { return_requested: "return requested" };
+    var labels = {
+      return_requested: "return requested",
+      on_call: "on call",
+      regular: "regular"
+    };
     var label = labels[status] || status;
     return (
       '<span class="badge badge-' +

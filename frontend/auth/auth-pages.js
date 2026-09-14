@@ -55,7 +55,9 @@
       if (NS.auth && NS.auth.current && NS.auth.current()) {
         var already = NS.auth.current();
         location.replace(
-          already.role === "staff" || already.role === "admin"
+          already.role === "driver"
+            ? NS.routes.href("driverHome")
+            : already.role === "staff" || already.role === "admin"
             ? NS.routes.href("adminHome")
             : NS.routes.href("account")
         );
@@ -85,9 +87,12 @@
         var user = NS.auth.login(val(form, "email"), val(form, "password"), csrfEl ? csrfEl.value : "");
         showAlert(form, "Welcome back, " + user.firstName + ".", "ok");
         var next = NS.ui.qs("next");
-        var dest = NS.routes.isSafeNext(next)
-          ? NS.routes.base() + next
-          : user.role === "staff" || user.role === "admin"
+        var dest =
+          user.role === "driver"
+            ? NS.routes.href("driverHome")
+            : NS.routes.isSafeNext(next)
+            ? NS.routes.base() + next
+            : user.role === "staff" || user.role === "admin"
             ? NS.routes.href("adminHome")
             : NS.routes.href("account");
         setTimeout(function () {

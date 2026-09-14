@@ -6,7 +6,7 @@
 
   var NS = (global.iDrive = global.iDrive || {});
   var SESSION_MS = 30 * 60 * 1000;
-  var ROLES = { customer: 1, staff: 2, admin: 3 };
+  var ROLES = { driver: 1, customer: 1, staff: 2, admin: 3 };
 
   function users() {
     return NS.store.get("users", []);
@@ -49,6 +49,7 @@
       phone: user.phone,
       address: user.address || "",
       department: user.department || "",
+      driverId: user.driverId || "",
       licenseNo: user.licenseNo,
       licenseExpiry: user.licenseExpiry,
       avatar: user.avatar || "",
@@ -331,6 +332,16 @@
     if (!me) {
       var next = currentRouteKey();
       location.replace(NS.routes.href("login", "?next=" + encodeURIComponent(next)));
+      return null;
+    }
+    // Drivers only ever see the driver workspace.
+    if (me.role === "driver") {
+      if (need === "driver") return me;
+      location.replace(NS.routes.href("driverHome"));
+      return null;
+    }
+    if (need === "driver") {
+      location.replace(NS.routes.href(hasRole("staff") ? "adminHome" : "account"));
       return null;
     }
     if (need === "user") return me;

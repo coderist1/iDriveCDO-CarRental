@@ -1003,6 +1003,7 @@
       typeDriverLicense: NS.security.sanitizeText(payload.typeDriverLicense || "Professional", 30),
       licenseExpiry: NS.security.sanitizeText(payload.licenseExpiry, 10),
       status: payload.status === "inactive" ? "inactive" : "active",
+      dutyStatus: payload.dutyStatus === "on_call" ? "on_call" : "regular",
       phone: NS.security.sanitizeText(payload.phone || "", 15),
       updatedAt: new Date().toISOString()
     };
@@ -1013,6 +1014,8 @@
     var found = false;
     for (var i = 0; i < list.length; i++) {
       if (list[i].id === item.id) {
+        if (list[i].userId) item.userId = list[i].userId;
+        if (list[i].createdAt) item.createdAt = list[i].createdAt;
         list[i] = item;
         found = true;
       }
@@ -1039,6 +1042,131 @@
       })
     );
     audit("driver-remove", NS.auth.current().id, id);
+  }
+
+  /* -------- Driver self-service (view assigned trips, update trip/fuel) -------- */
+
+  var DRIVER_FUEL_LEVELS = ["Full", "3/4", "1/2", "1/4", "Reserve", "Empty"];
+
+  function currentDriver() {
+    var me = NS.auth.current();
+    if (!me || me.role !== "driver") return null;
+    var list = drivers();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].userId === me.id || (me.driverId && list[i].id === me.driverId)) {
+        return list[i];
+      }
+    }
+    return null;
+  }
+
+  function requireDriver() {
+    var d = currentDriver();
+    if (!d) throw new Error("No driver profile is linked to this account.");
+    return d;
+  }
+
+  function driverTrips() {
+    var d = requireDriver();
+    return bookings()
+      .filter(function (b) {
+        return b.driverDetailsId === d.id;
+      })
+      .slice()
+      .sort(function (a, b) {
+        var ra = { confirmed: 0, ongoing: 1, return_requested: 2, completed: 3 };
+        var da = ra[a.status] == null ? 4 : ra[a.status];
+        var db = ra[b.status] == null ? 4 : ra[b.status];
+        if (da !== db) return da - db;
+        return String(a.startDate || "").localeCompare(String(b.startDate || ""));
+      });
+  }
+
+  function driverGetTrip(bookingId) {
+    var d = requireDriver();
+    var booking = getBooking(bookingId);
+    if (!booking) throw new Error("Trip not found.");
+    if (booking.driverDetailsId !== d.id) {
+      throw new Error("This trip is not assigned to you.");
+    }
+    return booking;
+  }
+
+  function persistBooking(booking) {
+    var list = bookings();
+    for (var i = 0; i < list.length; i++) if (list[i].id === booking.id) list[i] = booking;
+    saveBookings(list);
+  }
+
+  function driverSetTripStatus(bookingId, next, csrf) {
+    try {
+      if (csrf) NS.security.assertCsrf(csrf);
+      else NS.security.issueCsrf();
+    } catch (e) {
+      NS.security.issueCsrf();
+    }
+    var me = NS.auth.current();
+    var booking = driverGetTrip(bookingId);
+    next = NS.security.sanitizeText(next, 20);
+    var allowed = { confirmed: ["ongoing"], ongoing: ["completed"] };
+    if ((allowed[booking.status] || []).indexOf(next) === -1) {
+      throw new Error("That trip update is not allowed right now.");
+    }
+    if (next === "ongoing" && booking.paymentStatus !== "paid") {
+      throw new Error("Trip can start once the booking is paid.");
+    }
+    booking.status = next;
+    booking.updatedAt = new Date().toISOString();
+    if (next === "ongoing") {
+      booking.startedAt = new Date().toISOString();
+      booking.startedBy = me.id;
+    }
+    if (next === "completed") {
+      booking.returnedAt = new Date().toISOString();
+      booking.returnedBy = me.id;
+    }
+    persistBooking(booking);
+    audit("driver-trip", me.id, booking.ref + " → " + next);
+
+    var thread = threads().filter(function (t) {
+      return t.bookingId === booking.id;
+    })[0];
+    if (!thread) {
+      var customer = NS.auth.userById(booking.userId) || me;
+      thread = notifyStaffOfBooking(booking, customer);
+    }
+    if (thread) {
+      var note =
+        next === "ongoing"
+          ? "Driver started trip " + booking.ref + "."
+          : "Driver ended trip " + booking.ref + ". Vehicle returned.";
+      pushThreadMessage(thread, "staff", me, note);
+      thread.unreadStaff = true;
+      saveThread(thread);
+    }
+    return booking;
+  }
+
+  function driverUpdateFuel(bookingId, level, csrf) {
+    try {
+      if (csrf) NS.security.assertCsrf(csrf);
+      else NS.security.issueCsrf();
+    } catch (e) {
+      NS.security.issueCsrf();
+    }
+    var me = NS.auth.current();
+    var booking = driverGetTrip(bookingId);
+    if (booking.status !== "confirmed" && booking.status !== "ongoing") {
+      throw new Error("Fuel can only be updated on active trips.");
+    }
+    var fuel = NS.security.sanitizeText(level || "", 20);
+    if (!fuel) throw new Error("Choose a fuel level.");
+    if (booking.status === "confirmed") booking.fuelBeforeRent = fuel;
+    else booking.fuelUponReturn = fuel;
+    booking.updatedAt = new Date().toISOString();
+    persistBooking(booking);
+    audit("driver-fuel", me.id, booking.ref + " fuel " + fuel);
+    return booking;
   }
 
   function saveVehicleReg(payload, csrf) {
@@ -1488,6 +1616,7 @@
         typeDriverLicense: "Professional",
         licenseExpiry: "2028-06-30",
         status: "active",
+        dutyStatus: "on_call",
         phone: "09170001111",
         createdAt: "2026-01-15T08:00:00.000Z"
       },
@@ -1498,6 +1627,7 @@
         typeDriverLicense: "Professional",
         licenseExpiry: "2029-01-15",
         status: "active",
+        dutyStatus: "regular",
         phone: "09170002222",
         createdAt: "2026-01-15T08:00:00.000Z"
       }
@@ -1595,6 +1725,93 @@
       }
     }
     if (userChanged) NS.store.set("users", users);
+
+    // Driver login account for the self-service trip interface.
+    var hasDriverUser = users.some(function (u) {
+      return u.role === "driver";
+    });
+    if (!hasDriverUser) {
+      var salt = NS.security.randomHex(16);
+      users.push({
+        id: "usr_driver",
+        email: "driver@idrivecdo.ph",
+        passwordHash: NS.security.hashPassword("Drive@Driver1", salt),
+        salt: salt,
+        role: "driver",
+        firstName: "Rico",
+        lastName: "Manalo",
+        phone: "09170001111",
+        address: "Carmen, Cagayan de Oro",
+        department: "Chauffeur",
+        licenseNo: "N02-98-112233",
+        licenseExpiry: "2028-06-30",
+        avatar: "",
+        status: "active",
+        driverId: "drv_001",
+        createdAt: new Date().toISOString()
+      });
+      NS.store.set("users", users);
+    }
+
+    // Link the driver record back to its login account.
+    var ds = drivers();
+    var dsChanged = false;
+    for (var di = 0; di < ds.length; di++) {
+      if (ds[di].id === "drv_001" && !ds[di].userId) {
+        ds[di].userId = "usr_driver";
+        dsChanged = true;
+      }
+      if (!ds[di].dutyStatus) {
+        ds[di].dutyStatus = di === 0 ? "on_call" : "regular";
+        dsChanged = true;
+      }
+    }
+    if (dsChanged) saveDrivers(ds);
+
+    // Ensure at least one chauffeur trip is assigned so the driver has work to see.
+    var hasAssigned = bookings().some(function (b) {
+      return !!b.driverDetailsId;
+    });
+    if (!hasAssigned && getVehicle("veh_fortuner")) {
+      var bl = bookings();
+      bl.unshift({
+        id: "bkg_driver1",
+        ref: "IDR-20260918-C7D",
+        userId: "usr_customer",
+        vehicleId: "veh_fortuner",
+        startDate: "2026-09-18",
+        endDate: "2026-09-20",
+        days: 2,
+        pickup: "Laguindingan Airport (CGY)",
+        dropoff: "Uptown Cagayan de Oro",
+        pickupTime: "13:00",
+        returnTime: "10:00",
+        driveMode: "chauffeur",
+        driverOption: "Chauffeur",
+        driverDetailsId: "drv_001",
+        numberOfPassengers: 4,
+        fuelBeforeRent: "Full",
+        fuelUponReturn: "",
+        addons: ["driver"],
+        subtotal: 9000,
+        extras: 3000,
+        total: 12000,
+        status: "confirmed",
+        paymentStatus: "paid",
+        payment: {
+          brand: "Visa",
+          last4: "4242",
+          holder: "Paolo Reyes",
+          authCode: "AUTHC7D",
+          method: "card",
+          paidAt: "2026-09-10T09:00:00.000Z"
+        },
+        notes: "VIP airport pickup, 4 passengers.",
+        createdAt: "2026-09-10T08:30:00.000Z",
+        updatedAt: "2026-09-10T09:00:00.000Z"
+      });
+      saveBookings(bl);
+    }
   }
 
   function seedIfNeeded() {
@@ -1710,6 +1927,12 @@
     activeDrivers: activeDrivers,
     saveDriver: saveDriver,
     removeDriver: removeDriver,
+    DRIVER_FUEL_LEVELS: DRIVER_FUEL_LEVELS,
+    currentDriver: currentDriver,
+    driverTrips: driverTrips,
+    driverGetTrip: driverGetTrip,
+    driverSetTripStatus: driverSetTripStatus,
+    driverUpdateFuel: driverUpdateFuel,
     vehicleRegs: vehicleRegs,
     saveVehicleReg: saveVehicleReg,
     regsForVehicle: regsForVehicle,

@@ -1094,6 +1094,16 @@ textarea { min-height: 120px; resize: vertical; }
   color: #9a3412;
   border-color: rgba(253, 186, 116, 0.85);
 }
+.badge-regular {
+  background: rgba(219, 234, 254, 0.9);
+  color: #1e40af;
+  border-color: rgba(147, 197, 253, 0.9);
+}
+.badge-on_call {
+  background: rgba(254, 243, 199, 0.92);
+  color: #92400e;
+  border-color: rgba(253, 230, 138, 0.95);
+}
 .badge-cancelled, .badge-rejected, .badge-disabled, .badge-unpaid, .badge-maintenance {
   background: rgba(243, 244, 246, 0.75); color: #6b7280; border-color: rgba(229, 231, 235, 0.9);
 }
@@ -1332,12 +1342,72 @@ textarea { min-height: 120px; resize: vertical; }
   margin: 0.85rem 0 1.1rem;
 }
 .desk-toolbar .form-select { max-width: 240px; }
-#status-pills {
+#status-pills,
+.status-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem 0.7rem;
   align-items: center;
   margin: 0 0 0.4rem;
+}
+.driver-duty-pills {
+  margin: 0.55rem 0 0.15rem;
+}
+.driver-duty-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.15rem;
+}
+.status-pill-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.status-pill-btn:hover { opacity: 0.85; }
+.status-pill-btn.is-active {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+.status-pill-btn.is-active .badge {
+  box-shadow: 0 0 0 2px rgba(120, 66, 245, 0.22);
+}
+.status-pill-view {
+  display: inline-flex;
+  opacity: 0.4;
+  pointer-events: none;
+}
+.status-pill-view.is-active {
+  opacity: 1;
+}
+.status-pill-view.is-active .badge {
+  box-shadow: 0 0 0 2px rgba(120, 66, 245, 0.22);
+}
+.driver-duty-hint {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--muted);
+  margin-left: 0.15rem;
+}
+.driver-id-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+.driver-card-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
 }
 .admin-shell .form-card { margin-bottom: 1rem; }
 .admin-shell .table { margin-top: 0.4rem; }
@@ -1369,6 +1439,241 @@ textarea { min-height: 120px; resize: vertical; }
   font-size: 1.55rem;
   letter-spacing: -0.02em;
   text-transform: none;
+}
+
+/* Driver workspace */
+.driver-shell {
+  grid-template-columns: 1fr;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.driver-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.driver-id-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  text-align: right;
+  padding: 0.7rem 0.95rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  border: var(--glass-border);
+  box-shadow: var(--glass-shine);
+}
+.driver-id-card strong {
+  font-size: 0.98rem;
+  color: var(--ink);
+}
+.driver-id-card > span:not(.role-pill) {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+.driver-id-card .role-pill { margin-top: 0; }
+.driver-id-badges .role-pill { margin-top: 0; }
+
+.driver-section { margin-top: 0.35rem; }
+.driver-queue h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.55rem 0 0.85rem;
+  font-size: 1.05rem;
+}
+.driver-trips {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.95rem;
+}
+.driver-trip {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: var(--glass-border);
+  box-shadow: var(--shadow), var(--glass-shine);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.driver-trip:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift), var(--glass-shine);
+}
+.driver-trip.is-ongoing {
+  border-color: rgba(120, 66, 245, 0.45);
+  box-shadow: var(--shadow), 0 0 0 1px rgba(120, 66, 245, 0.18);
+}
+.driver-trip.is-done { opacity: 0.92; }
+.driver-photo {
+  position: relative;
+  min-height: 100%;
+  background: rgba(120, 66, 245, 0.08);
+}
+.driver-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  min-height: 180px;
+}
+.driver-photo-empty {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  height: 100%;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.driver-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem 1.05rem;
+  min-width: 0;
+}
+.driver-trip-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.driver-trip-head h3 {
+  margin: 0;
+  font-size: 1.12rem;
+}
+.driver-ref {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+.driver-route {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.55rem;
+  align-items: start;
+  padding: 0.7rem 0.8rem;
+  border-radius: 14px;
+  background: rgba(120, 66, 245, 0.06);
+}
+.driver-stop {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+.driver-stop span {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.driver-stop strong {
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.driver-stop em {
+  font-style: normal;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--accent, #7842F5);
+}
+.driver-route-arrow {
+  align-self: center;
+  font-weight: 800;
+  color: rgba(120, 66, 245, 0.55);
+}
+.driver-meta-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem 0.75rem;
+}
+.driver-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+.driver-meta span {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.driver-meta strong {
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.driver-phone {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.driver-notes {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px dashed rgba(120, 66, 245, 0.28);
+  border-radius: 10px;
+  font-size: 0.86rem;
+}
+.driver-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  margin-top: 0.15rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(120, 66, 245, 0.12);
+}
+.driver-ops {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.driver-ops-label {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.driver-ops-done p {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+.driver-fuel {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+.driver-fuel .field {
+  flex: 1 1 140px;
+  margin: 0;
+}
+.driver-fuel .form-select {
+  min-width: 120px;
+}
+.driver-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.driver-actions .btn {
+  min-width: 118px;
 }
 
 .fleet-editor {
@@ -1766,6 +2071,7 @@ th { background: rgba(255, 255, 255, 0.35); color: var(--ink); font-weight: 800;
   .desk-shortcuts,
   .desk-split,
   .fleet-stats,
+  .driver-stats,
   .fleet-admin-grid { grid-template-columns: 1fr; }
   .admin-shell { padding: 1rem 4vw 2.5rem; }
   .admin-shell > section { padding: 1.1rem 1rem 1.35rem; }
@@ -1773,6 +2079,13 @@ th { background: rgba(255, 255, 255, 0.35); color: var(--ink); font-weight: 800;
   .fleet-admin-card { grid-template-columns: 1fr; }
   .fleet-admin-photo img,
   .fleet-admin-photo-empty { min-height: 160px; }
+  .driver-trip { grid-template-columns: 1fr; }
+  .driver-photo img,
+  .driver-photo-empty { min-height: 140px; }
+  .driver-route { grid-template-columns: 1fr; }
+  .driver-route-arrow { display: none; }
+  .driver-meta-row { grid-template-columns: 1fr 1fr; }
+  .driver-id-card { align-items: flex-start; text-align: left; }
   .booking-card { flex-direction: column; align-items: stretch; gap: 0.85rem; }
   .booking-card > div:last-child { align-items: flex-start; text-align: left; }
   .booking-card .btn-row { justify-content: flex-start; }

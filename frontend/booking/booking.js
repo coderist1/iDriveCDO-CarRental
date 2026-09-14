@@ -166,11 +166,12 @@
         '<option value="">Select driver</option>' +
         (NS.domain.activeDrivers ? NS.domain.activeDrivers() : [])
           .map(function (d) {
+            var duty = d.dutyStatus === "on_call" ? "On call" : "Regular";
             return (
               '<option value="' +
               d.id +
               '">' +
-              NS.security.escapeHtml(d.fullName + " · " + d.driverLicense) +
+              NS.security.escapeHtml(d.fullName + " · " + duty + " · " + d.driverLicense) +
               "</option>"
             );
           })
@@ -555,12 +556,16 @@
       "</dd></div>" +
       (booking.driverDetailsId
         ? "<div><dt>Assigned driver</dt><dd>" +
-          NS.security.escapeHtml(
-            (function () {
-              var d = NS.domain.getDriver(booking.driverDetailsId);
-              return d ? d.fullName + " · " + d.driverLicense : booking.driverDetailsId;
-            })()
-          ) +
+          (function () {
+            var d = NS.domain.getDriver(booking.driverDetailsId);
+            if (!d) return NS.security.escapeHtml(booking.driverDetailsId);
+            var duty = d.dutyStatus === "on_call" ? "on_call" : "regular";
+            return (
+              NS.security.escapeHtml(d.fullName + " · " + d.driverLicense) +
+              " " +
+              NS.ui.statusBadge(duty)
+            );
+          })() +
           "</dd></div>"
         : "") +
       driverRows +
