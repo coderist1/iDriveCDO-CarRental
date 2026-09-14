@@ -88,15 +88,24 @@
     });
   }
 
-  function logoSvg(fill) {
+  function logoUrl() {
+    return NS.routes.base() + "shared/img/logo.jpg";
+  }
+
+  function brandLogo(options) {
+    options = options || {};
+    var cls = "brand-logo" + (options.compact ? " brand-logo-compact" : "");
     return (
-      '<svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">' +
-      '<rect width="40" height="40" rx="10" fill="' +
-      (fill || "#7842F5") +
-      '"/>' +
-      '<text x="20" y="26" text-anchor="middle" fill="#fff" font-size="18" font-family="Plus Jakarta Sans, Segoe UI, sans-serif" font-weight="800">i</text>' +
-      "</svg>"
+      '<img class="' +
+      cls +
+      '" src="' +
+      logoUrl() +
+      '" alt="idriveCDO Car Rental Services" width="160" height="72">'
     );
+  }
+
+  function logoSvg() {
+    return brandLogo();
   }
 
   function navLink(href, label, page) {
@@ -148,11 +157,11 @@
 
       nav.innerHTML =
         '<header class="site-header">' +
-        '<a class="brand" href="' +
+        '<a class="brand brand-with-logo" href="' +
         NS.routes.href("home") +
-        '">' +
-        logoSvg("#7842F5") +
-        "<span><strong>iDrive</strong> CDO<span class=\"brand-sub\">Car Rental</span></span></a>" +
+        '" aria-label="idriveCDO home">' +
+        brandLogo() +
+        "</a>" +
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
         '<nav class="site-nav" id="site-nav">' +
         navLink(NS.routes.href("home"), "Home", "home") +
@@ -168,9 +177,9 @@
       footer.innerHTML =
         '<footer class="site-footer">' +
         '<div class="footer-grid">' +
-        '<div><div class="brand">' +
-        logoSvg("#7842F5") +
-        "<span><strong>iDrive</strong> CDO</span></div>" +
+        '<div><div class="brand brand-with-logo">' +
+        brandLogo() +
+        "</div>" +
         "<p>Self-drive and chauffeur car hire in Cagayan de Oro. Airport, downtown, and city-wide delivery.</p></div>" +
         "<div><h4>Visit</h4><p>2F Limketkai Drive<br>Cagayan de Oro City 9000<br>Misamis Oriental</p></div>" +
         "<div><h4>Hours</h4><p>Desk: 7:00 AM – 9:00 PM daily<br>Airport night desk on request</p></div>" +
@@ -194,11 +203,11 @@
     if (nav) {
       nav.innerHTML =
         '<header class="desk-header">' +
-        '<a class="brand desk-brand" href="' +
+        '<a class="brand desk-brand brand-with-logo" href="' +
         NS.routes.href("adminHome") +
-        '">' +
-        logoSvg("#7842F5") +
-        "<span><strong>iDrive</strong> Desk<span class=\"brand-sub\">Workspace</span></span></a>" +
+        '" aria-label="idriveCDO Desk">' +
+        brandLogo({ compact: true }) +
+        "<span class=\"brand-workspace\">Desk<span class=\"brand-sub\">Workspace</span></span></a>" +
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
         '<nav class="desk-nav" id="site-nav">' +
         navLink(NS.routes.href("adminHome"), "Overview", "adminHome") +
@@ -235,11 +244,11 @@
     if (nav) {
       nav.innerHTML =
         '<header class="desk-header">' +
-        '<a class="brand desk-brand" href="' +
+        '<a class="brand desk-brand brand-with-logo" href="' +
         NS.routes.href("driverHome") +
-        '">' +
-        logoSvg("#7842F5") +
-        "<span><strong>iDrive</strong> Driver<span class=\"brand-sub\">Workspace</span></span></a>" +
+        '" aria-label="idriveCDO Driver">' +
+        brandLogo({ compact: true }) +
+        "<span class=\"brand-workspace\">Driver<span class=\"brand-sub\">Workspace</span></span></a>" +
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
         '<nav class="desk-nav" id="site-nav">' +
         navLink(NS.routes.href("driverHome"), "My trips", "driverHome") +
@@ -425,6 +434,18 @@
   }
 
   function readImageAsAvatar(file, done) {
+    readImageFile(file, done, { maxSide: 320, maxBytes: 320000, label: "Profile image" });
+  }
+
+  function readLicensePhoto(file, done) {
+    readImageFile(file, done, { maxSide: 960, maxBytes: 700000, label: "License photo" });
+  }
+
+  function readImageFile(file, done, options) {
+    options = options || {};
+    var maxSide = options.maxSide || 320;
+    var maxBytes = options.maxBytes || 320000;
+    var label = options.label || "Photo";
     if (!file) {
       done(new Error("Choose a photo first."), null);
       return;
@@ -433,8 +454,8 @@
       done(new Error("Use a JPG, PNG, or WebP photo."), null);
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      done(new Error("Photo must be under 5 MB."), null);
+    if (file.size > 8 * 1024 * 1024) {
+      done(new Error(label + " must be under 8 MB."), null);
       return;
     }
     var reader = new FileReader();
@@ -447,8 +468,7 @@
         done(new Error("That file is not a usable image."), null);
       };
       img.onload = function () {
-        var max = 320;
-        var scale = Math.min(1, max / Math.max(img.width, img.height));
+        var scale = Math.min(1, maxSide / Math.max(img.width, img.height));
         var w = Math.max(1, Math.round(img.width * scale));
         var h = Math.max(1, Math.round(img.height * scale));
         var canvas = document.createElement("canvas");
@@ -456,12 +476,15 @@
         canvas.height = h;
         var ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, w, h);
-        var dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-        if (dataUrl.length > 320000) {
-          dataUrl = canvas.toDataURL("image/jpeg", 0.65);
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.84);
+        if (dataUrl.length > maxBytes) {
+          dataUrl = canvas.toDataURL("image/jpeg", 0.7);
         }
-        if (dataUrl.length > 320000) {
-          done(new Error("Profile image is still too large after compression."), null);
+        if (dataUrl.length > maxBytes) {
+          dataUrl = canvas.toDataURL("image/jpeg", 0.55);
+        }
+        if (dataUrl.length > maxBytes) {
+          done(new Error(label + " is still too large after compression."), null);
           return;
         }
         done(null, dataUrl);
@@ -498,6 +521,9 @@
           "</td></tr>" +
           "<tr><th>License expiry</th><td>" +
           NS.security.escapeHtml(info.licenseExpiry || "") +
+          "</td></tr>" +
+          "<tr><th>License photo</th><td>" +
+          (info.licensePhoto ? "Attached" : "Missing") +
           "</td></tr>" +
           "<tr><th>Emergency</th><td>" +
           NS.security.escapeHtml(info.emergencyPhone || "") +
@@ -597,6 +623,7 @@
     clearErrors: clearErrors,
     avatarHtml: avatarHtml,
     readImageAsAvatar: readImageAsAvatar,
+    readLicensePhoto: readLicensePhoto,
     downloadReceipt: downloadReceipt
   };
 })(window);

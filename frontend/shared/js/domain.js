@@ -531,13 +531,22 @@
     if (!NS.validation.phMobile(emergencyPhone)) {
       throw new Error("Enter a Philippine emergency contact number (09XXXXXXXXX).");
     }
+    var licensePhoto = typeof info.licensePhoto === "string" ? info.licensePhoto.trim() : "";
+    if (!licensePhoto) throw new Error("Upload a photo of your driver's license for self-drive.");
+    if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(licensePhoto)) {
+      throw new Error("License photo must be a JPG, PNG, or WebP image.");
+    }
+    if (licensePhoto.length > 750000) {
+      throw new Error("License photo is too large. Choose a clearer, smaller photo.");
+    }
 
     return {
       licenseName: licenseName,
       licenseNo: licenseNo,
       licenseExpiry: licenseExpiry,
       licenseAddress: licenseAddress,
-      emergencyPhone: emergencyPhone
+      emergencyPhone: emergencyPhone,
+      licensePhoto: licensePhoto
     };
   }
 

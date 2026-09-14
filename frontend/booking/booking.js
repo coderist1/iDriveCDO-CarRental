@@ -161,6 +161,51 @@
       });
     }
 
+    var licensePhotoData = document.getElementById("license-photo-data");
+    var licensePhotoInput = document.getElementById("license-photo-input");
+    var licensePhotoPreview = document.getElementById("license-photo-preview");
+    var licensePhotoPick = document.getElementById("license-photo-pick");
+    var licensePhotoClear = document.getElementById("license-photo-clear");
+
+    function setLicensePhoto(dataUrl) {
+      if (licensePhotoData) licensePhotoData.value = dataUrl || "";
+      if (licensePhotoPreview) {
+        if (dataUrl) {
+          licensePhotoPreview.classList.remove("is-empty");
+          licensePhotoPreview.innerHTML = '<img src="' + dataUrl.replace(/"/g, "") + '" alt="Driver license preview">';
+        } else {
+          licensePhotoPreview.classList.add("is-empty");
+          licensePhotoPreview.textContent = "No photo yet";
+        }
+      }
+      if (licensePhotoClear) licensePhotoClear.hidden = !dataUrl;
+      if (licensePhotoPick) licensePhotoPick.textContent = dataUrl ? "Replace license photo" : "Upload license photo";
+    }
+
+    if (licensePhotoPick && licensePhotoInput) {
+      licensePhotoPick.addEventListener("click", function () {
+        licensePhotoInput.click();
+      });
+      licensePhotoInput.addEventListener("change", function () {
+        var file = licensePhotoInput.files && licensePhotoInput.files[0];
+        if (!file) return;
+        NS.ui.readLicensePhoto(file, function (err, dataUrl) {
+          licensePhotoInput.value = "";
+          if (err) {
+            showAlert(form, err.message || "Could not read license photo.", "err");
+            return;
+          }
+          setLicensePhoto(dataUrl);
+          showAlert(form, "License photo attached.", "ok");
+        });
+      });
+    }
+    if (licensePhotoClear) {
+      licensePhotoClear.addEventListener("click", function () {
+        setLicensePhoto("");
+      });
+    }
+
     if (form.driverDetailsId) {
       form.driverDetailsId.innerHTML =
         '<option value="">Select driver</option>' +
@@ -290,6 +335,12 @@
           if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
           var csrfInput = form.querySelector('input[name="csrf"]');
           var mode = driveMode();
+          if (mode === "self") {
+            var photoVal = licensePhotoData ? licensePhotoData.value : "";
+            if (!photoVal) {
+              throw new Error("Upload a photo of your driver's license for self-drive.");
+            }
+          }
           var driverInfo =
             mode === "chauffeur"
               ? {
@@ -301,7 +352,8 @@
                   licenseNo: form.licenseNo.value,
                   licenseExpiry: form.licenseExpiry.value,
                   licenseAddress: form.licenseAddress.value,
-                  emergencyPhone: form.emergencyPhone.value
+                  emergencyPhone: form.emergencyPhone.value,
+                  licensePhoto: licensePhotoData ? licensePhotoData.value : ""
                 };
           var booking = NS.domain.createBooking(
             {
@@ -612,6 +664,13 @@
       (info.licenseAddress
         ? "<p>License address: " + NS.security.escapeHtml(info.licenseAddress) + "</p>"
         : "") +
+      (info.licensePhoto
+        ? '<div class="license-photo-view"><p class="eyebrow">Driver’s license photo</p><img src="' +
+          String(info.licensePhoto).replace(/"/g, "") +
+          '" alt="Uploaded driver license"></div>'
+        : booking.driveMode !== "chauffeur"
+          ? "<p class='notice'>No license photo on file for this booking.</p>"
+          : "") +
       (booking.returnNotes
         ? "<p>Return notes: " + NS.security.escapeHtml(booking.returnNotes) + "</p>"
         : "") +
