@@ -654,7 +654,41 @@ label, .field { display: block; margin-bottom: 0.85rem; font-weight: 700; font-s
   font-weight: 700;
   font-size: 0.9rem;
 }
+.pay-qr-wrap {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 0.95rem;
+  align-items: center;
+  margin: 0 0 1rem;
+}
+.pay-qr-host {
+  width: 220px;
+  height: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid rgba(120, 66, 245, 0.18);
+  box-shadow: var(--shadow);
+  display: grid;
+  place-items: center;
+}
+.pay-qr-host canvas,
+.pay-qr-host img {
+  width: 220px;
+  height: 220px;
+  display: block;
+}
+.pay-qr-amount {
+  margin: 0.35rem 0 0.2rem;
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--primary);
+}
 @media (max-width: 640px) {
+  .pay-qr-wrap { grid-template-columns: 1fr; }
+  .pay-qr-host,
+  .pay-qr-host canvas,
+  .pay-qr-host img { width: 200px; height: 200px; margin: 0 auto; }
   .drive-mode { grid-template-columns: 1fr; }
 }
 .estimate-list {
