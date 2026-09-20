@@ -970,6 +970,7 @@
       var t = v ? v.type : "Other";
       byType[t] = (byType[t] || 0) + (list[j].paymentStatus === "paid" ? list[j].total : 0);
     }
+    var repair = fleetRepairStats();
     return {
       bookings: list.length,
       vehicles: vehicles().length,
@@ -980,9 +981,47 @@
       openMaintenance: maintenances().filter(function (m) {
         return !m.finished;
       }).length,
+      repairPercent: repair.percent,
+      repairCount: repair.repair,
       revenue: revenue,
       byStatus: byStatus,
       byType: byType
+    };
+  }
+
+  function fleetRepairStats() {
+    var list = vehicles();
+    var total = list.length;
+    var repair = 0;
+    var sample = null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].status === "maintenance") {
+        repair++;
+        if (!sample) sample = list[i];
+      }
+    }
+    if (!sample && list.length) {
+      for (var j = 0; j < list.length; j++) {
+        if (list[j].image) {
+          sample = list[j];
+          break;
+        }
+      }
+      if (!sample) sample = list[0];
+    }
+    return {
+      total: total,
+      repair: repair,
+      percent: total ? Math.round((repair / total) * 100) : 0,
+      sample: sample
+        ? {
+            id: sample.id,
+            name: sample.name,
+            plate: sample.plate,
+            image: sample.image || "",
+            status: sample.status
+          }
+        : null
     };
   }
 
@@ -1954,6 +1993,7 @@
     payments: payments,
     allPayments: allPayments,
     report: report,
+    fleetRepairStats: fleetRepairStats,
     seedIfNeeded: seedIfNeeded,
     sendContact: sendContact,
     replyToThread: replyToThread,

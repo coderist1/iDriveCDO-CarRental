@@ -208,7 +208,9 @@
         '" aria-label="idriveCDO Desk">' +
         brandLogo({ compact: true }) +
         "<span class=\"brand-workspace\">Desk<span class=\"brand-sub\">Workspace</span></span></a>" +
+        '<div class="desk-header-right">' +
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
+        "</div>" +
         '<nav class="desk-nav" id="site-nav">' +
         navLink(NS.routes.href("adminHome"), "Overview", "adminHome") +
         navLink(NS.routes.href("adminInbox"), unread ? "Inbox · " + unread : "Inbox", "adminInbox") +

@@ -276,6 +276,7 @@
     }
 
     function render() {
+      if (!grid) return;
       var all = NS.domain.vehicles();
       renderStats(all);
       var statusVal = filterStatus ? filterStatus.value : "";
@@ -288,36 +289,36 @@
       grid.innerHTML = list.length
         ? list
             .map(function (v) {
+              var pct = v.status === "maintenance" ? 100 : 0;
+              var tone = pct >= 40 ? "is-high" : pct > 0 ? "is-mid" : "is-ok";
               return (
-                '<article class="fleet-admin-card">' +
-                '<div class="fleet-admin-photo">' +
+                '<article class="fleet-photo-card">' +
+                '<div class="fleet-photo-media">' +
                 (v.image
-                  ? '<img src="' + NS.security.escapeHtml(v.image) + '" alt="' + NS.security.escapeHtml(v.name) + '">'
-                  : '<div class="fleet-admin-photo-empty">No photo</div>') +
+                  ? '<img src="' +
+                    NS.security.escapeHtml(v.image) +
+                    '" alt="' +
+                    NS.security.escapeHtml(v.name) +
+                    '">'
+                  : '<div class="fleet-photo-empty">No photo</div>') +
+                '<span class="fleet-photo-pct ' +
+                tone +
+                '"><strong>' +
+                pct +
+                "%</strong><em>to repair</em></span>" +
                 NS.ui.statusBadge(v.status) +
                 "</div>" +
-                '<div class="fleet-admin-body">' +
-                '<p class="eyebrow">' +
-                NS.security.escapeHtml(v.type) +
-                " · " +
-                NS.security.escapeHtml(v.transmission) +
-                "</p>" +
+                '<div class="fleet-photo-body">' +
                 "<h3>" +
                 NS.security.escapeHtml(v.name) +
                 "</h3>" +
-                '<p class="fleet-admin-meta">' +
+                "<p>" +
                 NS.security.escapeHtml(v.plate) +
                 " · " +
-                NS.security.escapeHtml(v.fuel || "") +
+                NS.security.escapeHtml(v.type) +
                 " · " +
-                (v.seats || 0) +
-                " seats" +
-                (v.mileage ? " · " + Number(v.mileage).toLocaleString() + " km" : "") +
-                "</p>" +
-                '<div class="fleet-admin-foot">' +
-                "<strong>" +
                 NS.ui.peso(v.dailyRate) +
-                "<span>/day</span></strong>" +
+                "/day</p>" +
                 (isAdmin
                   ? '<div class="btn-row"><button class="btn btn-ghost btn-sm" type="button" data-edit="' +
                     v.id +
@@ -325,7 +326,7 @@
                     v.id +
                     '">Remove</button></div>'
                   : "") +
-                "</div></div></article>"
+                "</div></article>"
               );
             })
             .join("")
@@ -393,26 +394,28 @@
       });
     }
 
-    grid.addEventListener("click", function (e) {
-      var edit = e.target.getAttribute("data-edit");
-      var del = e.target.getAttribute("data-del");
-      if (edit) {
-        openEditor(NS.domain.getVehicle(edit));
-      }
-      if (del) {
-        NS.ui.askYesNo("Remove this vehicle from the fleet?", { title: "Save edit" }).then(function (ok) {
-          if (!ok) return;
-          try {
-            NS.domain.removeVehicle(del, NS.security.getCsrf());
-            if (form && form.vehicleId.value === del) closeEditor();
-            render();
-            NS.ui.toast("Vehicle removed.", "ok");
-          } catch (err) {
-            NS.ui.toast(err.message, "err");
-          }
-        });
-      }
-    });
+    if (grid) {
+      grid.addEventListener("click", function (e) {
+        var edit = e.target.getAttribute("data-edit");
+        var del = e.target.getAttribute("data-del");
+        if (edit) {
+          openEditor(NS.domain.getVehicle(edit));
+        }
+        if (del) {
+          NS.ui.askYesNo("Remove this vehicle from the fleet?", { title: "Save edit" }).then(function (ok) {
+            if (!ok) return;
+            try {
+              NS.domain.removeVehicle(del, NS.security.getCsrf());
+              if (form && form.vehicleId.value === del) closeEditor();
+              render();
+              NS.ui.toast("Vehicle removed.", "ok");
+            } catch (err) {
+              NS.ui.toast(err.message, "err");
+            }
+          });
+        }
+      });
+    }
 
     if (filterStatus) filterStatus.addEventListener("change", render);
     if (filterType) filterType.addEventListener("change", render);
