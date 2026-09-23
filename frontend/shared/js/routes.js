@@ -28,6 +28,7 @@
     adminSecurityLog: "admin/security-log.html",
     adminDrivers: "admin/drivers.html",
     adminFleetOps: "admin/fleet-ops.html",
+    adminPredictiveMaintenance: "admin/predictive-maintenance.html",
     adminPayments: "admin/payments.html",
     adminInbox: "admin/inbox.html",
     driverHome: "driver/index.html"

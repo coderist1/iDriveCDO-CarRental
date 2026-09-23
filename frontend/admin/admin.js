@@ -53,6 +53,7 @@
     var fleet =
       link("vehicles.html", "Vehicles", "adminVehicles", icon('<path d="M5 16h14l-1.5-7h-11z"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/>')) +
       link("fleet-ops.html", "Registration & service", "adminFleetOps", icon('<path d="M12 3v4"/><circle cx="12" cy="14" r="7"/><path d="M12 11v3l2 2"/>')) +
+      link("predictive-maintenance.html", "Predictive maintenance", "adminPredictiveMaintenance", icon('<path d="M4 18h16"/><path d="M6 15l3-4 3 2 5-7 2 2"/><circle cx="17" cy="6" r="1"/>')) +
       link("drivers.html", "Drivers", "adminDrivers", icon('<circle cx="12" cy="8" r="3"/><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5"/>'));
     var people = isAdmin
       ? group(
@@ -110,6 +111,7 @@
         '<a class="desk-shortcut" href="bookings.html"><strong>Bookings</strong><span>Confirm and complete trips</span></a>' +
         '<a class="desk-shortcut" href="payments.html"><strong>Payments</strong><span>Cash and cashless records</span></a>' +
         '<a class="desk-shortcut" href="vehicles.html"><strong>Fleet</strong><span>Cars, plates, and rates</span></a>' +
+        '<a class="desk-shortcut" href="predictive-maintenance.html"><strong>Predictive maintenance</strong><span>Run ML vehicle health checks</span></a>' +
         '<a class="desk-shortcut" href="drivers.html"><strong>Drivers</strong><span>Chauffeur roster</span></a>' +
         '<a class="desk-shortcut" href="reports.html"><strong>Reports</strong><span>Revenue and mix</span></a>';
     }
@@ -289,8 +291,13 @@
       grid.innerHTML = list.length
         ? list
             .map(function (v) {
-              var pct = v.status === "maintenance" ? 100 : 0;
-              var tone = pct >= 40 ? "is-high" : pct > 0 ? "is-mid" : "is-ok";
+              var prediction = NS.domain.predictionForVehicle
+                ? NS.domain.predictionForVehicle(v.id)
+                : null;
+              var pct = prediction && prediction.probability !== null
+                ? Math.round(prediction.probability * 100)
+                : null;
+              var tone = pct === null ? "" : pct >= 50 ? "is-high" : pct >= 25 ? "is-mid" : "is-ok";
               return (
                 '<article class="fleet-photo-card">' +
                 '<div class="fleet-photo-media">' +
@@ -304,8 +311,8 @@
                 '<span class="fleet-photo-pct ' +
                 tone +
                 '"><strong>' +
-                pct +
-                "%</strong><em>to repair</em></span>" +
+                (pct === null ? "—" : pct + "%") +
+                "</strong><em>ML risk</em></span>" +
                 NS.ui.statusBadge(v.status) +
                 "</div>" +
                 '<div class="fleet-photo-body">' +
@@ -1320,6 +1327,8 @@
     renderThread();
   }
 
+  NS.admin = NS.admin || {};
+  NS.admin.mountNav = mountAdminNav;
   NS.pages.adminHome = adminHome;
   NS.pages.adminVehicles = adminVehicles;
   NS.pages.adminBookings = adminBookings;

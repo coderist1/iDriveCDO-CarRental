@@ -114,6 +114,39 @@
     return '<a class="nav-link' + cls + '" href="' + href + '">' + label + "</a>";
   }
 
+  function defaultBackHref() {
+    var me = NS.auth.current();
+    var page = document.body.getAttribute("data-page") || "";
+    if (me && me.role === "driver") return NS.routes.href("driverHome");
+    if (me && NS.auth.hasRole("staff")) return NS.routes.href("adminHome");
+    if (page === "car" || page === "book") return NS.routes.href("fleet");
+    if (page === "bookingDetail" || page === "payment") return NS.routes.href("myBookings");
+    if (page === "profile") return NS.routes.href("account");
+    if (page === "login" || page === "register") return NS.routes.href("home");
+    return NS.routes.href("home");
+  }
+
+  function backButtonHtml() {
+    return (
+      '<button class="btn btn-ghost btn-sm nav-back" id="nav-back-btn" type="button" aria-label="Go back">' +
+      '<span class="nav-back-icon" aria-hidden="true">←</span> Back' +
+      "</button>"
+    );
+  }
+
+  function goBack() {
+    var fallback = defaultBackHref();
+    var sameOrigin =
+      document.referrer &&
+      document.referrer.indexOf(location.origin) === 0 &&
+      document.referrer.split("#")[0] !== location.href.split("#")[0];
+    if (sameOrigin && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    location.href = fallback;
+  }
+
   function bindNavChrome() {
     var toggle = document.getElementById("nav-toggle");
     var siteNav = document.getElementById("site-nav");
@@ -128,6 +161,10 @@
         NS.auth.logout();
         location.href = NS.routes.href("home");
       });
+    }
+    var backBtn = document.getElementById("nav-back-btn");
+    if (backBtn) {
+      backBtn.addEventListener("click", goBack);
     }
   }
 
@@ -157,11 +194,13 @@
 
       nav.innerHTML =
         '<header class="site-header">' +
+        '<div class="header-lead">' +
+        backButtonHtml() +
         '<a class="brand brand-with-logo" href="' +
         NS.routes.href("home") +
         '" aria-label="idriveCDO home">' +
         brandLogo() +
-        "</a>" +
+        "</a></div>" +
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
         '<nav class="site-nav" id="site-nav">' +
         navLink(NS.routes.href("home"), "Home", "home") +
@@ -203,11 +242,13 @@
     if (nav) {
       nav.innerHTML =
         '<header class="desk-header">' +
+        '<div class="header-lead">' +
+        backButtonHtml() +
         '<a class="brand desk-brand brand-with-logo" href="' +
         NS.routes.href("adminHome") +
         '" aria-label="idriveCDO Desk">' +
         brandLogo({ compact: true }) +
-        "<span class=\"brand-workspace\">Desk<span class=\"brand-sub\">Workspace</span></span></a>" +
+        "<span class=\"brand-workspace\">Desk<span class=\"brand-sub\">Workspace</span></span></a></div>" +
         '<div class="desk-header-right">' +
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
         "</div>" +
@@ -246,11 +287,13 @@
     if (nav) {
       nav.innerHTML =
         '<header class="desk-header">' +
+        '<div class="header-lead">' +
+        backButtonHtml() +
         '<a class="brand desk-brand brand-with-logo" href="' +
         NS.routes.href("driverHome") +
         '" aria-label="idriveCDO Driver">' +
         brandLogo({ compact: true }) +
-        "<span class=\"brand-workspace\">Driver<span class=\"brand-sub\">Workspace</span></span></a>" +
+        "<span class=\"brand-workspace\">Driver<span class=\"brand-sub\">Workspace</span></span></a></div>" +
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
         '<nav class="desk-nav" id="site-nav">' +
         navLink(NS.routes.href("driverHome"), "My trips", "driverHome") +
@@ -617,6 +660,7 @@
     toast: toast,
     askYesNo: askYesNo,
     mountChrome: mountChrome,
+    goBack: goBack,
     statusBadge: statusBadge,
     starsDisplay: starsDisplay,
     vehicleCard: vehicleCard,

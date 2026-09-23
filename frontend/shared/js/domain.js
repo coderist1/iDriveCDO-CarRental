@@ -74,6 +74,14 @@
     NS.store.set("fuelRecords", list);
   }
 
+  function vehicleTelemetry() {
+    return NS.store.get("vehicleTelemetry", {});
+  }
+
+  function maintenancePredictions() {
+    return NS.store.get("maintenancePredictions", {});
+  }
+
   function payments() {
     return NS.store.get("payments", []);
   }
@@ -1356,6 +1364,59 @@
     });
   }
 
+  function telemetryForVehicle(vehicleId) {
+    requireStaff();
+    return vehicleTelemetry()[vehicleId] || null;
+  }
+
+  function predictionForVehicle(vehicleId) {
+    requireStaff();
+    return maintenancePredictions()[vehicleId] || null;
+  }
+
+  function saveMaintenancePrediction(vehicleId, telemetry, prediction, csrf) {
+    NS.security.assertCsrf(csrf);
+    requireStaff();
+    var vehicle = getVehicle(vehicleId);
+    if (!vehicle) throw new Error("Vehicle not found.");
+
+    var cleanTelemetry = {};
+    Object.keys(telemetry || {}).forEach(function (key) {
+      var value = telemetry[key];
+      cleanTelemetry[NS.security.sanitizeText(key, 50)] =
+        typeof value === "number" ? value : NS.security.sanitizeText(value, 80);
+    });
+
+    var savedAt = new Date().toISOString();
+    var telemetryMap = vehicleTelemetry();
+    telemetryMap[vehicleId] = {
+      vehicleId: vehicleId,
+      attributes: cleanTelemetry,
+      updatedAt: savedAt
+    };
+    NS.store.set("vehicleTelemetry", telemetryMap);
+
+    var probability = Number(prediction && prediction.probability);
+    var result = {
+      vehicleId: vehicleId,
+      target: "failure_imminent",
+      prediction: prediction && Number(prediction.prediction) === 1 ? 1 : 0,
+      needsMaintenance: !!(prediction && prediction.needs_maintenance),
+      probability: Number.isFinite(probability) ? probability : null,
+      predictedAt: savedAt,
+      predictedBy: NS.auth.current().id
+    };
+    var predictionMap = maintenancePredictions();
+    predictionMap[vehicleId] = result;
+    NS.store.set("maintenancePredictions", predictionMap);
+    audit(
+      "ml-prediction",
+      NS.auth.current().id,
+      vehicle.plate + " · " + (result.probability === null ? "n/a" : Math.round(result.probability * 100) + "%")
+    );
+    return result;
+  }
+
   function fuelForVehicle(vehicleId) {
     return fuelRecords().filter(function (f) {
       return f.vehicleId === vehicleId;
@@ -1875,6 +1936,8 @@
       NS.store.set("fuelRecords", []);
       NS.store.set("payments", []);
       NS.store.set("ratings", []);
+      NS.store.set("vehicleTelemetry", {});
+      NS.store.set("maintenancePredictions", {});
       NS.store.set("seeded", true);
       saveVehicleRegs(seedVehicleRegs());
       saveFuelRecords(seedFuelRecords());
@@ -1987,6 +2050,9 @@
     maintenances: maintenances,
     saveMaintenance: saveMaintenance,
     maintenanceForVehicle: maintenanceForVehicle,
+    telemetryForVehicle: telemetryForVehicle,
+    predictionForVehicle: predictionForVehicle,
+    saveMaintenancePrediction: saveMaintenancePrediction,
     fuelRecords: fuelRecords,
     saveFuelRecord: saveFuelRecord,
     fuelForVehicle: fuelForVehicle,
