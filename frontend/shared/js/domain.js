@@ -777,6 +777,7 @@
     var list = bookings();
     for (var i = 0; i < list.length; i++) if (list[i].id === booking.id) list[i] = booking;
     saveBookings(list);
+    pushBookingStatusToApi(booking);
     audit("booking-status", me.id, booking.ref + " → " + next);
 
     var statusThread = threads().filter(function (t) {
@@ -1245,6 +1246,7 @@
       booking.returnedBy = me.id;
     }
     persistBooking(booking);
+    pushBookingStatusToApi(booking);
     audit("driver-trip", me.id, booking.ref + " → " + next);
 
     var thread = threads().filter(function (t) {
@@ -2121,6 +2123,274 @@
     });
   }
 
+  function apiDay(s) {
+    return s ? String(s).slice(0, 10) : "";
+  }
+
+  function apiTime(s) {
+    return s ? String(s).slice(0, 5) : "";
+  }
+
+  /* Laravel stores "Return requested"; the app uses "return_requested". */
+  function toApiStatus(status) {
+    var s = String(status || "pending").replace(/_/g, " ");
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  function fromApiStatus(status) {
+    return String(status || "pending").trim().toLowerCase().replace(/\s+/g, "_");
+  }
+
+  function apiIdIndex(list) {
+    var map = {};
+    list.forEach(function (x) {
+      if (x.apiId != null) map[x.apiId] = x.id;
+    });
+    return map;
+  }
+
+  /*
+   * Server rows replace their local copy (matched by apiId) but keep local-only fields such as
+   * booking refs, card details, or a disabled flag. Local records without an apiId survive only if keepLocal says so.
+   */
+  function mergeFromApi(local, rows, idKey, idPrefix, map, keepLocal) {
+    var known = {};
+    local.forEach(function (x) {
+      if (x.apiId != null) known[x.apiId] = x;
+    });
+    var merged = rows.map(function (row) {
+      var prev = known[row[idKey]];
+      return Object.assign({}, prev, map(row, prev), {
+        id: prev ? prev.id : idPrefix + row[idKey],
+        apiId: row[idKey]
+      });
+    });
+    return merged.concat(
+      local.filter(function (x) {
+        return x.apiId == null && keepLocal(x);
+      })
+    );
+  }
+
+  function apiUser(info, role, fullName, prev) {
+    var name = String(fullName || (info.user && info.user.name) || "").trim();
+    var space = name.indexOf(" ");
+    return {
+      email: info.user ? info.user.email : (prev && prev.email) || "",
+      role: role,
+      firstName: space === -1 ? name : name.slice(0, space),
+      lastName: space === -1 ? "" : name.slice(space + 1),
+      phone: (prev && prev.phone) || "",
+      address: info.address || "",
+      avatar: (prev && prev.avatar) || "",
+      status: (prev && prev.status) || "active",
+      createdAt: info.created_at
+    };
+  }
+
+  function syncUsersFromApi(customers, staff) {
+    var rows = customers
+      .map(function (c) {
+        return Object.assign({ role: "customer" }, c);
+      })
+      .concat(
+        staff.map(function (s) {
+          return Object.assign({ role: "staff" }, s);
+        })
+      );
+    NS.store.set(
+      "users",
+      mergeFromApi(NS.store.get("users", []), rows, "user_id", "usr_api_", function (r, prev) {
+        return r.role === "staff"
+          ? Object.assign(apiUser(r, "staff", r.staff_full_name, prev), { department: r.department || "" })
+          : Object.assign(apiUser(r, "customer", r.customer_full_name, prev), { licenseNo: r.driver_license || "" });
+      }, function () {
+        return true;
+      })
+    );
+  }
+
+  function syncDriversFromApi(rows) {
+    saveDrivers(
+      mergeFromApi(drivers(), rows, "driver_details_id", "drv_api_", function (r, prev) {
+        return {
+          fullName: r.fullName,
+          driverLicense: r.Driver_License,
+          typeDriverLicense: r.type_DriverLicense,
+          licenseExpiry: apiDay(r.Driver_License_Expiry),
+          status: (prev && prev.status) || (String(r.status).toLowerCase() === "available" ? "active" : "inactive"),
+          dutyStatus: (prev && prev.dutyStatus) || "regular",
+          phone: (prev && prev.phone) || "",
+          createdAt: r.created_at
+        };
+      }, function (d) {
+        return !!d.userId;
+      })
+    );
+  }
+
+  function syncBookingsFromApi(rows, paymentRows) {
+    var paid = {};
+    var billed = {};
+    paymentRows.forEach(function (p) {
+      if (String(p.payment_status).toLowerCase() === "paid") paid[p.booking_id] = true;
+      billed[p.booking_id] = (billed[p.booking_id] || 0) + (Number(p.amount) || 0);
+    });
+    var vehicleIds = apiIdIndex(vehicles());
+    var driverIds = apiIdIndex(drivers());
+    saveBookings(
+      mergeFromApi(bookings(), rows, "booking_id", "bkg_api_", function (r, prev) {
+        var start = apiDay(r.pickup_date);
+        var end = apiDay(r.return_date) || start;
+        var days = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) || 1);
+        var rate = r.vehicle ? Number(r.vehicle.daily_rate) || 0 : 0;
+        var chauffeur = /driver/i.test(r.driver_option || "");
+        var mapped = {
+          vehicleId: vehicleIds[r.vehicle_id] || "veh_api_" + r.vehicle_id,
+          startDate: start,
+          endDate: end,
+          days: days,
+          pickupTime: apiTime(r.pickup_time),
+          returnTime: apiTime(r.return_time),
+          numberOfPassengers: Number(r.number_of_passenger) || 1,
+          driveMode: chauffeur ? "chauffeur" : "self",
+          driverOption: chauffeur ? "Chauffeur" : "Self-drive",
+          driverDetailsId: r.driver_details_id ? driverIds[r.driver_details_id] || null : null,
+          fuelBeforeRent: r.fuel_before_rent || "",
+          fuelUponReturn: r.fuel_upon_return || "",
+          paymentMethod: r.payment_method || "",
+          status: fromApiStatus(r.booking_status),
+          dateReserve: r.date_reserve,
+          paymentStatus: paid[r.booking_id] || (prev && prev.paymentStatus === "paid") ? "paid" : "unpaid"
+        };
+        if (prev && !/^bkg_api_/.test(prev.id)) return mapped;
+        var total = billed[r.booking_id] || rate * days;
+        if (prev) return Object.assign(mapped, { subtotal: total, total: total });
+        return Object.assign(
+          {
+            ref: "BKG-" + r.booking_id,
+            userId: "usr_api_" + r.user_id,
+            pickup: "",
+            dropoff: "",
+            addons: [],
+            subtotal: total,
+            extras: 0,
+            total: total,
+            payment: null,
+            notes: "",
+            createdAt: r.created_at,
+            updatedAt: r.updated_at
+          },
+          mapped
+        );
+      }, function (b) {
+        return !!getVehicle(b.vehicleId);
+      })
+    );
+  }
+
+  function syncPaymentsFromApi(rows) {
+    var bookingIds = apiIdIndex(bookings());
+    savePayments(
+      mergeFromApi(payments(), rows, "payment_id", "pay_api_", function (p) {
+        var booking = getBooking(bookingIds[p.booking_id]);
+        return {
+          bookingId: booking ? booking.id : null,
+          bookingRef: booking ? booking.ref : "BKG-" + p.booking_id,
+          amount: Number(p.amount) || 0,
+          paymentMethod: p.payment_method || "",
+          referenceNumber: p.reference_number || "",
+          paymentDate: apiDay(p.payment_date),
+          paymentStatus: String(p.payment_status || "").toLowerCase(),
+          createdAt: p.created_at
+        };
+      }, function (p) {
+        return !!getBooking(p.bookingId);
+      })
+    );
+  }
+
+  function syncVehicleRecordsFromApi(fuelRows, maintenanceRows, regRows) {
+    var vehicleIds = apiIdIndex(vehicles());
+    function vehicleId(apiId) {
+      return vehicleIds[apiId] || "veh_api_" + apiId;
+    }
+    function vehicleExists(x) {
+      var seeded = x.id === "fuel_" + x.vehicleId || x.id === "reg_" + x.vehicleId || x.id === "mnt_001";
+      return !seeded && !!getVehicle(x.vehicleId);
+    }
+    saveFuelRecords(
+      mergeFromApi(fuelRecords(), fuelRows, "fuel_record_id", "fuel_api_", function (f) {
+        return {
+          vehicleId: vehicleId(f.vehicle_id),
+          fuelType: f.fuel_type,
+          quantity: Number(f.quantity) || 0,
+          fuelCost: Number(f.fuel_cost) || 0,
+          mileage: Number(f.mileage) || 0,
+          recordedAt: apiDay(f.fuel_date),
+          notes: f.quantity + " L, ₱" + f.fuel_cost
+        };
+      }, vehicleExists)
+    );
+    saveMaintenances(
+      mergeFromApi(maintenances(), maintenanceRows, "maintenance_id", "mnt_api_", function (m, prev) {
+        return {
+          vehicleId: vehicleId(m.vehicle_id),
+          maintenanceType: m.maintenance_type,
+          scheduledDate: apiDay(m.scheduled_date),
+          performedAt: apiDay(m.performed_at),
+          finished: String(m.finish).toLowerCase() === "yes",
+          notes: (prev && prev.notes) || "",
+          createdAt: m.created_at
+        };
+      }, vehicleExists)
+    );
+    saveVehicleRegs(
+      mergeFromApi(vehicleRegs(), regRows, "vehicle_reg_det_id", "reg_api_", function (r) {
+        return {
+          vehicleId: vehicleId(r.vehicle_id),
+          plateNumber: r.plate_number,
+          renewalScheduledDay: apiDay(r.renewal_scheduled_day),
+          nextRegRenewal: apiDay(r.next_reg_renewal),
+          updatedAt: r.updated_at
+        };
+      }, vehicleExists)
+    );
+  }
+
+  /* Loads every Laravel table into local storage so staff pages show database records. */
+  function syncAllFromApi() {
+    if (!NS.api) return Promise.reject(new Error("API client not loaded."));
+    return syncVehiclesFromApi()
+      .then(function () {
+        return Promise.all([
+          NS.api.customerInfo.all(),
+          NS.api.staffInfo.all(),
+          NS.api.driverDetails.all(),
+          NS.api.bookings.all(),
+          NS.api.payments.all(),
+          NS.api.fuelRecords.all(),
+          NS.api.vehicleMaintenances.all(),
+          NS.api.vehicleRegDetails.all()
+        ]);
+      })
+      .then(function (res) {
+        syncUsersFromApi(res[0], res[1]);
+        syncDriversFromApi(res[2]);
+        syncBookingsFromApi(res[3], res[4]);
+        syncPaymentsFromApi(res[4]);
+        syncVehicleRecordsFromApi(res[5], res[6], res[7]);
+      });
+  }
+
+  function pushBookingStatusToApi(booking) {
+    if (!booking || booking.apiId == null || !NS.api) return;
+    NS.api.bookings.update(booking.apiId, { booking_status: toApiStatus(booking.status) }).catch(function (err) {
+      console.warn("iDrive: booking status was not saved to the server.", err);
+      if (NS.ui && NS.ui.toast) NS.ui.toast("Server did not save the status change: " + apiErrorMessage(err), "err");
+    });
+  }
+
   /* Display-only fields (name, photo, gear, fuel, features, status) that Laravel does not store. */
   function saveVehicleExtras(plate, extras) {
     var key = String(plate).toUpperCase();
@@ -2140,6 +2410,7 @@
     ADDONS: ADDONS,
     vehicles: vehicles,
     syncVehiclesFromApi: syncVehiclesFromApi,
+    syncAllFromApi: syncAllFromApi,
     saveVehicleExtras: saveVehicleExtras,
     bookings: bookings,
     audit: audit,
