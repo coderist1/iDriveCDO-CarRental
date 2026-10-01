@@ -44,6 +44,14 @@
   }
 
   NS.pages.book = function book() {
+    if (!document.getElementById("book-form")) return;
+    NS.domain.syncVehiclesFromApi().then(initBook, function (e) {
+      console.warn("iDrive: could not load vehicles from API, showing local data.", e);
+      initBook();
+    });
+  };
+
+  function initBook() {
     var form = document.getElementById("book-form");
     var summary = document.getElementById("book-summary");
     if (!form) return;
@@ -54,7 +62,7 @@
 
     var vehicleId = NS.ui.qs("vehicle") || "";
     var vehicles = NS.domain.vehicles().filter(function (v) {
-      return v.status === "available";
+      return v.status === "available" && v.dailyRate && v.apiId;
     });
 
     if (!vehicles.length) {
@@ -331,6 +339,15 @@
           btn.disabled = true;
           btn.textContent = "Creating booking…";
         }
+        function fail(err) {
+          busy = false;
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Continue to payment";
+          }
+          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+          showAlert(form, err.message || "Could not create booking.", "err");
+        }
         try {
           if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
           var csrfInput = form.querySelector('input[name="csrf"]');
@@ -374,22 +391,20 @@
             },
             csrfInput ? csrfInput.value : ""
           );
+        } catch (err) {
+          fail(err);
+          return;
+        }
+        if (btn) btn.textContent = "Saving to server…";
+        NS.domain.pushBookingToApi(booking.id).then(function () {
           showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
           location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));
-        } catch (err) {
-          busy = false;
-          if (btn) {
-            btn.disabled = false;
-            btn.textContent = "Continue to payment";
-          }
-          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-          showAlert(form, err.message || "Could not create booking.", "err");
-        }
+        }, fail);
       });
     });
     syncDriveMode();
     refresh();
-  };
+  }
 
   NS.pages.bookings = function myBookings() {
     var host = document.getElementById("bookings-list");

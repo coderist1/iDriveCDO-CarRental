@@ -173,6 +173,7 @@
     var vehicle = getVehicle(vehicleId);
     if (!vehicle) throw new Error("Vehicle not found.");
     if (vehicle.status !== "available") throw new Error("This vehicle is not available for hire.");
+    if (!vehicle.dailyRate) throw new Error("This vehicle has no daily rate yet. Contact us to book it.");
     if (!options.ignoreAvailability && !isAvailable(vehicleId, start, end)) {
       throw new Error("Those dates overlap an existing booking for this car.");
     }
@@ -226,7 +227,15 @@
     var driverInfo = normalizeDriverInfo(driveMode, payload.driverInfo || {});
 
     var q = quote(payload.vehicleId, payload.startDate, payload.endDate, addonIds);
+    if (!q.vehicle.apiId) throw new Error("This vehicle is not in the booking system yet. Choose another car.");
     var notes = NS.security.sanitizeText(payload.notes, 240);
+
+    var timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+    var pickupTime = String(payload.pickupTime || "");
+    var returnTime = String(payload.returnTime || "");
+    if (!timePattern.test(pickupTime) || !timePattern.test(returnTime)) {
+      throw new Error("Choose a pickup and return time.");
+    }
 
     try {
       if (csrf) NS.security.assertCsrf(csrf);
@@ -242,8 +251,8 @@
       vehicleId: q.vehicle.id,
       startDate: q.startDate,
       endDate: q.endDate,
-      pickupTime: NS.security.sanitizeText(payload.pickupTime || "09:00", 8),
-      returnTime: NS.security.sanitizeText(payload.returnTime || "09:00", 8),
+      pickupTime: pickupTime,
+      returnTime: returnTime,
       numberOfPassengers: Math.max(1, parseInt(payload.numberOfPassengers, 10) || 1),
       days: q.days,
       pickup: pickup,
@@ -514,6 +523,60 @@
       phone: ""
     };
     return notifyStaffOfBooking(booking, customer);
+  }
+
+  function localISODate(d) {
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  }
+
+  function apiErrorMessage(err) {
+    var errors = err && err.data && err.data.errors;
+    if (!errors) return (err && err.message) || "Could not save the booking to the server.";
+    return Object.keys(errors)
+      .map(function (k) {
+        return errors[k].join(" ");
+      })
+      .join(" ");
+  }
+
+  /* Saves a local booking to Laravel; the local copy is discarded if the server rejects it. */
+  function pushBookingToApi(bookingId) {
+    var booking = getBooking(bookingId);
+    if (!booking) return Promise.reject(new Error("Booking not found."));
+    var vehicle = getVehicle(booking.vehicleId);
+    var body = {
+      vehicle_id: vehicle && vehicle.apiId,
+      user_id: NS.api.CONFIG.backendUserId,
+      pickup_date: booking.startDate,
+      pickup_time: booking.pickupTime,
+      return_date: booking.endDate,
+      return_time: booking.returnTime,
+      payment_method: "Card",
+      number_of_passenger: booking.numberOfPassengers,
+      driver_option: booking.driveMode === "chauffeur" ? "With driver" : "Self-drive",
+      date_reserve: localISODate(new Date())
+    };
+    return NS.api.bookings.create(body).then(
+      function (saved) {
+        var all = bookings();
+        for (var i = 0; i < all.length; i++) {
+          if (all[i].id === bookingId) {
+            all[i].apiId = saved.booking_id;
+            all[i].updatedAt = new Date().toISOString();
+          }
+        }
+        saveBookings(all);
+        return saved;
+      },
+      function (err) {
+        saveBookings(
+          bookings().filter(function (b) {
+            return b.id !== bookingId;
+          })
+        );
+        throw new Error("Server did not save the booking: " + apiErrorMessage(err));
+      }
+    );
   }
 
   function normalizeDriverInfo(driveMode, info) {
@@ -2007,10 +2070,77 @@
     if (changed) saveVehicles(list);
   }
 
+  /* Laravel `vehicles` has no rate/image/specs columns; those stay local, matched by plate number. */
+  function fromApiVehicle(row, local, seeded) {
+    var fallback = null;
+    for (var i = 0; i < seeded.length; i++) {
+      if (seeded[i].type === row.type) {
+        fallback = seeded[i];
+        break;
+      }
+    }
+    var base = local || {
+      id: "veh_api_" + row.vehicle_id,
+      transmission: "—",
+      fuel: "—",
+      luggage: 0,
+      dailyRate: null,
+      image: (fallback || seeded[0]).image,
+      description: "",
+      features: [],
+      status: "available"
+    };
+    return Object.assign({}, base, {
+      apiId: row.vehicle_id,
+      name: (local && local.name) || row.brand + " " + row.model + " " + row.year_model,
+      brand: row.brand,
+      model: row.model,
+      year: Number(row.year_model),
+      yearPurchased: Number(row.year_purchased),
+      type: row.type,
+      seats: Number(row.capacity),
+      mileage: Number(row.mileage),
+      plate: row.plate_number,
+      dailyRate: row.daily_rate != null ? Number(row.daily_rate) : base.dailyRate
+    });
+  }
+
+  function syncVehiclesFromApi() {
+    if (!NS.api) return Promise.reject(new Error("API client not loaded."));
+    return NS.api.vehicles.all().then(function (rows) {
+      var byPlate = {};
+      vehicles().forEach(function (v) {
+        if (v.plate) byPlate[String(v.plate).toUpperCase()] = v;
+      });
+      var seeded = seedVehicles();
+      var list = rows.map(function (row) {
+        return fromApiVehicle(row, byPlate[String(row.plate_number).toUpperCase()], seeded);
+      });
+      saveVehicles(list);
+      return list;
+    });
+  }
+
+  /* Display-only fields (name, photo, gear, fuel, features, status) that Laravel does not store. */
+  function saveVehicleExtras(plate, extras) {
+    var key = String(plate).toUpperCase();
+    var list = vehicles();
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].plate).toUpperCase() === key) {
+        list[i] = Object.assign({}, list[i], extras);
+        saveVehicles(list);
+        return list[i];
+      }
+    }
+    return null;
+  }
+
   NS.domain = {
     LOCATIONS: LOCATIONS,
     ADDONS: ADDONS,
     vehicles: vehicles,
+    syncVehiclesFromApi: syncVehiclesFromApi,
+    saveVehicleExtras: saveVehicleExtras,
     bookings: bookings,
     audit: audit,
     auditLog: auditLog,
@@ -2020,6 +2150,8 @@
     availableVehicles: availableVehicles,
     quote: quote,
     createBooking: createBooking,
+    pushBookingToApi: pushBookingToApi,
+    apiErrorMessage: apiErrorMessage,
     payBooking: payBooking,
     setBookingStatus: setBookingStatus,
     requestVehicleReturn: requestVehicleReturn,

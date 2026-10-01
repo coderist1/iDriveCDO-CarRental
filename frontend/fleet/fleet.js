@@ -74,9 +74,9 @@
       });
 
       list.sort(function (a, b) {
-        if (sort && sort.value === "high") return b.dailyRate - a.dailyRate;
+        if (sort && sort.value === "high") return (b.dailyRate || 0) - (a.dailyRate || 0);
         if (sort && sort.value === "seats") return b.seats - a.seats;
-        return a.dailyRate - b.dailyRate;
+        return (a.dailyRate || 0) - (b.dailyRate || 0);
       });
 
       if (summary) {
@@ -106,13 +106,25 @@
       if (el) el.addEventListener("change", render);
     });
     render();
+    NS.domain.syncVehiclesFromApi().then(render, function (e) {
+      console.warn("iDrive: could not load vehicles from API, showing local data.", e);
+    });
   };
 
   NS.pages.car = function car() {
-    var id = NS.ui.qs("id");
-    var v = NS.domain.getVehicle(id);
     var host = document.getElementById("car-view");
     if (!host) return;
+    renderCar(host);
+    NS.domain.syncVehiclesFromApi().then(function () {
+      renderCar(host);
+    }, function (e) {
+      console.warn("iDrive: could not load vehicles from API, showing local data.", e);
+    });
+  };
+
+  function renderCar(host) {
+    var id = NS.ui.qs("id");
+    var v = NS.domain.getVehicle(id);
     if (!v) {
       host.innerHTML =
         "<p class='notice'>This vehicle is no longer in the fleet. <a href='" +
@@ -212,9 +224,13 @@
       "<h3>Customer ratings</h3>" +
       reviewsHtml +
       '<div class="rate-box"><strong>' +
-      NS.ui.peso(v.dailyRate) +
-      "</strong><span>per day, tax inclusive demo rate</span>" +
-      (free
+      (v.dailyRate ? NS.ui.peso(v.dailyRate) : "Rate on request") +
+      "</strong><span>" +
+      (v.dailyRate ? "per day, tax inclusive demo rate" : "contact us for pricing") +
+      "</span>" +
+      (!v.dailyRate
+        ? '<a class="btn btn-gold btn-block" href="' + NS.routes.href("contact") + '">Contact us</a>'
+        : free
         ? '<a class="btn btn-gold btn-block" href="' +
           NS.routes.href("book", bookQuery) +
           '">Book this car</a>'
@@ -222,5 +238,5 @@
           NS.routes.href("fleet") +
           '">See other available cars</a>.</p>') +
       "</div></div>";
-  };
+  }
 })(window);

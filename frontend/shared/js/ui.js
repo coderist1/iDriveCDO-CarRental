@@ -413,9 +413,9 @@
       NS.security.escapeHtml(v.fuel) +
       "</li></ul>" +
       '<div class="vehicle-cta"><strong>' +
-      peso(v.dailyRate) +
-      "<span>/day</span></strong>" +
-      (free
+      (v.dailyRate ? peso(v.dailyRate) + "<span>/day</span>" : "Rate on request") +
+      "</strong>" +
+      (free && v.dailyRate
         ? '<a class="btn btn-gold" href="' + bookLink + '">Book</a>'
         : '<a class="btn btn-ghost" href="' + link + '">View</a>') +
       "</div></div></article>"
