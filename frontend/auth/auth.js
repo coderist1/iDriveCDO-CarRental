@@ -220,6 +220,7 @@
           list[i].avatar = normalizeAvatar(patch.avatar);
         }
         saveUsers(list);
+        if (NS.domain.pushUserProfileToApi) NS.domain.pushUserProfileToApi(list[i]);
         NS.domain.audit("profile", userId, "Profile updated.");
         return publicUser(list[i]);
       }

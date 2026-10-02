@@ -903,7 +903,7 @@
         '<div class="col-md-5"><label class="field">Vehicle <select class="form-select" name="vehicleId" required>' +
         vehicleOptionsHtml() +
         "</select></label></div>" +
-        '<div class="col-md-2"><label class="field">Renewal day <input class="form-control" name="renewalScheduledDay" placeholder="15"></label></div>' +
+        '<div class="col-md-2"><label class="field">Renewal date <input class="form-control" name="renewalScheduledDay" type="date"></label></div>' +
         '<div class="col-md-3"><label class="field">Next renewal <input class="form-control" name="nextRegRenewal" type="date" required></label></div>' +
         '<div class="col-md-2"><button class="btn btn-gold" type="submit">Save</button></div></form></div>' +
         '<div class="form-card">' +

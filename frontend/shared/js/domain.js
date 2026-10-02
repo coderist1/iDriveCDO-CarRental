@@ -700,6 +700,16 @@
     var pays = payments();
     pays.unshift(paymentRow);
     savePayments(pays);
+    if (booking.apiId != null) {
+      pushToApi("payments", "payments", paymentRow, {
+        booking_id: booking.apiId,
+        amount: booking.total,
+        payment_method: method === "cashless" ? payment.brand : "Cash",
+        reference_number: payment.authCode,
+        payment_date: todayISO(),
+        payment_status: "Paid"
+      }, "payment_id");
+    }
 
     var payer = NS.auth.userById(booking.userId) || me;
     var payNote =
@@ -999,6 +1009,7 @@
     var found = false;
     for (var i = 0; i < list.length; i++) {
       if (list[i].id === item.id) {
+        if (list[i].apiId != null) item.apiId = list[i].apiId;
         list[i] = item;
         found = true;
       } else if (list[i].plate === item.plate) {
@@ -1007,6 +1018,17 @@
     }
     if (!found) list.push(item);
     saveVehicles(list);
+    pushToApi("vehicles", "vehicles", item, {
+      plate_number: item.plate,
+      mileage: item.mileage,
+      brand: item.brand,
+      model: item.model,
+      type: item.type,
+      capacity: item.seats,
+      daily_rate: item.dailyRate,
+      year_model: item.year,
+      year_purchased: item.yearPurchased
+    }, "vehicle_id");
     audit("vehicle-save", me.id, item.name);
     return item;
   }
@@ -1018,6 +1040,8 @@
       return b.vehicleId === id && ACTIVE_BOOKING[b.status];
     });
     if (busy) throw new Error("Cannot remove a vehicle with active bookings.");
+    var removed = getVehicle(id);
+    if (removed) removeFromApi("vehicles", removed.apiId);
     saveVehicles(
       vehicles().filter(function (v) {
         return v.id !== id;
@@ -1136,6 +1160,7 @@
       if (list[i].id === item.id) {
         if (list[i].userId) item.userId = list[i].userId;
         if (list[i].createdAt) item.createdAt = list[i].createdAt;
+        if (list[i].apiId != null) item.apiId = list[i].apiId;
         list[i] = item;
         found = true;
       }
@@ -1145,6 +1170,13 @@
       list.push(item);
     }
     saveDrivers(list);
+    pushToApi("driverDetails", "drivers", item, {
+      fullName: item.fullName,
+      Driver_License: item.driverLicense,
+      type_DriverLicense: item.typeDriverLicense,
+      Driver_License_Expiry: item.licenseExpiry,
+      status: item.status === "active" ? "available" : "inactive"
+    }, "driver_details_id");
     audit("driver-save", NS.auth.current().id, item.fullName);
     return item;
   }
@@ -1156,6 +1188,8 @@
       return b.driverDetailsId === id && ACTIVE_BOOKING[b.status];
     });
     if (busy) throw new Error("Cannot remove a driver assigned to an active booking.");
+    var removed = getDriver(id);
+    if (removed) removeFromApi("driverDetails", removed.apiId);
     saveDrivers(
       drivers().filter(function (d) {
         return d.id !== id;
@@ -1314,12 +1348,21 @@
     for (var i = 0; i < list.length; i++) {
       if (list[i].id === item.id || list[i].vehicleId === item.vehicleId) {
         item.id = list[i].id;
+        if (list[i].apiId != null) item.apiId = list[i].apiId;
         list[i] = item;
         found = true;
       }
     }
     if (!found) list.push(item);
     saveVehicleRegs(list);
+    if (vehicle.apiId != null) {
+      pushToApi("vehicleRegDetails", "vehicleRegs", item, {
+        vehicle_id: vehicle.apiId,
+        plate_number: item.plateNumber,
+        renewal_scheduled_day: /^\d{4}-\d{2}-\d{2}$/.test(item.renewalScheduledDay) ? item.renewalScheduledDay : todayISO(),
+        next_reg_renewal: item.nextRegRenewal
+      }, "vehicle_reg_det_id");
+    }
     audit("vehicle-reg", NS.auth.current().id, vehicle.plate);
     return item;
   }
@@ -1350,6 +1393,8 @@
     var found = false;
     for (var i = 0; i < list.length; i++) {
       if (list[i].id === item.id) {
+        if (list[i].apiId != null) item.apiId = list[i].apiId;
+        if (list[i].createdAt) item.createdAt = list[i].createdAt;
         list[i] = item;
         found = true;
       }
@@ -1359,6 +1404,15 @@
       list.unshift(item);
     }
     saveMaintenances(list);
+    if (vehicle.apiId != null) {
+      pushToApi("vehicleMaintenances", "maintenances", item, {
+        vehicle_id: vehicle.apiId,
+        maintenance_type: item.maintenanceType,
+        scheduled_date: item.scheduledDate,
+        performed_at: item.performedAt || null,
+        finish: item.finished ? "Yes" : "No"
+      }, "maintenance_id");
+    }
     if (item.finished) {
       /* keep vehicle available unless still open jobs */
       var open = list.some(function (m) {
@@ -1400,6 +1454,14 @@
     var list = fuelRecords();
     list.unshift(item);
     saveFuelRecords(list.slice(0, 200));
+    if (vehicle.apiId != null) {
+      pushToApi("fuelRecords", "fuelRecords", item, {
+        vehicle_id: vehicle.apiId,
+        fuel_type: item.fuelType,
+        fuel_date: todayISO(),
+        mileage: vehicle.mileage || null
+      }, "fuel_record_id");
+    }
     vehicle.fuel = item.fuelType;
     var vs = vehicles();
     for (var i = 0; i < vs.length; i++) if (vs[i].id === vehicle.id) vs[i] = vehicle;
@@ -2383,6 +2445,60 @@
       });
   }
 
+  function warnApiFailure(err) {
+    console.warn("iDrive: change was not saved to the server.", err);
+    if (NS.ui && NS.ui.toast) NS.ui.toast("Saved here, but the server rejected it: " + apiErrorMessage(err), "err");
+  }
+
+  /*
+   * Mirrors a local save to Laravel: updates when the record already has an apiId, otherwise creates it
+   * and stores the new id back on the local record so later edits update the same row.
+   */
+  function pushToApi(resource, storeKey, local, body, apiIdKey) {
+    if (!NS.api || !local) return Promise.resolve(null);
+    var request = local.apiId != null ? NS.api[resource].update(local.apiId, body) : NS.api[resource].create(body);
+    return request.then(function (saved) {
+      if (local.apiId == null && saved && saved[apiIdKey] != null) {
+        var list = NS.store.get(storeKey, []);
+        for (var i = 0; i < list.length; i++) if (list[i].id === local.id) list[i].apiId = saved[apiIdKey];
+        NS.store.set(storeKey, list);
+      }
+      return saved;
+    }, function (err) {
+      warnApiFailure(err);
+      return null;
+    });
+  }
+
+  function removeFromApi(resource, apiId) {
+    if (!NS.api || apiId == null) return;
+    NS.api[resource].remove(apiId).catch(warnApiFailure);
+  }
+
+  function todayISO() {
+    return localISODate(new Date());
+  }
+
+  function pushUserProfileToApi(user) {
+    if (!NS.api || !user || user.apiId == null) return;
+    var name = ((user.firstName || "") + " " + (user.lastName || "")).trim();
+    var body = {};
+    var resource;
+    if (user.role === "customer") {
+      resource = "customerInfo";
+      if (name) body.customer_full_name = name;
+      if (user.licenseNo) body.driver_license = user.licenseNo;
+    } else if (user.role === "staff") {
+      resource = "staffInfo";
+      if (name) body.staff_full_name = name;
+      if (user.department) body.department = user.department;
+    } else {
+      return;
+    }
+    if (user.address) body.address = user.address;
+    NS.api[resource].update(user.apiId, body).catch(warnApiFailure);
+  }
+
   function pushBookingStatusToApi(booking) {
     if (!booking || booking.apiId == null || !NS.api) return;
     NS.api.bookings.update(booking.apiId, { booking_status: toApiStatus(booking.status) }).catch(function (err) {
@@ -2411,6 +2527,7 @@
     vehicles: vehicles,
     syncVehiclesFromApi: syncVehiclesFromApi,
     syncAllFromApi: syncAllFromApi,
+    pushUserProfileToApi: pushUserProfileToApi,
     saveVehicleExtras: saveVehicleExtras,
     bookings: bookings,
     audit: audit,
