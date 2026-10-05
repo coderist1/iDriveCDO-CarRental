@@ -539,44 +539,72 @@
       .join(" ");
   }
 
+  /*
+   * Login is still local, so customers are matched to a Laravel `users` row by email.
+   * Resolves to that users.id and stores it as the local user's apiId.
+   */
+  function ensureCustomerOnApi(userId) {
+    if (!NS.api) return Promise.reject(new Error("API client not loaded."));
+    var user = NS.store.get("users", []).filter(function (u) {
+      return u.id === userId;
+    })[0];
+    if (!user) return Promise.reject(new Error("Customer account not found."));
+    if (user.role !== "customer") return Promise.reject(new Error("Bookings must belong to a customer account."));
+    if (user.apiId != null) return Promise.resolve(user.apiId);
+    var body = {
+      email: user.email,
+      customer_full_name: ((user.firstName || "") + " " + (user.lastName || "")).trim() || user.email
+    };
+    if (user.address) body.address = user.address;
+    if (user.licenseNo) body.driver_license = user.licenseNo;
+    return NS.api.post("/customer-info/sync", body).then(function (saved) {
+      var list = NS.store.get("users", []);
+      for (var i = 0; i < list.length; i++) if (list[i].id === userId) list[i].apiId = saved.user_id;
+      NS.store.set("users", list);
+      return saved.user_id;
+    });
+  }
+
   /* Saves a local booking to Laravel; the local copy is discarded if the server rejects it. */
   function pushBookingToApi(bookingId) {
     var booking = getBooking(bookingId);
     if (!booking) return Promise.reject(new Error("Booking not found."));
     var vehicle = getVehicle(booking.vehicleId);
-    var body = {
-      vehicle_id: vehicle && vehicle.apiId,
-      user_id: NS.api.CONFIG.backendUserId,
-      pickup_date: booking.startDate,
-      pickup_time: booking.pickupTime,
-      return_date: booking.endDate,
-      return_time: booking.returnTime,
-      payment_method: "Card",
-      number_of_passenger: booking.numberOfPassengers,
-      driver_option: booking.driveMode === "chauffeur" ? "With driver" : "Self-drive",
-      date_reserve: localISODate(new Date())
-    };
-    return NS.api.bookings.create(body).then(
-      function (saved) {
-        var all = bookings();
-        for (var i = 0; i < all.length; i++) {
-          if (all[i].id === bookingId) {
-            all[i].apiId = saved.booking_id;
-            all[i].updatedAt = new Date().toISOString();
-          }
+    var driver = booking.driverDetailsId ? getDriver(booking.driverDetailsId) : null;
+    function discard(err) {
+      saveBookings(
+        bookings().filter(function (b) {
+          return b.id !== bookingId;
+        })
+      );
+      throw new Error("Server did not save the booking: " + apiErrorMessage(err));
+    }
+    return ensureCustomerOnApi(booking.userId).then(function (apiUserId) {
+      var body = {
+        vehicle_id: vehicle && vehicle.apiId,
+        user_id: apiUserId,
+        driver_details_id: driver && driver.apiId != null ? driver.apiId : null,
+        pickup_date: booking.startDate,
+        pickup_time: booking.pickupTime,
+        return_date: booking.endDate,
+        return_time: booking.returnTime,
+        payment_method: "Card",
+        number_of_passenger: booking.numberOfPassengers,
+        driver_option: booking.driveMode === "chauffeur" ? "With driver" : "Self-drive",
+        date_reserve: localISODate(new Date())
+      };
+      return NS.api.bookings.create(body);
+    }).then(function (saved) {
+      var all = bookings();
+      for (var i = 0; i < all.length; i++) {
+        if (all[i].id === bookingId) {
+          all[i].apiId = saved.booking_id;
+          all[i].updatedAt = new Date().toISOString();
         }
-        saveBookings(all);
-        return saved;
-      },
-      function (err) {
-        saveBookings(
-          bookings().filter(function (b) {
-            return b.id !== bookingId;
-          })
-        );
-        throw new Error("Server did not save the booking: " + apiErrorMessage(err));
       }
-    );
+      saveBookings(all);
+      return saved;
+    }, discard);
   }
 
   function normalizeDriverInfo(driveMode, info) {
@@ -2300,6 +2328,7 @@
     });
     var vehicleIds = apiIdIndex(vehicles());
     var driverIds = apiIdIndex(drivers());
+    var userIds = apiIdIndex(NS.store.get("users", []));
     saveBookings(
       mergeFromApi(bookings(), rows, "booking_id", "bkg_api_", function (r, prev) {
         var start = apiDay(r.pickup_date);
@@ -2331,7 +2360,7 @@
         return Object.assign(
           {
             ref: "BKG-" + r.booking_id,
-            userId: "usr_api_" + r.user_id,
+            userId: userIds[r.user_id] || "usr_api_" + r.user_id,
             pickup: "",
             dropoff: "",
             addons: [],
@@ -2528,6 +2557,7 @@
     syncVehiclesFromApi: syncVehiclesFromApi,
     syncAllFromApi: syncAllFromApi,
     pushUserProfileToApi: pushUserProfileToApi,
+    ensureCustomerOnApi: ensureCustomerOnApi,
     saveVehicleExtras: saveVehicleExtras,
     bookings: bookings,
     audit: audit,

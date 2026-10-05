@@ -11,7 +11,7 @@
     local: "http://127.0.0.1:8000/api",
     /* Replace with the deployed Laravel backend (must be https). */
     production: "https://YOUR-BACKEND-DOMAIN/api"
-  };
+  };  
 
   function isLocalHost() {
     var host = global.location ? global.location.hostname : "";
@@ -27,8 +27,6 @@
     env: env,
     baseUrl: global.IDRIVE_API_BASE_URL || API_URLS[env],
     timeoutMs: 15000,
-    /* Laravel users.id attached to every booking until login is backed by the API. */
-    backendUserId: 5,
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json"

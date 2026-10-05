@@ -179,9 +179,23 @@
         );
 
         showAlert(form, "Welcome, " + user.firstName + ". Redirecting…", "ok");
-        setTimeout(function () {
+        /* Navigating away cancels the request, so wait for it (briefly); the first booking retries if it fails. */
+        function delay(ms) {
+          return new Promise(function (resolve) {
+            setTimeout(resolve, ms);
+          });
+        }
+        var ready = NS.api && NS.domain.ensureCustomerOnApi
+          ? Promise.race([
+              NS.domain.ensureCustomerOnApi(user.id).catch(function (e) {
+                console.warn("iDrive: customer was not saved to the server yet.", e);
+              }),
+              delay(4000)
+            ])
+          : delay(150);
+        ready.then(function () {
           location.href = NS.routes.href("account");
-        }, 150);
+        });
       } catch (err) {
         busy = false;
         if (btn) {
