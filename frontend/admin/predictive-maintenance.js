@@ -215,7 +215,7 @@
               min: 0,
               max: 100,
               ticks: { callback: function (v) { return v + "%"; } },
-              grid: { color: "rgba(120, 66, 245, 0.08)" }
+              grid: { color: "rgba(232, 137, 12, 0.08)" }
             },
             y: { grid: { display: false } }
           },
@@ -316,7 +316,6 @@
       fleetHost.innerHTML = vehicles
         .map(function (vehicle) {
           var meta = riskMeta(readPrediction(vehicle.id));
-          var unsupported = !NS.ml.supportsBrand(vehicle.brand);
           return (
             '<div class="ml-fleet-row' +
             (vehicle.id === selectedId ? " is-open" : "") +
@@ -335,7 +334,8 @@
             NS.security.escapeHtml(vehicle.name) +
             "</strong><small>" +
             NS.security.escapeHtml(vehicle.plate) +
-            (unsupported ? " · unsupported brand" : "") +
+            " · " +
+            NS.security.escapeHtml(vehicle.brand) +
             '</small></span><span class="ml-risk ml-risk-' +
             meta.tone +
             '"><strong>' +
@@ -360,9 +360,8 @@
       }
       defaults.brand = vehicle.brand;
       defaults.timestamp = localDateTime(defaults.timestamp);
-      defaults.odometer_reading = saved
-        ? defaults.odometer_reading
-        : Number(vehicle.mileage) || defaults.odometer_reading;
+      defaults.odometer_reading =
+        Number(vehicle.mileage) || Number(defaults.odometer_reading) || 50000;
       return defaults;
     }
 
@@ -416,11 +415,8 @@
       setFormValues(valuesFor(vehicle));
 
       var supported = NS.ml.supportsBrand(vehicle.brand);
-      brandWarning.hidden = supported;
-      brandWarning.textContent = supported
-        ? ""
-        : vehicle.brand +
-          " is not represented in the trained model. Choose a supported fleet vehicle or retrain the model with this brand.";
+      brandWarning.hidden = true;
+      brandWarning.textContent = "";
       predictBtn.disabled = !supported;
       renderFleet();
       renderCurrentRisk(vehicleId);
@@ -520,7 +516,7 @@
         return NS.ml.supportsBrand(vehicle.brand);
       });
       if (!targets.length) {
-        NS.ui.toast("No supported brands available to score.", "err");
+        NS.ui.toast("No fleet vehicles available to score.", "err");
         return;
       }
       scoreBtn.disabled = true;
@@ -529,10 +525,14 @@
       var done = 0;
       targets.forEach(function (vehicle) {
         chain = chain.then(function () {
-          var attributes = valuesFor(vehicle);
+          // Rebuild from each vehicle profile so risk differs per car.
+          var attributes = NS.ml.defaultTelemetry(vehicle);
           Object.keys(patch).forEach(function (key) {
             attributes[key] = patch[key];
           });
+          attributes.brand = vehicle.brand;
+          attributes.odometer_reading =
+            Number(vehicle.mileage) || Number(attributes.odometer_reading) || 50000;
           attributes.timestamp = new Date().toISOString();
           return NS.ml.predict(attributes).then(function (response) {
             NS.domain.saveMaintenancePrediction(

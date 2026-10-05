@@ -170,6 +170,7 @@
 
   function mountCustomerChrome(me) {
     document.body.classList.remove("desk-mode");
+    document.body.classList.add("site-mode");
     var nav = document.getElementById("app-nav");
     if (nav) {
       var account = me
@@ -206,6 +207,11 @@
         navLink(NS.routes.href("home"), "Home", "home") +
         navLink(NS.routes.href("fleet"), "Available Cars", "fleet") +
         navLink(NS.routes.href("myBookings"), "View Booking Status", "bookings") +
+        navLink(NS.routes.href("about"), "About", "about") +
+        navLink(NS.routes.href("contact"), "Contact", "contact") +
+        '<a class="nav-phone" href="tel:0888562100">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>' +
+        "088 856 2100</a>" +
         account +
         "</nav></header>";
       bindNavChrome();
@@ -215,21 +221,40 @@
     if (footer) {
       footer.innerHTML =
         '<footer class="site-footer">' +
-        '<div class="footer-grid">' +
-        '<div><div class="brand brand-with-logo">' +
+        '<div class="sf-top"><a class="brand brand-with-logo" href="' +
+        NS.routes.href("home") +
+        '" aria-label="idriveCDO home">' +
         brandLogo() +
+        "</a></div>" +
+        '<div class="sf-row">' +
+        '<div class="sf-contact">' +
+        '<a class="sf-phone" href="tel:0888562100">088 856 2100</a>' +
+        '<a class="btn sf-btn" href="' +
+        NS.routes.href("fleet") +
+        '">Book a car</a>' +
         "</div>" +
-        "<p>Self-drive and chauffeur car hire in Cagayan de Oro. Airport, downtown, and city-wide delivery.</p></div>" +
-        "<div><h4>Visit</h4><p>2F Limketkai Drive<br>Cagayan de Oro City 9000<br>Misamis Oriental</p></div>" +
-        "<div><h4>Hours</h4><p>Desk: 7:00 AM – 9:00 PM daily<br>Airport night desk on request</p></div>" +
-        "<div><h4>Contact</h4><p>088 856 2100<br>hello@idrivecdo.ph</p></div>" +
-        "</div>" +
+        '<nav class="sf-links">' +
+        '<a href="' + NS.routes.href("fleet") + '">Available cars</a>' +
+        '<a href="' + NS.routes.href("myBookings") + '">Booking status</a>' +
+        '<a href="' + NS.routes.href("about") + '">About</a>' +
+        '<a href="' + NS.routes.href("contact") + '">Contact</a>' +
+        "</nav></div>" +
+        '<div class="sf-bottom">' +
+        "<div>" +
+        "<p>2F Limketkai Drive, Cagayan de Oro City 9000 · Desk 7:00 AM – 9:00 PM daily · hello@idrivecdo.ph</p>" +
         '<p class="fineprint">Frontend-only demo. Payments are simulated and never sent to a server.</p>' +
+        "</div>" +
+        '<div class="sf-social">' +
+        '<a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 8h3V4h-3a4 4 0 0 0-4 4v2H8v4h2v8h4v-8h3l1-4h-4V8z"/></svg></a>' +
+        '<a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg></a>' +
+        '<a href="#" aria-label="Messenger"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.5 2 2 6.1 2 11.3c0 2.9 1.4 5.5 3.7 7.2V22l3.4-1.9c.9.3 1.9.4 2.9.4 5.5 0 10-4.1 10-9.2S17.5 2 12 2zm1 12.4-2.5-2.7-4.9 2.7 5.4-5.8 2.6 2.7 4.8-2.7-5.4 5.8z"/></svg></a>' +
+        "</div></div>" +
         "</footer>";
     }
   }
 
   function mountDeskChrome(me) {
+    document.body.classList.remove("site-mode");
     document.body.classList.add("desk-mode");
     var unread = 0;
     try {
@@ -282,6 +307,7 @@
   }
 
   function mountDriverChrome(me) {
+    document.body.classList.remove("site-mode");
     document.body.classList.add("desk-mode");
     var nav = document.getElementById("app-nav");
     if (nav) {
@@ -582,10 +608,10 @@
       "<style>" +
       "body{font-family:Segoe UI,Arial,sans-serif;max-width:720px;margin:32px auto;color:#111827;padding:0 16px}" +
       "h1{margin:0 0 4px;font-size:28px}h2{margin:24px 0 8px;font-size:18px}" +
-      ".muted{color:#6b7280}.total{font-size:28px;font-weight:800;color:#6430e0;margin:12px 0}" +
+      ".muted{color:#6b7280}.total{font-size:28px;font-weight:800;color:#c97405;margin:12px 0}" +
       "table{width:100%;border-collapse:collapse;margin-top:12px}" +
       "th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top}" +
-      "th{width:34%;color:#6b7280;font-weight:600}.brand{font-weight:800;color:#7842f5}" +
+      "th{width:34%;color:#6b7280;font-weight:600}.brand{font-weight:800;color:#e8890c}" +
       "@media print{body{margin:0}}" +
       "</style></head><body>" +
       "<p class='brand'>iDrive CDO</p>" +

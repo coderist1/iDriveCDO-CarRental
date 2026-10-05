@@ -20,8 +20,8 @@
     }
     box.hidden = false;
     box.textContent = message;
-    box.style.borderColor = type === "ok" ? "rgba(120,66,245,0.35)" : "rgba(155,28,28,0.45)";
-    box.style.color = type === "ok" ? "#6430e0" : "#9b1c1c";
+    box.style.borderColor = type === "ok" ? "rgba(232,137,12,0.35)" : "rgba(155,28,28,0.45)";
+    box.style.color = type === "ok" ? "#c97405" : "#9b1c1c";
     if (NS.ui && NS.ui.toast) NS.ui.toast(message, type === "ok" ? "ok" : "err");
   }
 
