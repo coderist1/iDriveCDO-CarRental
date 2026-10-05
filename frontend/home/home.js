@@ -15,15 +15,66 @@
           return v.status === "available";
         });
 
+    var esc = NS.security.escapeHtml;
+    var all = NS.domain.vehicles();
+
     var count = document.getElementById("avail-count");
     if (count) count.textContent = available.length + " vehicles available now";
+    var promoCount = document.getElementById("hp-promo-count");
+    if (promoCount) promoCount.textContent = String(available.length);
+
+    var lineup = document.getElementById("hp-lineup");
+    if (lineup) {
+      var picks = (available.length >= 5 ? available : all).slice(0, 5);
+      var order = [3, 1, 0, 2, 4];
+      lineup.innerHTML = order
+        .filter(function (i) {
+          return picks[i];
+        })
+        .map(function (i, pos) {
+          return (
+            '<figure class="hp-lineup-car hp-pos-' +
+            pos +
+            '"><img src="' +
+            esc(picks[i].image) +
+            '" alt=""></figure>'
+          );
+        })
+        .join("");
+    }
 
     var host = document.getElementById("featured-grid");
     if (host) {
       host.innerHTML = available
-        .slice(0, 6)
+        .slice(0, 3)
         .map(function (v) {
-          return NS.ui.vehicleCard(v, { dateAvailable: true });
+          var carLink = NS.routes.href("car", "?id=" + encodeURIComponent(v.id));
+          var bookLink = NS.routes.href("book", "?vehicle=" + encodeURIComponent(v.id));
+          return (
+            '<article class="hp-car">' +
+            '<a class="hp-car-photo" href="' +
+            carLink +
+            '"><img src="' +
+            esc(v.image) +
+            '" alt="' +
+            esc(v.name) +
+            '"></a>' +
+            "<h3>" +
+            esc(v.name) +
+            "</h3>" +
+            "<p>Type: <strong>" +
+            esc(v.type) +
+            " · " +
+            esc(v.transmission) +
+            "</strong></p>" +
+            "<p>Rate: <strong>from " +
+            NS.ui.peso(v.dailyRate) +
+            " / day</strong></p>" +
+            '<a class="btn btn-gold btn-sm" href="' +
+            bookLink +
+            '">Book this car</a>' +
+            "</article>"
+          );
         })
         .join("");
       if (!available.length) {

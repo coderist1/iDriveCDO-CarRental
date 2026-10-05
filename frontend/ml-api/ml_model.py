@@ -12,6 +12,18 @@ MODEL_FILES = {
     "failure_imminent": "failure_imminent_rf.joblib",
 }
 
+# Fleet brands not present in the training set map to the closest trained brand.
+BRAND_ALIASES = {
+    "Mitsubishi": "Toyota",
+    "Suzuki": "Toyota",
+    "Isuzu": "Toyota",
+    "Mazda": "Honda",
+    "Subaru": "Honda",
+    "Lexus": "Toyota",
+    "Jeep": "Ford",
+    "MG": "Hyundai",
+}
+
 
 class MaintenanceModelService:
     def __init__(self, model_dir: Path = MODEL_DIR) -> None:
@@ -45,6 +57,18 @@ class MaintenanceModelService:
             return self.features
         self._assert_target(target)
         return self.features[target]
+
+    def resolve_brand(self, brand: str, target: str) -> str:
+        classes = self.brand_classes.get(target, [])
+        name = str(brand or "").strip()
+        if name in classes:
+            return name
+        alias = BRAND_ALIASES.get(name)
+        if alias and alias in classes:
+            return alias
+        if "Toyota" in classes:
+            return "Toyota"
+        return classes[0] if classes else name
 
     def predict(self, target: str, attributes: dict[str, Any]) -> dict[str, Any]:
         self._assert_target(target)
@@ -81,16 +105,9 @@ class MaintenanceModelService:
             prepared.setdefault("day_of_week", int(ts.dayofweek))
 
         if "brand_encoded" not in prepared and "brand" in prepared:
-            brand = str(prepared["brand"])
+            brand = self.resolve_brand(str(prepared["brand"]), target)
             classes = self.brand_classes.get(target, [])
-            if brand not in classes:
-                raise ValueError(
-                    "Unknown brand '"
-                    + brand
-                    + "'. Known brands: "
-                    + ", ".join(classes)
-                )
-            prepared["brand_encoded"] = classes.index(brand)
+            prepared["brand_encoded"] = classes.index(brand) if brand in classes else 0
 
         return prepared
 
