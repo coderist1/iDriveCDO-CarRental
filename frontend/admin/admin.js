@@ -4,6 +4,83 @@
   var NS = (global.iDrive = global.iDrive || {});
   NS.pages = NS.pages || {};
 
+  /*
+   * Renders a booking's details as a clear bulleted list (one item per line)
+   * for the Admin and Staff desk views. Only lines that have data are shown.
+   */
+  function bookingDetailList(b) {
+    var esc = NS.security.escapeHtml;
+    var v = NS.domain.getVehicle(b.vehicleId);
+    var u = NS.auth.userById(b.userId);
+    var customerName = u ? ((u.firstName || "") + " " + (u.lastName || "")).trim() : "Customer";
+    var driveMode = b.driveMode === "chauffeur" ? "Chauffeur" : "Self-drive";
+    var paymentLine = b.paymentStatus === "paid"
+      ? (b.payment
+          ? (b.payment.method === "cashless" ? "Paid · Cashless · " + (b.payment.brand || "") : "Paid · Cash")
+          : "Paid")
+      : "Unpaid";
+    var rows = [
+      ["Booking ID", esc(b.ref || b.id)],
+      ["Customer", esc(customerName) + (u && u.phone ? " · " + esc(u.phone) : "") + (u && u.email ? " · " + esc(u.email) : "")],
+      ["Vehicle", esc(v ? v.name + " · " + v.plate : "—")],
+      ["Drive mode", esc(driveMode)],
+      ["Pick-up Location", esc(b.pickup || "—") + (b.pickupTime ? " · " + esc(b.pickupTime) : "")],
+      ["Drop-off Location", esc(b.dropoff || "—") + (b.returnTime ? " · " + esc(b.returnTime) : "")],
+      ["Pick-up date", NS.ui.fmtDate(b.startDate)],
+      ["Return date", NS.ui.fmtDate(b.endDate)],
+      ["Passengers", esc(String(b.numberOfPassengers || 1))],
+      ["Payment", esc(paymentLine)],
+      ["Total amount", NS.ui.peso(b.total)],
+      ["Status", esc(b.status || "—")]
+    ];
+    if (b.returnNotes) rows.push(["Return notes", esc(b.returnNotes)]);
+    if (b.notes) rows.push(["Notes", esc(b.notes)]);
+    return (
+      '<ul class="booking-detail-list">' +
+      rows
+        .map(function (r) {
+          return "<li><strong>" + r[0] + ":</strong> <span>" + r[1] + "</span></li>";
+        })
+        .join("") +
+      "</ul>"
+    );
+  }
+
+  /* Booking threads whose booking record is gone: rebuild what we can from the desk notice text. */
+  function missingBookingDetailList(thread) {
+    var esc = NS.security.escapeHtml;
+    var first = (thread.messages || []).filter(function (m) {
+      return /^New booking \S+ received\./.test(m.body || "");
+    })[0];
+    var m = first
+      ? /^New booking (\S+) received\. (Chauffeur|Self-drive), pickup (.+?) on (\d{4}-\d{2}-\d{2})\. Payment: (\w+)\.(?: Notes: ([\s\S]*))?$/.exec(first.body)
+      : null;
+    var contact = [thread.customerName, thread.customerPhone, thread.customerEmail].filter(Boolean).map(esc).join(" · ");
+    var rows = [
+      ["Booking ID", esc(thread.bookingRef || (m && m[1]) || "—")],
+      ["Customer", contact || "—"]
+    ];
+    if (m) {
+      rows.push(
+        ["Drive mode", esc(m[2])],
+        ["Pick-up Location", esc(m[3])],
+        ["Pick-up date", NS.ui.fmtDate(m[4])],
+        ["Payment", esc(m[5].charAt(0).toUpperCase() + m[5].slice(1))]
+      );
+    }
+    rows.push(["Status", "Not saved to the server — other details are unavailable"]);
+    if (m && m[6]) rows.push(["Notes", esc(m[6])]);
+    return (
+      '<ul class="booking-detail-list">' +
+      rows
+        .map(function (r) {
+          return "<li><strong>" + r[0] + ":</strong> <span>" + r[1] + "</span></li>";
+        })
+        .join("") +
+      "</ul>"
+    );
+  }
+
   function mountAdminNav() {
     var host = document.getElementById("admin-side");
     if (!host) return;
@@ -141,51 +218,29 @@
       : "<p class='notice'>No incoming bookings yet. New customer bookings appear here.</p>";
     var returnsHost = document.getElementById("admin-returns");
     if (returnsHost) {
+      // Overview is a read-only glance; the Inbox owns the interactive return workflow.
       returnsHost.innerHTML = returns.length
         ? returns
+            .slice(0, 8)
             .map(function (b) {
               var v = NS.domain.getVehicle(b.vehicleId);
               var u = NS.auth.userById(b.userId);
               return (
-                '<article class="booking-card"><div><p class="eyebrow">Return requested</p><h3>' +
+                '<a class="row-link" href="inbox.html"><strong>' +
                 NS.security.escapeHtml(b.ref) +
-                "</h3><p>" +
+                "</strong><span>" +
                 NS.security.escapeHtml(u ? u.firstName + " " + u.lastName : "Customer") +
                 " · " +
                 NS.security.escapeHtml(v ? v.name : "") +
-                "<br>" +
+                " · " +
                 NS.security.escapeHtml(b.dropoff || "") +
-                (b.returnNotes ? "<br>Notes: " + NS.security.escapeHtml(b.returnNotes) : "") +
-                "</p></div><div>" +
+                "</span>" +
                 NS.ui.statusBadge(b.status) +
-                '<div class="btn-row"><button class="btn btn-gold btn-sm" data-accept-return="' +
-                b.id +
-                '">Accept return</button>' +
-                '<a class="btn btn-ghost btn-sm" href="inbox.html">Open inbox</a></div></div></article>'
+                "</a>"
               );
             })
             .join("")
         : "<p class='notice'>No vehicle returns waiting.</p>";
-      returnsHost.onclick = function (e) {
-        var id = e.target.getAttribute("data-accept-return");
-        if (!id) return;
-        NS.ui
-          .askYesNo("Accept this vehicle return and complete the trip?", {
-            title: "Accept return",
-            yes: "Yes",
-            no: "No"
-          })
-          .then(function (ok) {
-            if (!ok) return;
-            try {
-              NS.domain.acceptVehicleReturn(id, NS.security.getCsrf());
-              NS.ui.toast("Return accepted. Trip completed.", "ok");
-              adminHome();
-            } catch (err) {
-              NS.ui.toast(err.message, "err");
-            }
-          });
-      };
     }
   }
 
@@ -312,7 +367,7 @@
                 tone +
                 '"><strong>' +
                 (pct === null ? "—" : pct + "%") +
-                "</strong><em>ML risk</em></span>" +
+                "</strong><em>Maintenance Risk</em></span>" +
                 NS.ui.statusBadge(v.status) +
                 "</div>" +
                 '<div class="fleet-photo-body">' +
@@ -464,29 +519,16 @@
             b.id +
             '">Message</button>';
           return (
-            '<article class="booking-card"><div><p class="eyebrow">' +
+            '<article class="booking-card"><div><p class="eyebrow">Booking ' +
             NS.security.escapeHtml(b.ref) +
             "</p><h3>" +
             NS.security.escapeHtml(v ? v.name : "") +
-            "</h3><p>" +
-            NS.security.escapeHtml(u ? u.firstName + " " + u.lastName : "") +
-            " · " +
-            NS.security.escapeHtml(u ? u.phone || "" : "") +
-            "<br>" +
-            NS.security.escapeHtml(u ? u.email || "" : "") +
-            "<br>" +
-            NS.ui.fmtDate(b.startDate) +
-            " → " +
-            NS.ui.fmtDate(b.endDate) +
-            (b.returnNotes ? "<br>Return notes: " + NS.security.escapeHtml(b.returnNotes) : "") +
-            (b.notes ? "<br>Notes: " + NS.security.escapeHtml(b.notes) : "") +
-            "</p></div><div>" +
+            "</h3>" +
+            bookingDetailList(b) +
+            "</div><div>" +
             NS.ui.statusBadge(b.status) +
             " " +
             NS.ui.statusBadge(b.paymentStatus) +
-            "<p>" +
-            NS.ui.peso(b.total) +
-            "</p>" +
             actions +
             "</div></article>"
           );
@@ -1051,8 +1093,11 @@
       : "<p class='notice'>No payment records yet.</p>";
   }
 
-  function threadMessagesHtml(thread) {
+  function threadMessagesHtml(thread, hideBookingNotice) {
     return (thread.messages || [])
+      .filter(function (m) {
+        return !(hideBookingNotice && /^New booking \S+ received\./.test(m.body || ""));
+      })
       .map(function (m) {
         return (
           '<div class="chat-line chat-' +
@@ -1085,21 +1130,13 @@
               var v = NS.domain.getVehicle(b.vehicleId);
               var u = NS.auth.userById(b.userId);
               return (
-                '<article class="booking-card"><div><p class="eyebrow">Incoming</p><h3>' +
+                '<article class="booking-card"><div><p class="eyebrow">Incoming · Booking ' +
                 NS.security.escapeHtml(b.ref) +
-                "</h3><p>" +
-                NS.security.escapeHtml(u ? u.firstName + " " + u.lastName : "Customer") +
-                " · " +
-                NS.security.escapeHtml(u ? u.phone || "" : "") +
-                "<br>" +
-                NS.security.escapeHtml(u ? u.email || "" : "") +
-                "<br>" +
+                "</p><h3>" +
                 NS.security.escapeHtml(v ? v.name : "") +
-                " · " +
-                NS.ui.fmtDate(b.startDate) +
-                " → " +
-                NS.ui.fmtDate(b.endDate) +
-                "</p></div><div>" +
+                "</h3>" +
+                bookingDetailList(b) +
+                "</div><div>" +
                 NS.ui.statusBadge(b.status) +
                 " " +
                 NS.ui.statusBadge(b.paymentStatus) +
@@ -1122,18 +1159,13 @@
               var v = NS.domain.getVehicle(b.vehicleId);
               var u = NS.auth.userById(b.userId);
               return (
-                '<article class="booking-card"><div><p class="eyebrow">Return vehicle</p><h3>' +
+                '<article class="booking-card"><div><p class="eyebrow">Return vehicle · Booking ' +
                 NS.security.escapeHtml(b.ref) +
-                "</h3><p>" +
-                NS.security.escapeHtml(u ? u.firstName + " " + u.lastName : "Customer") +
-                " · " +
-                NS.security.escapeHtml(u ? u.phone || "" : "") +
-                "<br>" +
+                "</p><h3>" +
                 NS.security.escapeHtml(v ? v.name : "") +
-                "<br>Drop-off: " +
-                NS.security.escapeHtml(b.dropoff || "—") +
-                (b.returnNotes ? "<br>Notes: " + NS.security.escapeHtml(b.returnNotes) : "") +
-                "</p></div><div>" +
+                "</h3>" +
+                bookingDetailList(b) +
+                "</div><div>" +
                 NS.ui.statusBadge(b.status) +
                 '<div class="btn-row"><button class="btn btn-gold btn-sm" data-accept-return="' +
                 b.id +
@@ -1200,16 +1232,26 @@
         NS.security.escapeHtml(kindLabel(thread.kind)) +
         "</p><h3>" +
         NS.security.escapeHtml(thread.topic) +
-        "</h3><p>" +
-        NS.security.escapeHtml(thread.customerName || "") +
-        " · " +
-        NS.security.escapeHtml(thread.customerEmail || "") +
-        " · " +
-        NS.security.escapeHtml(thread.customerPhone || "") +
-        "</p>" +
+        "</h3>" +
+        (booking
+          ? '<div class="thread-booking">' +
+            NS.ui.statusBadge(booking.status) +
+            " " +
+            NS.ui.statusBadge(booking.paymentStatus) +
+            bookingDetailList(booking) +
+            "</div>"
+          : thread.bookingId
+          ? '<div class="thread-booking">' + missingBookingDetailList(thread) + "</div>"
+          : "<p>" +
+            NS.security.escapeHtml(thread.customerName || "") +
+            " · " +
+            NS.security.escapeHtml(thread.customerEmail || "") +
+            " · " +
+            NS.security.escapeHtml(thread.customerPhone || "") +
+            "</p>") +
         acceptBlock +
         '<div class="chat-log">' +
-        threadMessagesHtml(thread) +
+        threadMessagesHtml(thread, !!booking || !!thread.bookingId) +
         "</div>" +
         '<form id="staff-reply" class="reply-form">' +
         '<label class="field">Reply to customer<textarea class="form-control" name="body" maxlength="500" required></textarea></label>' +

@@ -107,6 +107,9 @@
       if (form.licenseNo) form.licenseNo.value = me.licenseNo || "";
       if (form.licenseExpiry) form.licenseExpiry.value = me.licenseExpiry || "";
       if (form.emergencyPhone) form.emergencyPhone.value = me.phone || "";
+      // Pre-fill address / ID number from the ID the user added on file (optional).
+      if (form.licenseAddress && !form.licenseAddress.value) form.licenseAddress.value = me.address || "";
+      if (form.idNumber && !form.idNumber.value) form.idNumber.value = me.licenseNo || "";
     }
 
     var addonsHost = document.getElementById("addons");
@@ -213,6 +216,71 @@
         setLicensePhoto("");
       });
     }
+
+    /*
+     * Optional OCR auto-fill. Reads an uploaded ID/license photo and fills the
+     * matching fields. Every field stays editable; booking still works without it.
+     */
+    function bindOcrUpload(pickId, inputId, statusId, apply, alsoSetLicensePhoto) {
+      var pick = document.getElementById(pickId);
+      var input = document.getElementById(inputId);
+      var status = document.getElementById(statusId);
+      if (!pick || !input) return;
+      function setStatus(msg) {
+        if (status) status.textContent = msg || "";
+      }
+      pick.addEventListener("click", function () {
+        input.click();
+      });
+      input.addEventListener("change", function () {
+        var file = input.files && input.files[0];
+        input.value = "";
+        if (!file) return;
+        NS.ui.readLicensePhoto(file, function (err, dataUrl) {
+          if (err) {
+            setStatus(err.message || "Could not read that image.");
+            return;
+          }
+          if (alsoSetLicensePhoto) setLicensePhoto(dataUrl);
+          if (!NS.ocr || !NS.ocr.scan) {
+            setStatus("Image attached. Automatic reading is unavailable; please type the details.");
+            return;
+          }
+          setStatus("Reading… this can take a few seconds.");
+          NS.ocr
+            .scan(dataUrl, function (p) {
+              setStatus("Reading… " + Math.round(p * 100) + "%");
+            })
+            .then(function (data) {
+              var filled = apply(data);
+              refresh();
+              setStatus(
+                filled.length
+                  ? "Filled " + filled.join(", ") + ". Please review and edit before booking."
+                  : "Couldn't read the details. Please type them in."
+              );
+            })
+            .catch(function (e) {
+              setStatus(e.message || "Could not read the image automatically. Please type the details.");
+            });
+        });
+      });
+    }
+
+    bindOcrUpload("selfdrive-id-pick", "selfdrive-id-input", "selfdrive-id-status", function (data) {
+      var filled = [];
+      if (data.fullName && form.licenseName) { form.licenseName.value = data.fullName; filled.push("name"); }
+      if (data.idNumber && form.licenseNo) { form.licenseNo.value = data.idNumber; filled.push("license number"); }
+      if (data.expiry && form.licenseExpiry) { form.licenseExpiry.value = data.expiry; filled.push("expiry"); }
+      if (data.address && form.licenseAddress) { form.licenseAddress.value = data.address; filled.push("address"); }
+      return filled;
+    }, true);
+
+    bindOcrUpload("chauffeur-id-pick", "chauffeur-id-input", "chauffeur-id-status", function (data) {
+      var filled = [];
+      if (data.idNumber && form.idNumber) { form.idNumber.value = data.idNumber; filled.push("ID number"); }
+      return filled;
+    }, false);
 
     if (form.driverDetailsId) {
       form.driverDetailsId.innerHTML =

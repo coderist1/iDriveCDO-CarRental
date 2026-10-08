@@ -40,6 +40,109 @@
     return el && el.value != null ? el.value : "";
   }
 
+  function setHidden(id, value) {
+    var el = document.getElementById(id);
+    if (el) el.value = value || "";
+  }
+
+  /*
+   * Optional ID upload on the register form. Reads the photo with Tesseract OCR,
+   * stores the extracted fields in hidden inputs, and pre-fills the name only when
+   * those fields are still empty. Everything stays optional and editable.
+   */
+  function bindIdUpload(form) {
+    var pick = document.getElementById("reg-id-pick");
+    var input = document.getElementById("reg-id-input");
+    var preview = document.getElementById("reg-id-preview");
+    var clear = document.getElementById("reg-id-clear");
+    var status = document.getElementById("reg-id-status");
+    if (!pick || !input) return;
+
+    function setStatus(msg) {
+      if (status) status.textContent = msg || "";
+    }
+
+    function showPreview(dataUrl) {
+      if (!preview) return;
+      if (dataUrl) {
+        preview.classList.remove("is-empty");
+        preview.innerHTML = '<img src="' + dataUrl.replace(/"/g, "") + '" alt="ID preview">';
+      } else {
+        preview.classList.add("is-empty");
+        preview.textContent = "No ID yet";
+      }
+      if (clear) clear.hidden = !dataUrl;
+      if (pick) pick.textContent = dataUrl ? "Replace ID" : "Upload ID";
+    }
+
+    pick.addEventListener("click", function () {
+      input.click();
+    });
+
+    if (clear) {
+      clear.addEventListener("click", function () {
+        setHidden("reg-id-data", "");
+        setHidden("reg-id-number", "");
+        setHidden("reg-id-expiry", "");
+        setHidden("reg-id-address", "");
+        setHidden("reg-id-birthdate", "");
+        showPreview("");
+        setStatus("");
+      });
+    }
+
+    input.addEventListener("change", function () {
+      var file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+      NS.ui.readLicensePhoto(file, function (err, dataUrl) {
+        if (err) {
+          setStatus(err.message || "Could not read that image.");
+          return;
+        }
+        setHidden("reg-id-data", dataUrl);
+        showPreview(dataUrl);
+        if (!NS.ocr || !NS.ocr.scan) {
+          setStatus("ID attached. Automatic reading is unavailable; please type your details.");
+          return;
+        }
+        setStatus("Reading your ID… this can take a few seconds.");
+        NS.ocr
+          .scan(dataUrl, function (p) {
+            setStatus("Reading your ID… " + Math.round(p * 100) + "%");
+          })
+          .then(function (data) {
+            setHidden("reg-id-number", data.idNumber);
+            setHidden("reg-id-expiry", data.expiry);
+            setHidden("reg-id-address", data.address);
+            setHidden("reg-id-birthdate", data.birthdate);
+            // Pre-fill name only if the user has not typed it yet.
+            if (data.fullName) {
+              var parts = data.fullName.split(/\s+/);
+              var first = field(form, "firstName");
+              var lastEl = field(form, "lastName");
+              if (first && !first.value) first.value = parts[0] || "";
+              if (lastEl && !lastEl.value && parts.length > 1) lastEl.value = parts.slice(1).join(" ");
+            }
+            var found = [];
+            if (data.fullName) found.push("name");
+            if (data.idNumber) found.push("ID number");
+            if (data.expiry) found.push("expiry");
+            if (data.address) found.push("address");
+            if (data.birthdate) found.push("birthdate");
+            setStatus(
+              found.length
+                ? "Read " + found.join(", ") + ". Please review and edit anything that looks off."
+                : "ID attached, but we couldn't read the details. Please type them in."
+            );
+          })
+          .catch(function (e) {
+            setStatus(e.message || "Could not read the ID automatically. Please type your details.");
+          });
+      });
+    });
+  }
+
   NS.pages.login = function login() {
     var form = document.getElementById("login-form");
     if (!form || form.getAttribute("data-bound") === "1") return;
@@ -59,7 +162,7 @@
             ? NS.routes.href("driverHome")
             : already.role === "staff" || already.role === "admin"
             ? NS.routes.href("adminHome")
-            : NS.routes.href("account")
+            : NS.routes.href("home")
         );
         return;
       }
@@ -94,7 +197,7 @@
             ? NS.routes.base() + next
             : user.role === "staff" || user.role === "admin"
             ? NS.routes.href("adminHome")
-            : NS.routes.href("account");
+            : NS.routes.href("home");
         setTimeout(function () {
           location.href = dest;
         }, 150);
@@ -122,13 +225,15 @@
       console.warn("CSRF bind failed", e);
     }
 
+    bindIdUpload(form);
+
     try {
       if (NS.auth && NS.auth.current && NS.auth.current()) {
         var alreadyReg = NS.auth.current();
         location.replace(
           alreadyReg.role === "staff" || alreadyReg.role === "admin"
             ? NS.routes.href("adminHome")
-            : NS.routes.href("account")
+            : NS.routes.href("home")
         );
         return;
       }
@@ -173,7 +278,12 @@
             password: val(form, "password"),
             confirmPassword: val(form, "confirmPassword"),
             ageConfirm: !!(ageConfirm && ageConfirm.checked),
-            terms: !!(terms && terms.checked)
+            terms: !!(terms && terms.checked),
+            idImage: val(form, "idImage"),
+            idNumber: val(form, "idNumber"),
+            idExpiry: val(form, "idExpiry"),
+            idAddress: val(form, "idAddress"),
+            idBirthdate: val(form, "idBirthdate")
           },
           csrfInput ? csrfInput.value : ""
         );
@@ -194,7 +304,7 @@
             ])
           : delay(150);
         ready.then(function () {
-          location.href = NS.routes.href("account");
+          location.href = NS.routes.href("home");
         });
       } catch (err) {
         busy = false;

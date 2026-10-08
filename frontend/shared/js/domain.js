@@ -551,18 +551,89 @@
     if (!user) return Promise.reject(new Error("Customer account not found."));
     if (user.role !== "customer") return Promise.reject(new Error("Bookings must belong to a customer account."));
     if (user.apiId != null) return Promise.resolve(user.apiId);
+    /* Backend contract: POST /users/sync with first_name/last_name/phone/address/license_*. */
     var body = {
       email: user.email,
-      customer_full_name: ((user.firstName || "") + " " + (user.lastName || "")).trim() || user.email
+      first_name: user.firstName || (user.email || "").split("@")[0] || "Guest",
+      last_name: user.lastName || "-",
+      phone: NS.validation.normalizePhone(user.phone || "") || "09000000000"
     };
     if (user.address) body.address = user.address;
-    if (user.licenseNo) body.driver_license = user.licenseNo;
-    return NS.api.post("/customer-info/sync", body).then(function (saved) {
+    if (user.licenseNo) body.license_no = user.licenseNo;
+    if (user.licenseExpiry) body.license_expiry = user.licenseExpiry;
+    return NS.api.post("/users/sync", body).then(function (saved) {
       var list = NS.store.get("users", []);
       for (var i = 0; i < list.length; i++) if (list[i].id === userId) list[i].apiId = saved.user_id;
       NS.store.set("users", list);
       return saved.user_id;
     });
+  }
+
+  /*
+   * Location + addon lookups. The app models locations as plain strings and addons by
+   * string id ("driver", "gps", ...). The backend keys them by integer id, so we fetch
+   * once and cache name/key -> id maps for the current page.
+   */
+  var _refCache = { locations: null, addons: null };
+
+  function ensureRefMaps() {
+    if (!NS.api) return Promise.reject(new Error("API client not loaded."));
+    if (_refCache.locations && _refCache.addons) return Promise.resolve(_refCache);
+    return Promise.all([NS.api.locations.all(), NS.api.addons.all()]).then(function (res) {
+      var locMap = {};
+      (res[0] || []).forEach(function (l) {
+        locMap[String(l.name).trim().toLowerCase()] = l.location_id;
+      });
+      var addonMap = {};
+      (res[1] || []).forEach(function (a) {
+        /* match by code or name so local string ids line up with backend rows */
+        if (a.code) addonMap[String(a.code).trim().toLowerCase()] = a.addon_id;
+        if (a.name) addonMap[String(a.name).trim().toLowerCase()] = a.addon_id;
+      });
+      _refCache.locations = locMap;
+      _refCache.addons = addonMap;
+      return _refCache;
+    });
+  }
+
+  function locationId(name) {
+    if (!_refCache.locations) return null;
+    return _refCache.locations[String(name || "").trim().toLowerCase()] || null;
+  }
+
+  /* Local addon string ids mapped to likely backend names, as a fallback match. */
+  var ADDON_NAME_BY_ID = {
+    driver: "professional driver",
+    gps: "gps navigation",
+    child: "child seat",
+    insurance: "full coverage insurance"
+  };
+
+  function addonId(localId) {
+    if (!_refCache.addons) return null;
+    var key = String(localId || "").trim().toLowerCase();
+    return _refCache.addons[key] || _refCache.addons[ADDON_NAME_BY_ID[key] || ""] || null;
+  }
+
+  /* Builds the backend renter_document object from a local booking's driverInfo. */
+  function renterDocumentBody(booking) {
+    var info = booking.driverInfo || {};
+    if (booking.driveMode === "chauffeur") {
+      if (!info.idType || !info.idNumber) return null;
+      return { id_type: info.idType, id_number: info.idNumber };
+    }
+    /* self-drive: all license fields are required together by the backend */
+    var hasAll = info.licenseName && info.licenseNo && info.licenseExpiry &&
+      info.licenseAddress && info.emergencyPhone && info.licensePhoto;
+    if (!hasAll) return null;
+    return {
+      license_name: info.licenseName,
+      license_no: info.licenseNo,
+      license_expiry: info.licenseExpiry,
+      license_address: info.licenseAddress,
+      emergency_phone: NS.validation.normalizePhone(info.emergencyPhone),
+      license_photo: info.licensePhoto
+    };
   }
 
   /* Saves a local booking to Laravel; the local copy is discarded if the server rejects it. */
@@ -577,22 +648,39 @@
           return b.id !== bookingId;
         })
       );
+      saveThreads(
+        threads().filter(function (t) {
+          return t.bookingId !== bookingId;
+        })
+      );
       throw new Error("Server did not save the booking: " + apiErrorMessage(err));
     }
-    return ensureCustomerOnApi(booking.userId).then(function (apiUserId) {
+    return Promise.all([ensureCustomerOnApi(booking.userId), ensureRefMaps()]).then(function (res) {
+      var apiUserId = res[0];
+      var addonIds = (booking.addons || [])
+        .map(addonId)
+        .filter(function (x) { return x != null; });
       var body = {
         vehicle_id: vehicle && vehicle.apiId,
         user_id: apiUserId,
-        driver_details_id: driver && driver.apiId != null ? driver.apiId : null,
-        pickup_date: booking.startDate,
+        driver_id: driver && driver.apiId != null ? driver.apiId : null,
+        drive_mode: booking.driveMode === "chauffeur" ? "chauffeur" : "self",
+        start_date: booking.startDate,
+        end_date: booking.endDate,
         pickup_time: booking.pickupTime,
-        return_date: booking.endDate,
         return_time: booking.returnTime,
-        payment_method: "Card",
-        number_of_passenger: booking.numberOfPassengers,
-        driver_option: booking.driveMode === "chauffeur" ? "With driver" : "Self-drive",
-        date_reserve: localISODate(new Date())
+        pickup_location_id: locationId(booking.pickup),
+        dropoff_location_id: locationId(booking.dropoff),
+        number_of_passengers: booking.numberOfPassengers,
+        fuel_before_rent: booking.fuelBeforeRent || "Full",
+        subtotal: booking.subtotal,
+        payment_status: "unpaid",
+        notes: booking.notes || null,
+        date_reserve: new Date().toISOString(),
+        addon_ids: addonIds
       };
+      var doc = renterDocumentBody(booking);
+      if (doc) body.renter_document = doc;
       return NS.api.bookings.create(body);
     }).then(function (saved) {
       var all = bookings();
@@ -732,11 +820,21 @@
       pushToApi("payments", "payments", paymentRow, {
         booking_id: booking.apiId,
         amount: booking.total,
-        payment_method: method === "cashless" ? payment.brand : "Cash",
+        payment_method: method === "cashless" ? "cashless" : "cash",
+        brand: method === "cashless" ? payment.brand : "Cash",
+        account_last4: /^\d{4}$/.test(payment.last4 || "") ? payment.last4 : null,
+        holder: payment.holder || null,
         reference_number: payment.authCode,
-        payment_date: todayISO(),
-        payment_status: "Paid"
+        payment_date: new Date().toISOString(),
+        payment_status: "paid"
       }, "payment_id");
+      /* Mark the booking paid on the server too so staff can confirm it. */
+      if (NS.api) {
+        NS.api.bookings.update(booking.apiId, {
+          payment_status: "paid",
+          payment_method: method === "cashless" ? "cashless" : "cash"
+        }).catch(function () {});
+      }
     }
 
     var payer = NS.auth.userById(booking.userId) || me;
@@ -1047,15 +1145,23 @@
     if (!found) list.push(item);
     saveVehicles(list);
     pushToApi("vehicles", "vehicles", item, {
+      name: item.name,
       plate_number: item.plate,
       mileage: item.mileage,
       brand: item.brand,
       model: item.model,
       type: item.type,
+      transmission: item.transmission,
+      fuel: item.fuel,
       capacity: item.seats,
+      luggage: item.luggage,
       daily_rate: item.dailyRate,
       year_model: item.year,
-      year_purchased: item.yearPurchased
+      year_purchased: item.yearPurchased,
+      image: item.image || null,
+      description: item.description || null,
+      status: item.status,
+      features: item.features || []
     }, "vehicle_id");
     audit("vehicle-save", me.id, item.name);
     return item;
@@ -1198,13 +1304,15 @@
       list.push(item);
     }
     saveDrivers(list);
-    pushToApi("driverDetails", "drivers", item, {
-      fullName: item.fullName,
-      Driver_License: item.driverLicense,
-      type_DriverLicense: item.typeDriverLicense,
-      Driver_License_Expiry: item.licenseExpiry,
-      status: item.status === "active" ? "available" : "inactive"
-    }, "driver_details_id");
+    pushToApi("drivers", "drivers", item, {
+      full_name: item.fullName,
+      driver_license: item.driverLicense,
+      type_driver_license: item.typeDriverLicense,
+      license_expiry: item.licenseExpiry,
+      phone: item.phone || null,
+      status: item.status === "active" ? "active" : "inactive",
+      duty_status: item.dutyStatus === "on_call" ? "on_call" : "regular"
+    }, "driver_id");
     audit("driver-save", NS.auth.current().id, item.fullName);
     return item;
   }
@@ -1384,12 +1492,18 @@
     if (!found) list.push(item);
     saveVehicleRegs(list);
     if (vehicle.apiId != null) {
-      pushToApi("vehicleRegDetails", "vehicleRegs", item, {
+      /* Backend wants renewal_scheduled_day as a day-of-month integer (1-31). */
+      var dayNum = parseInt(item.renewalScheduledDay, 10);
+      if (!(dayNum >= 1 && dayNum <= 31)) {
+        var m = /^\d{4}-\d{2}-(\d{2})$/.exec(item.renewalScheduledDay || "");
+        dayNum = m ? parseInt(m[1], 10) : null;
+      }
+      pushToApi("vehicleRegistrations", "vehicleRegs", item, {
         vehicle_id: vehicle.apiId,
         plate_number: item.plateNumber,
-        renewal_scheduled_day: /^\d{4}-\d{2}-\d{2}$/.test(item.renewalScheduledDay) ? item.renewalScheduledDay : todayISO(),
+        renewal_scheduled_day: dayNum || null,
         next_reg_renewal: item.nextRegRenewal
-      }, "vehicle_reg_det_id");
+      }, "registration_id");
     }
     audit("vehicle-reg", NS.auth.current().id, vehicle.plate);
     return item;
@@ -1433,12 +1547,13 @@
     }
     saveMaintenances(list);
     if (vehicle.apiId != null) {
-      pushToApi("vehicleMaintenances", "maintenances", item, {
+      pushToApi("maintenances", "maintenances", item, {
         vehicle_id: vehicle.apiId,
         maintenance_type: item.maintenanceType,
         scheduled_date: item.scheduledDate,
         performed_at: item.performedAt || null,
-        finish: item.finished ? "Yes" : "No"
+        finished: !!item.finished,
+        notes: item.notes || null
       }, "maintenance_id");
     }
     if (item.finished) {
@@ -1486,8 +1601,8 @@
       pushToApi("fuelRecords", "fuelRecords", item, {
         vehicle_id: vehicle.apiId,
         fuel_type: item.fuelType,
-        fuel_date: todayISO(),
-        mileage: vehicle.mileage || null
+        notes: item.notes || null,
+        recorded_at: new Date().toISOString()
       }, "fuel_record_id");
     }
     vehicle.fuel = item.fuelType;
@@ -2182,35 +2297,49 @@
       features: [],
       status: "available"
     };
+    var apiFeatures = Array.isArray(row.features)
+      ? row.features.map(function (f) {
+          return typeof f === "string" ? f : f && f.feature;
+        }).filter(Boolean)
+      : null;
     return Object.assign({}, base, {
       apiId: row.vehicle_id,
-      name: (local && local.name) || row.brand + " " + row.model + " " + row.year_model,
+      name: row.name || (local && local.name) || row.brand + " " + row.model + " " + row.year_model,
       brand: row.brand,
       model: row.model,
       year: Number(row.year_model),
       yearPurchased: Number(row.year_purchased),
       type: row.type,
+      transmission: row.transmission || base.transmission,
+      fuel: row.fuel || base.fuel,
       seats: Number(row.capacity),
+      luggage: row.luggage != null ? Number(row.luggage) : base.luggage,
       mileage: Number(row.mileage),
       plate: row.plate_number,
+      image: row.image || base.image,
+      description: row.description || base.description,
+      features: (apiFeatures && apiFeatures.length) ? apiFeatures : base.features,
+      status: row.status || base.status,
       dailyRate: row.daily_rate != null ? Number(row.daily_rate) : base.dailyRate
     });
   }
 
   function syncVehiclesFromApi() {
     if (!NS.api) return Promise.reject(new Error("API client not loaded."));
-    return NS.api.vehicles.all().then(function (rows) {
-      var byPlate = {};
-      vehicles().forEach(function (v) {
-        if (v.plate) byPlate[String(v.plate).toUpperCase()] = v;
-      });
-      var seeded = seedVehicles();
-      var list = rows.map(function (row) {
-        return fromApiVehicle(row, byPlate[String(row.plate_number).toUpperCase()], seeded);
-      });
-      saveVehicles(list);
-      return list;
+    return NS.api.vehicles.all().then(applyVehicleRows);
+  }
+
+  function applyVehicleRows(rows) {
+    var byPlate = {};
+    vehicles().forEach(function (v) {
+      if (v.plate) byPlate[String(v.plate).toUpperCase()] = v;
     });
+    var seeded = seedVehicles();
+    var list = rows.map(function (row) {
+      return fromApiVehicle(row, byPlate[String(row.plate_number).toUpperCase()], seeded);
+    });
+    saveVehicles(list);
+    return list;
   }
 
   function apiDay(s) {
@@ -2221,10 +2350,9 @@
     return s ? String(s).slice(0, 5) : "";
   }
 
-  /* Laravel stores "Return requested"; the app uses "return_requested". */
+  /* Backend uses lowercase snake statuses that already match the app (e.g. "return_requested"). */
   function toApiStatus(status) {
-    var s = String(status || "pending").replace(/_/g, " ");
-    return s.charAt(0).toUpperCase() + s.slice(1);
+    return String(status || "pending").trim().toLowerCase().replace(/\s+/g, "_");
   }
 
   function fromApiStatus(status) {
@@ -2262,38 +2390,29 @@
     );
   }
 
-  function apiUser(info, role, fullName, prev) {
-    var name = String(fullName || (info.user && info.user.name) || "").trim();
-    var space = name.indexOf(" ");
+  function apiUser(row, prev) {
     return {
-      email: info.user ? info.user.email : (prev && prev.email) || "",
-      role: role,
-      firstName: space === -1 ? name : name.slice(0, space),
-      lastName: space === -1 ? "" : name.slice(space + 1),
-      phone: (prev && prev.phone) || "",
-      address: info.address || "",
+      email: row.email || (prev && prev.email) || "",
+      role: row.role || (prev && prev.role) || "customer",
+      firstName: row.first_name || (prev && prev.firstName) || "",
+      lastName: row.last_name || (prev && prev.lastName) || "",
+      phone: row.phone || (prev && prev.phone) || "",
+      address: row.address || (prev && prev.address) || "",
+      department: row.department || (prev && prev.department) || "",
+      licenseNo: row.license_no || (prev && prev.licenseNo) || "",
+      licenseExpiry: apiDay(row.license_expiry) || (prev && prev.licenseExpiry) || "",
       avatar: (prev && prev.avatar) || "",
-      status: (prev && prev.status) || "active",
-      createdAt: info.created_at
+      status: row.status || (prev && prev.status) || "active",
+      createdAt: row.created_at
     };
   }
 
-  function syncUsersFromApi(customers, staff) {
-    var rows = customers
-      .map(function (c) {
-        return Object.assign({ role: "customer" }, c);
-      })
-      .concat(
-        staff.map(function (s) {
-          return Object.assign({ role: "staff" }, s);
-        })
-      );
+  /* Single /users endpoint carries role; we keep local-only accounts (no apiId) as-is. */
+  function syncUsersFromApi(users) {
     NS.store.set(
       "users",
-      mergeFromApi(NS.store.get("users", []), rows, "user_id", "usr_api_", function (r, prev) {
-        return r.role === "staff"
-          ? Object.assign(apiUser(r, "staff", r.staff_full_name, prev), { department: r.department || "" })
-          : Object.assign(apiUser(r, "customer", r.customer_full_name, prev), { licenseNo: r.driver_license || "" });
+      mergeFromApi(NS.store.get("users", []), users, "user_id", "usr_api_", function (r, prev) {
+        return apiUser(r, prev);
       }, function () {
         return true;
       })
@@ -2302,15 +2421,16 @@
 
   function syncDriversFromApi(rows) {
     saveDrivers(
-      mergeFromApi(drivers(), rows, "driver_details_id", "drv_api_", function (r, prev) {
+      mergeFromApi(drivers(), rows, "driver_id", "drv_api_", function (r, prev) {
         return {
-          fullName: r.fullName,
-          driverLicense: r.Driver_License,
-          typeDriverLicense: r.type_DriverLicense,
-          licenseExpiry: apiDay(r.Driver_License_Expiry),
-          status: (prev && prev.status) || (String(r.status).toLowerCase() === "available" ? "active" : "inactive"),
-          dutyStatus: (prev && prev.dutyStatus) || "regular",
-          phone: (prev && prev.phone) || "",
+          fullName: r.full_name,
+          driverLicense: r.driver_license,
+          typeDriverLicense: r.type_driver_license || "Professional",
+          licenseExpiry: apiDay(r.license_expiry),
+          status: String(r.status).toLowerCase() === "active" ? "active" : "inactive",
+          dutyStatus: r.duty_status === "on_call" ? "on_call" : "regular",
+          phone: r.phone || (prev && prev.phone) || "",
+          userId: (prev && prev.userId) || null,
           createdAt: r.created_at
         };
       }, function (d) {
@@ -2319,23 +2439,19 @@
     );
   }
 
-  function syncBookingsFromApi(rows, paymentRows) {
-    var paid = {};
-    var billed = {};
-    paymentRows.forEach(function (p) {
-      if (String(p.payment_status).toLowerCase() === "paid") paid[p.booking_id] = true;
-      billed[p.booking_id] = (billed[p.booking_id] || 0) + (Number(p.amount) || 0);
-    });
+  function syncBookingsFromApi(rows) {
     var vehicleIds = apiIdIndex(vehicles());
     var driverIds = apiIdIndex(drivers());
     var userIds = apiIdIndex(NS.store.get("users", []));
+    function locName(rel) {
+      return rel && rel.name ? rel.name : "";
+    }
     saveBookings(
       mergeFromApi(bookings(), rows, "booking_id", "bkg_api_", function (r, prev) {
-        var start = apiDay(r.pickup_date);
-        var end = apiDay(r.return_date) || start;
-        var days = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) || 1);
-        var rate = r.vehicle ? Number(r.vehicle.daily_rate) || 0 : 0;
-        var chauffeur = /driver/i.test(r.driver_option || "");
+        var start = apiDay(r.start_date);
+        var end = apiDay(r.end_date) || start;
+        var days = Number(r.days) || Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) || 1);
+        var chauffeur = String(r.drive_mode || "").toLowerCase() === "chauffeur";
         var mapped = {
           vehicleId: vehicleIds[r.vehicle_id] || "veh_api_" + r.vehicle_id,
           startDate: start,
@@ -2343,32 +2459,32 @@
           days: days,
           pickupTime: apiTime(r.pickup_time),
           returnTime: apiTime(r.return_time),
-          numberOfPassengers: Number(r.number_of_passenger) || 1,
+          numberOfPassengers: Number(r.number_of_passengers) || 1,
           driveMode: chauffeur ? "chauffeur" : "self",
           driverOption: chauffeur ? "Chauffeur" : "Self-drive",
-          driverDetailsId: r.driver_details_id ? driverIds[r.driver_details_id] || null : null,
+          driverDetailsId: r.driver_id ? driverIds[r.driver_id] || null : null,
           fuelBeforeRent: r.fuel_before_rent || "",
           fuelUponReturn: r.fuel_upon_return || "",
           paymentMethod: r.payment_method || "",
-          status: fromApiStatus(r.booking_status),
+          status: fromApiStatus(r.status),
           dateReserve: r.date_reserve,
-          paymentStatus: paid[r.booking_id] || (prev && prev.paymentStatus === "paid") ? "paid" : "unpaid"
+          paymentStatus: String(r.payment_status).toLowerCase() === "paid" ? "paid" : "unpaid",
+          subtotal: Number(r.subtotal) || 0,
+          extras: Number(r.extras) || 0,
+          total: Number(r.total) || (Number(r.subtotal) || 0) + (Number(r.extras) || 0)
         };
         if (prev && !/^bkg_api_/.test(prev.id)) return mapped;
-        var total = billed[r.booking_id] || rate * days;
-        if (prev) return Object.assign(mapped, { subtotal: total, total: total });
+        if (prev) return mapped;
         return Object.assign(
           {
-            ref: "BKG-" + r.booking_id,
+            ref: r.ref || "IDR-" + r.booking_id,
             userId: userIds[r.user_id] || "usr_api_" + r.user_id,
-            pickup: "",
-            dropoff: "",
+            pickup: locName(r.pickup_location || r.pickupLocation),
+            dropoff: locName(r.dropoff_location || r.dropoffLocation),
             addons: [],
-            subtotal: total,
-            extras: 0,
-            total: total,
             payment: null,
-            notes: "",
+            notes: r.notes || "",
+            returnNotes: r.return_notes || "",
             createdAt: r.created_at,
             updatedAt: r.updated_at
           },
@@ -2415,11 +2531,8 @@
         return {
           vehicleId: vehicleId(f.vehicle_id),
           fuelType: f.fuel_type,
-          quantity: Number(f.quantity) || 0,
-          fuelCost: Number(f.fuel_cost) || 0,
-          mileage: Number(f.mileage) || 0,
-          recordedAt: apiDay(f.fuel_date),
-          notes: f.quantity + " L, ₱" + f.fuel_cost
+          recordedAt: apiDay(f.recorded_at) || apiDay(f.created_at),
+          notes: f.notes || ""
         };
       }, vehicleExists)
     );
@@ -2430,18 +2543,18 @@
           maintenanceType: m.maintenance_type,
           scheduledDate: apiDay(m.scheduled_date),
           performedAt: apiDay(m.performed_at),
-          finished: String(m.finish).toLowerCase() === "yes",
-          notes: (prev && prev.notes) || "",
+          finished: m.finished === true || String(m.finished).toLowerCase() === "true",
+          notes: m.notes || (prev && prev.notes) || "",
           createdAt: m.created_at
         };
       }, vehicleExists)
     );
     saveVehicleRegs(
-      mergeFromApi(vehicleRegs(), regRows, "vehicle_reg_det_id", "reg_api_", function (r) {
+      mergeFromApi(vehicleRegs(), regRows, "registration_id", "reg_api_", function (r) {
         return {
           vehicleId: vehicleId(r.vehicle_id),
           plateNumber: r.plate_number,
-          renewalScheduledDay: apiDay(r.renewal_scheduled_day),
+          renewalScheduledDay: r.renewal_scheduled_day != null ? String(r.renewal_scheduled_day) : "",
           nextRegRenewal: apiDay(r.next_reg_renewal),
           updatedAt: r.updated_at
         };
@@ -2450,27 +2563,60 @@
   }
 
   /* Loads every Laravel table into local storage so staff pages show database records. */
+  var SYNCED_KEYS = ["vehicles", "users", "drivers", "bookings", "payments", "fuelRecords", "maintenances", "vehicleRegs"];
+
+  function syncedWriteCounts() {
+    return SYNCED_KEYS.map(function (k) {
+      return NS.store.writeCount(k);
+    }).join(",");
+  }
+
+  function fetchAllFromApiLegacy() {
+    return Promise.all([
+      NS.api.vehicles.all(),
+      NS.api.users.all(),
+      NS.api.drivers.all(),
+      NS.api.bookings.all(),
+      NS.api.payments.all(),
+      NS.api.fuelRecords.all(),
+      NS.api.maintenances.all(),
+      NS.api.vehicleRegistrations.all()
+    ]).then(function (res) {
+      return {
+        vehicles: res[0],
+        users: res[1],
+        drivers: res[2],
+        bookings: res[3],
+        payments: res[4],
+        fuel_records: res[5],
+        maintenances: res[6],
+        vehicle_registrations: res[7]
+      };
+    });
+  }
+
+  /*
+   * Resolves true when server data was applied, false when it was skipped because the user saved
+   * something locally while the request was in flight (that change is newer than the snapshot).
+   */
   function syncAllFromApi() {
     if (!NS.api) return Promise.reject(new Error("API client not loaded."));
-    return syncVehiclesFromApi()
-      .then(function () {
-        return Promise.all([
-          NS.api.customerInfo.all(),
-          NS.api.staffInfo.all(),
-          NS.api.driverDetails.all(),
-          NS.api.bookings.all(),
-          NS.api.payments.all(),
-          NS.api.fuelRecords.all(),
-          NS.api.vehicleMaintenances.all(),
-          NS.api.vehicleRegDetails.all()
-        ]);
+    var before = syncedWriteCounts();
+    return NS.api
+      .sync()
+      .catch(function (err) {
+        if (err && err.status === 404) return fetchAllFromApiLegacy();
+        throw err;
       })
-      .then(function (res) {
-        syncUsersFromApi(res[0], res[1]);
-        syncDriversFromApi(res[2]);
-        syncBookingsFromApi(res[3], res[4]);
-        syncPaymentsFromApi(res[4]);
-        syncVehicleRecordsFromApi(res[5], res[6], res[7]);
+      .then(function (data) {
+        if (syncedWriteCounts() !== before) return false;
+        applyVehicleRows(data.vehicles || []);
+        syncUsersFromApi(data.users || []);
+        syncDriversFromApi(data.drivers || []);
+        syncBookingsFromApi(data.bookings || []);
+        syncPaymentsFromApi(data.payments || []);
+        syncVehicleRecordsFromApi(data.fuel_records || [], data.maintenances || [], data.vehicle_registrations || []);
+        return true;
       });
   }
 
@@ -2510,27 +2656,21 @@
 
   function pushUserProfileToApi(user) {
     if (!NS.api || !user || user.apiId == null) return;
-    var name = ((user.firstName || "") + " " + (user.lastName || "")).trim();
-    var body = {};
-    var resource;
-    if (user.role === "customer") {
-      resource = "customerInfo";
-      if (name) body.customer_full_name = name;
-      if (user.licenseNo) body.driver_license = user.licenseNo;
-    } else if (user.role === "staff") {
-      resource = "staffInfo";
-      if (name) body.staff_full_name = name;
-      if (user.department) body.department = user.department;
-    } else {
-      return;
-    }
+    var body = {
+      first_name: user.firstName || "",
+      last_name: user.lastName || ""
+    };
+    if (user.phone) body.phone = NS.validation.normalizePhone(user.phone);
     if (user.address) body.address = user.address;
-    NS.api[resource].update(user.apiId, body).catch(warnApiFailure);
+    if (user.department) body.department = user.department;
+    if (user.licenseNo) body.license_no = user.licenseNo;
+    if (user.licenseExpiry) body.license_expiry = user.licenseExpiry;
+    NS.api.users.update(user.apiId, body).catch(warnApiFailure);
   }
 
   function pushBookingStatusToApi(booking) {
     if (!booking || booking.apiId == null || !NS.api) return;
-    NS.api.bookings.update(booking.apiId, { booking_status: toApiStatus(booking.status) }).catch(function (err) {
+    NS.api.bookings.update(booking.apiId, { status: toApiStatus(booking.status) }).catch(function (err) {
       console.warn("iDrive: booking status was not saved to the server.", err);
       if (NS.ui && NS.ui.toast) NS.ui.toast("Server did not save the status change: " + apiErrorMessage(err), "err");
     });

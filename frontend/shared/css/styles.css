@@ -335,6 +335,15 @@ h1, h2, h3, .brand span {
   font-size: 1rem;
   line-height: 1;
 }
+.btn.nav-back {
+  height: 38px;
+  min-height: 0;
+  padding: 0 0.9rem;
+  font-size: 0.88rem;
+  line-height: 1;
+  border-radius: 999px;
+  align-self: center;
+}
 
 .brand {
   display: flex;
@@ -1023,6 +1032,24 @@ label, .field { display: block; margin-bottom: 0.85rem; font-weight: 700; font-s
 .license-photo-actions .fineprint {
   margin: 0;
 }
+.id-upload-field {
+  margin: 0.5rem 0 0.9rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed rgba(232, 137, 12, 0.4);
+  border-radius: 14px;
+  background: rgba(232, 137, 12, 0.05);
+}
+.id-upload-field .eyebrow { margin: 0 0 0.3rem; }
+.id-upload-field .eyebrow em { font-style: normal; color: var(--muted); font-weight: 600; }
+.id-upload-field .fineprint { margin: 0.3rem 0; }
+.id-upload-field .license-photo-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 0.9rem;
+  margin-top: 0.5rem;
+}
+#reg-id-status, #selfdrive-id-status, #chauffeur-id-status { min-height: 1em; }
+
 .license-photo-view {
   margin: 0.85rem 0 0.4rem;
 }
@@ -1933,8 +1960,14 @@ textarea { min-height: 120px; resize: vertical; }
   flex-wrap: wrap;
   margin: 0.4rem 0 0.85rem;
 }
+.fleet-list-head { align-items: center; }
 .fleet-list-head h2 { margin: 0; }
-.fleet-list-head .desk-toolbar { margin: 0; }
+.fleet-list-head .desk-toolbar { margin: 0; flex-wrap: nowrap; }
+.fleet-list-head .desk-toolbar .form-select { width: 170px; }
+@media (max-width: 560px) {
+  .fleet-list-head .desk-toolbar { width: 100%; }
+  .fleet-list-head .desk-toolbar .form-select { flex: 1 1 0; width: auto; min-width: 0; max-width: none; }
+}
 
 .fleet-photo-grid {
   display: grid;
@@ -2503,6 +2536,38 @@ textarea { min-height: 120px; resize: vertical; }
 }
 .booking-card .btn-row { margin-top: 0.15rem; justify-content: flex-end; }
 .booking-card .fineprint { margin: 0.35rem 0 0; }
+
+/* Bulleted booking details for the Admin and Staff desk views */
+.booking-detail-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+.booking-detail-list li {
+  position: relative;
+  padding-left: 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.booking-detail-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--brand, #e8890c);
+  font-weight: 700;
+}
+.booking-detail-list li strong { color: var(--ink); font-weight: 700; }
+.booking-detail-list li span { color: var(--muted); }
+.thread-booking {
+  margin: 0.4rem 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #ededed;
+  border-radius: 14px;
+  background: #fff;
+}
 
 table {
   width: 100%;

@@ -47,35 +47,64 @@
     }
 
     var access = document.body.getAttribute("data-auth");
-    if ((access === "staff" || access === "admin") && NS.api && NS.domain && NS.domain.syncAllFromApi) {
-      /* The Laravel dev server answers one request at a time, so a full sync takes seconds. After the
-         first sync, pages render from the saved copy and refresh it in the background. */
-      if (NS.store.get("apiSyncedAt", null)) {
-        runPage();
-        NS.domain.syncAllFromApi().then(
-          function () {
-            NS.store.set("apiSyncedAt", new Date().toISOString());
-          },
-          function (e) {
-            console.warn("iDrive: background sync with the API failed.", e);
-          }
-        );
-      } else {
-        if (NS.ui && NS.ui.toast) NS.ui.toast("Loading data from the server…", "ok");
-        NS.domain.syncAllFromApi().then(
-          function () {
-            NS.store.set("apiSyncedAt", new Date().toISOString());
-            runPage();
-          },
-          function (e) {
-            console.warn("iDrive: could not load data from the API, showing local data.", e);
-            if (NS.ui && NS.ui.toast) NS.ui.toast("Could not reach the server. Showing saved data.", "err");
-            runPage();
-          }
-        );
+
+    /*
+     * Backend sync: pull the Laravel database into local storage so the frontend shows real data.
+     * Only the first desk page of a tab waits for it (at most FIRST_SYNC_WAIT_MS); later pages render
+     * from the last sync immediately and refresh it in the background for the next page.
+     * If the API is unreachable we fall back to local storage. Writes still mirror to the API per action.
+     */
+    var SYNC_KEY = "idrive_lastSync";
+    var FIRST_SYNC_WAIT_MS = 4000;
+
+    function lastSyncAt() {
+      try {
+        return Number(sessionStorage.getItem(SYNC_KEY)) || 0;
+      } catch (e) {
+        return 0;
       }
-    } else {
-      runPage();
     }
+
+    function markSynced() {
+      try {
+        sessionStorage.setItem(SYNC_KEY, String(Date.now()));
+      } catch (e) {
+        /* sync still applied for this page */
+      }
+    }
+
+    function startWithSync() {
+      var shouldSync =
+        NS.api &&
+        NS.domain &&
+        NS.domain.syncAllFromApi &&
+        access !== "public";
+      if (!shouldSync) {
+        runPage();
+        return;
+      }
+      var started = false;
+      function startOnce() {
+        if (started) return;
+        started = true;
+        runPage();
+      }
+      var sync = NS.domain.syncAllFromApi().then(
+        function (applied) {
+          if (applied) markSynced();
+        },
+        function (e) {
+          console.warn("iDrive: could not sync from the backend; showing local data.", e);
+        }
+      );
+      if (lastSyncAt()) {
+        startOnce();
+        return;
+      }
+      setTimeout(startOnce, FIRST_SYNC_WAIT_MS);
+      sync.then(startOnce);
+    }
+
+    startWithSync();
   });
 })(window);

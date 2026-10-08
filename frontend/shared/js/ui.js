@@ -129,22 +129,65 @@
   function backButtonHtml() {
     return (
       '<button class="btn btn-ghost btn-sm nav-back" id="nav-back-btn" type="button" aria-label="Go back">' +
-      '<span class="nav-back-icon" aria-hidden="true">←</span> Back' +
+      "Back" +
       "</button>"
     );
   }
 
-  function goBack() {
-    var fallback = defaultBackHref();
-    var sameOrigin =
-      document.referrer &&
-      document.referrer.indexOf(location.origin) === 0 &&
-      document.referrer.split("#")[0] !== location.href.split("#")[0];
-    if (sameOrigin && window.history.length > 1) {
-      window.history.back();
-      return;
+  /*
+   * In-app page trail (per tab). The Back button walks this instead of browser history so it never
+   * lands on a login/register page that bounces forward again, or on pages left behind by a redirect.
+   */
+  var NAV_KEY = "idrive_navTrail";
+  var NAV_MAX = 30;
+  var NAV_SKIP = /\/auth\/(login|register)\.html/;
+
+  function currentPath() {
+    return location.pathname + location.search;
+  }
+
+  function readTrail() {
+    try {
+      var list = JSON.parse(sessionStorage.getItem(NAV_KEY) || "[]");
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
     }
-    location.href = fallback;
+  }
+
+  function writeTrail(list) {
+    try {
+      sessionStorage.setItem(NAV_KEY, JSON.stringify(list.slice(-NAV_MAX)));
+    } catch (e) {
+      /* Back falls back to the default page */
+    }
+  }
+
+  function clearTrail() {
+    try {
+      sessionStorage.removeItem(NAV_KEY);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function trackPage() {
+    var cur = currentPath();
+    var list = readTrail();
+    if (list[list.length - 1] === cur) return;
+    if (list[list.length - 2] === cur) list.pop();
+    else list.push(cur);
+    writeTrail(list);
+  }
+
+  function goBack() {
+    var cur = currentPath();
+    var list = readTrail();
+    while (list.length && list[list.length - 1] === cur) list.pop();
+    while (list.length && NAV_SKIP.test(list[list.length - 1])) list.pop();
+    var target = list.length ? list[list.length - 1] : null;
+    writeTrail(list);
+    location.href = target || defaultBackHref();
   }
 
   function bindNavChrome() {
@@ -159,6 +202,7 @@
     if (logoutBtn) {
       logoutBtn.addEventListener("click", function () {
         NS.auth.logout();
+        clearTrail();
         location.href = NS.routes.href("home");
       });
     }
@@ -256,12 +300,6 @@
   function mountDeskChrome(me) {
     document.body.classList.remove("site-mode");
     document.body.classList.add("desk-mode");
-    var unread = 0;
-    try {
-      unread = NS.domain.staffUnreadCount ? NS.domain.staffUnreadCount() : 0;
-    } catch (e) {
-      unread = 0;
-    }
     var roleLabel = me.role === "admin" ? "Admin" : "Rental-Incharge";
     var nav = document.getElementById("app-nav");
     if (nav) {
@@ -278,9 +316,6 @@
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
         "</div>" +
         '<nav class="desk-nav" id="site-nav">' +
-        navLink(NS.routes.href("adminHome"), "Overview", "adminHome") +
-        navLink(NS.routes.href("adminInbox"), unread ? "Inbox · " + unread : "Inbox", "adminInbox") +
-        navLink(NS.routes.href("adminBookings"), "Bookings", "adminBookings") +
         '<div class="nav-user">' +
         '<span class="role-pill">' +
         roleLabel +
@@ -346,6 +381,7 @@
   }
 
   function mountChrome() {
+    trackPage();
     var me = NS.auth.current();
     if (me && me.role === "driver") mountDriverChrome(me);
     else if (me && NS.auth.hasRole("staff")) mountDeskChrome(me);

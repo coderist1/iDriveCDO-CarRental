@@ -52,6 +52,8 @@
       driverId: user.driverId || "",
       licenseNo: user.licenseNo,
       licenseExpiry: user.licenseExpiry,
+      birthdate: user.birthdate || "",
+      idImage: user.idImage || "",
       avatar: user.avatar || "",
       status: user.status,
       createdAt: user.createdAt
@@ -151,6 +153,14 @@
     }
 
     var salt = NS.security.randomHex(16);
+    /* Optional ID details captured from the register upload (OCR). All optional. */
+    var idNumber = NS.security.sanitizeText(payload.idNumber || "", 30).toUpperCase().replace(/\s+/g, "");
+    var idExpiry = NS.security.sanitizeText(payload.idExpiry || "", 10);
+    var idAddress = NS.security.sanitizeText(payload.idAddress || "", 120);
+    var idBirthdate = NS.security.sanitizeText(payload.idBirthdate || "", 10);
+    var idImage = typeof payload.idImage === "string" ? payload.idImage.trim() : "";
+    if (idImage && !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(idImage)) idImage = "";
+    if (idImage && idImage.length > 750000) idImage = "";
     var user = {
       id: "usr_" + NS.security.randomHex(8),
       email: email,
@@ -160,8 +170,11 @@
       firstName: firstName,
       lastName: lastName,
       phone: phone,
-      licenseNo: "",
-      licenseExpiry: "",
+      licenseNo: idNumber || "",
+      licenseExpiry: idExpiry || "",
+      address: idAddress || "",
+      birthdate: idBirthdate || "",
+      idImage: idImage || "",
       avatar: "",
       status: "active",
       createdAt: new Date().toISOString()

@@ -9,6 +9,9 @@
   var PREFIX = "idrive_";
   var memory = {};
   var sessionMem = null;
+  /* Raw strings already checked this page load; reading them again only needs JSON.parse. */
+  var verified = {};
+  var writes = {};
 
   function canUse(storage) {
     try {
@@ -73,15 +76,34 @@
   }
 
   function get(name, fallback) {
-    return unwrap(readRaw(name), fallback);
-  }
-
-  function set(name, value) {
-    writeRaw(name, JSON.stringify(wrap(value)));
+    var raw = readRaw(name);
+    if (raw && verified[name] === raw) {
+      try {
+        return JSON.parse(raw).v;
+      } catch (e) {
+        delete verified[name];
+      }
+    }
+    var value = unwrap(raw, fallback);
+    if (raw && value !== fallback) verified[name] = raw;
     return value;
   }
 
+  function set(name, value) {
+    var raw = JSON.stringify(wrap(value));
+    writeRaw(name, raw);
+    verified[name] = raw;
+    writes[name] = (writes[name] || 0) + 1;
+    return value;
+  }
+
+  function writeCount(name) {
+    return writes[name] || 0;
+  }
+
   function remove(name) {
+    delete verified[name];
+    writes[name] = (writes[name] || 0) + 1;
     delete memory[name];
     if (hasLocal) {
       try {
@@ -128,6 +150,7 @@
     get: get,
     set: set,
     remove: remove,
+    writeCount: writeCount,
     getSession: getSession,
     setSession: setSession,
     storageOk: hasLocal

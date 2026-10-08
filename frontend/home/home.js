@@ -49,7 +49,6 @@
         .slice(0, 3)
         .map(function (v) {
           var carLink = NS.routes.href("car", "?id=" + encodeURIComponent(v.id));
-          var bookLink = NS.routes.href("book", "?vehicle=" + encodeURIComponent(v.id));
           return (
             '<article class="hp-car">' +
             '<a class="hp-car-photo" href="' +
@@ -70,9 +69,6 @@
             "<p>Rate: <strong>from " +
             NS.ui.peso(v.dailyRate) +
             " / day</strong></p>" +
-            '<a class="btn btn-gold btn-sm" href="' +
-            bookLink +
-            '">Book this car</a>' +
             "</article>"
           );
         })

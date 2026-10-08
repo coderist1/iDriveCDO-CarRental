@@ -186,7 +186,7 @@
           labels: labels,
           datasets: [
             {
-              label: "Repair risk %",
+              label: "Maintenance Risk",
               data: values,
               backgroundColor: colors,
               borderRadius: 8,
@@ -284,7 +284,7 @@
                 row.meta.tone +
                 '"><strong>' +
                 row.meta.percent +
-                "</strong><small>risk</small></span></button>"
+                "</strong><small>Maintenance Risk</small></span></button>"
               );
             })
             .join("")

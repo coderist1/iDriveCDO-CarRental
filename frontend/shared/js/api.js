@@ -36,14 +36,18 @@
   /* Laravel apiResource routes: index, store, show, update, destroy. */
   var ENDPOINTS = {
     vehicles: "/vehicles",
-    driverDetails: "/driver-details",
+    driverDetails: "/drivers",
     bookings: "/bookings",
     payments: "/payments",
     fuelRecords: "/fuel-records",
-    vehicleMaintenances: "/vehicle-maintenances",
-    vehicleRegDetails: "/vehicle-reg-details",
-    staffInfo: "/staff-info",
-    customerInfo: "/customer-info"
+    vehicleMaintenances: "/maintenances",
+    vehicleRegDetails: "/vehicle-registrations",
+    users: "/users",
+    drivers: "/drivers",
+    maintenances: "/maintenances",
+    vehicleRegistrations: "/vehicle-registrations",
+    locations: "/locations",
+    addons: "/addons"
   };
 
   function ApiError(message, status, data) {
@@ -128,7 +132,7 @@
       all: function (query) {
         var out = [];
         function load(page) {
-          return request("GET", path, { query: Object.assign({}, query, { page: page }) }).then(function (res) {
+          return request("GET", path, { query: Object.assign({ per_page: 200 }, query, { page: page }) }).then(function (res) {
             out = out.concat(Array.isArray(res) ? res : (res && res.data) || []);
             return !Array.isArray(res) && page < lastPage(res) ? load(page + 1) : out;
           });
@@ -153,7 +157,9 @@
     post: function (path, body, options) { return request("POST", path, Object.assign({}, options, { body: body })); },
     put: function (path, body, options) { return request("PUT", path, Object.assign({}, options, { body: body })); },
     patch: function (path, body, options) { return request("PATCH", path, Object.assign({}, options, { body: body })); },
-    del: function (path, options) { return request("DELETE", path, options); }
+    del: function (path, options) { return request("DELETE", path, options); },
+    /* One request with every mirrored collection; see SyncController on the backend. */
+    sync: function () { return request("GET", "/sync"); }
   };
 
   Object.keys(ENDPOINTS).forEach(function (name) {
