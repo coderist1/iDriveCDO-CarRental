@@ -215,7 +215,7 @@
               min: 0,
               max: 100,
               ticks: { callback: function (v) { return v + "%"; } },
-              grid: { color: "rgba(232, 137, 12, 0.08)" }
+              grid: { color: "rgba(196, 80, 75, 0.08)" }
             },
             y: { grid: { display: false } }
           },

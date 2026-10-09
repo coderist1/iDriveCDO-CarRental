@@ -644,10 +644,10 @@
       "<style>" +
       "body{font-family:Segoe UI,Arial,sans-serif;max-width:720px;margin:32px auto;color:#111827;padding:0 16px}" +
       "h1{margin:0 0 4px;font-size:28px}h2{margin:24px 0 8px;font-size:18px}" +
-      ".muted{color:#6b7280}.total{font-size:28px;font-weight:800;color:#c97405;margin:12px 0}" +
+      ".muted{color:#6b7280}.total{font-size:28px;font-weight:800;color:#a63f3b;margin:12px 0}" +
       "table{width:100%;border-collapse:collapse;margin-top:12px}" +
       "th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top}" +
-      "th{width:34%;color:#6b7280;font-weight:600}.brand{font-weight:800;color:#e8890c}" +
+      "th{width:34%;color:#6b7280;font-weight:600}.brand{font-weight:800;color:#c4504b}" +
       "@media print{body{margin:0}}" +
       "</style></head><body>" +
       "<p class='brand'>iDrive CDO</p>" +
