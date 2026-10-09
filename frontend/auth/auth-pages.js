@@ -143,6 +143,89 @@
     });
   }
 
+  var GSI_SRC = "https://accounts.google.com/gsi/client";
+
+  function loadGsi() {
+    if (global.google && global.google.accounts && global.google.accounts.id) return Promise.resolve();
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = GSI_SRC;
+      s.async = true;
+      s.onload = function () {
+        resolve();
+      };
+      s.onerror = function () {
+        reject(new Error("Could not load Google sign-in. Check your connection."));
+      };
+      document.head.appendChild(s);
+    });
+  }
+
+  function destinationFor(user) {
+    if (user.role === "driver") return NS.routes.href("driverHome");
+    if (user.role === "staff" || user.role === "admin") return NS.routes.href("adminHome");
+    return NS.routes.href("home");
+  }
+
+  /* "Continue with Google": the credential goes to the backend, which verifies it with Google. */
+  function mountGoogleButton(form) {
+    var host = document.getElementById("google-signin");
+    if (!host || !NS.api || !NS.api.googleConfig) return;
+    function unavailable(msg) {
+      host.innerHTML =
+        '<button type="button" class="btn google-fallback" aria-disabled="true" title="' +
+        NS.security.escapeHtml(msg) +
+        '"><span class="google-g" aria-hidden="true">G</span> Google</button>';
+      host.querySelector("button").addEventListener("click", function () {
+        showAlert(form, msg, "err");
+      });
+    }
+    NS.api
+      .googleConfig()
+      .then(function (cfg) {
+        if (!cfg || !cfg.client_id) throw new Error("Google sign-in isn't set up yet. Use email and password for now.");
+        return loadGsi().then(function () {
+          return cfg.client_id;
+        });
+      })
+      .then(function (clientId) {
+        global.google.accounts.id.initialize({
+          client_id: clientId,
+          ux_mode: "popup",
+          callback: function (resp) {
+            showAlert(form, "Checking your Google account…", "ok");
+            NS.api
+              .googleSignIn(resp.credential)
+              .then(function (data) {
+                var user = NS.auth.googleSignIn(data.user);
+                showAlert(form, "Welcome, " + user.firstName + ". Redirecting…", "ok");
+                location.href = destinationFor(user);
+              })
+              .catch(function (err) {
+                showAlert(form, (err && err.message) || "Google sign-in failed.", "err");
+              });
+          }
+        });
+        host.innerHTML = "";
+        global.google.accounts.id.renderButton(host, {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: host.clientWidth < 260 ? "signin_with" : "continue_with",
+          shape: "rectangular",
+          logo_alignment: "left",
+          width: Math.min(400, host.clientWidth || 200)
+        });
+      })
+      .catch(function (err) {
+        unavailable(
+          err && err.name !== "ApiError" && err.message
+            ? err.message
+            : "Google sign-in is unavailable right now. Use email and password for now."
+        );
+      });
+  }
+
   NS.pages.login = function login() {
     var form = document.getElementById("login-form");
     if (!form || form.getAttribute("data-bound") === "1") return;
@@ -169,6 +252,8 @@
     } catch (e) {
       console.warn("current() check failed", e);
     }
+
+    mountGoogleButton(form);
 
     form.addEventListener("submit", function (e) {
       e.preventDefault();
@@ -240,6 +325,8 @@
     } catch (e) {
       console.warn("current() check failed", e);
     }
+
+    mountGoogleButton(form);
 
     var busy = false;
 

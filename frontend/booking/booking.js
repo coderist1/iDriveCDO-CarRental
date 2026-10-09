@@ -45,11 +45,48 @@
 
   NS.pages.book = function book() {
     if (!document.getElementById("book-form")) return;
-    NS.domain.syncVehiclesFromApi().then(initBook, function (e) {
-      console.warn("iDrive: could not load vehicles from API, showing local data.", e);
-      initBook();
+    requirePhone(function () {
+      NS.domain.syncVehiclesFromApi().then(initBook, function (e) {
+        console.warn("iDrive: could not load vehicles from API, showing local data.", e);
+        initBook();
+      });
     });
   };
+
+  /* Accounts created with Google have no mobile number yet; collect it before the first booking. */
+  function requirePhone(next) {
+    var me = NS.auth.current();
+    var form = document.getElementById("book-form");
+    if (!me || me.phone) return next();
+    form.hidden = true;
+    var gate = document.createElement("form");
+    gate.className = "form-card phone-gate";
+    gate.noValidate = true;
+    gate.innerHTML =
+      '<p class="eyebrow">One more step</p>' +
+      "<h1>Add your mobile number</h1>" +
+      '<p class="fineprint">We need a Philippine mobile number to confirm your booking and reach you on pick-up day.</p>' +
+      '<div class="notice" role="alert" hidden></div>' +
+      '<label class="field">Mobile number ' +
+      '<input class="form-control" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="09XXXXXXXXX" maxlength="13" required></label>' +
+      '<button class="btn btn-gold" type="submit">Continue to booking</button>';
+    form.parentNode.insertBefore(gate, form);
+    gate.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var notice = gate.querySelector(".notice");
+      try {
+        NS.auth.setPhone(gate.phone.value);
+      } catch (err) {
+        notice.hidden = false;
+        notice.textContent = err.message;
+        gate.phone.focus();
+        return;
+      }
+      gate.remove();
+      form.hidden = false;
+      next();
+    });
+  }
 
   function initBook() {
     var form = document.getElementById("book-form");

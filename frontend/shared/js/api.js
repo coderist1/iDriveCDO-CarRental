@@ -159,7 +159,10 @@
     patch: function (path, body, options) { return request("PATCH", path, Object.assign({}, options, { body: body })); },
     del: function (path, options) { return request("DELETE", path, options); },
     /* One request with every mirrored collection; see SyncController on the backend. */
-    sync: function () { return request("GET", "/sync"); }
+    sync: function () { return request("GET", "/sync"); },
+    googleConfig: function () { return request("GET", "/auth/google/config", { timeoutMs: 6000 }); },
+    /* The backend verifies the Google ID token; the browser never decides who the user is. */
+    googleSignIn: function (credential) { return request("POST", "/auth/google", { body: { credential: credential } }); }
   };
 
   Object.keys(ENDPOINTS).forEach(function (name) {

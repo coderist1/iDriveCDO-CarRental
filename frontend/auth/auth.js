@@ -188,6 +188,77 @@
     return profile;
   }
 
+  /*
+   * Finishes a Google sign-in after the backend verified the ID token and returned the account.
+   * Links to an existing local account by email, otherwise creates one (no usable password).
+   */
+  function googleSignIn(apiUser) {
+    if (!apiUser || !apiUser.email) throw new Error("Google sign-in failed.");
+    var email = NS.security.sanitizeEmail(apiUser.email);
+    var list = users();
+    var user = null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].email === email || (apiUser.user_id != null && list[i].apiId === apiUser.user_id)) user = list[i];
+    }
+    var picture = "";
+    try {
+      picture = normalizeAvatar(apiUser.avatar || "");
+    } catch (e) {
+      picture = "";
+    }
+    if (user) {
+      if (user.status !== "active") throw new Error("This account is disabled.");
+      if (user.apiId == null && apiUser.user_id != null) user.apiId = apiUser.user_id;
+      if (!user.avatar && picture) user.avatar = picture;
+      user.authProvider = user.authProvider || "google";
+    } else {
+      var salt = NS.security.randomHex(16);
+      user = {
+        id: "usr_" + NS.security.randomHex(8),
+        apiId: apiUser.user_id != null ? apiUser.user_id : null,
+        email: email,
+        passwordHash: NS.security.hashPassword(NS.security.randomHex(32), salt),
+        salt: salt,
+        role: ROLES[apiUser.role] ? apiUser.role : "customer",
+        firstName: NS.security.sanitizeText(apiUser.first_name || "", 40) || email.split("@")[0],
+        lastName: NS.security.sanitizeText(apiUser.last_name || "", 40),
+        phone: NS.validation.phMobile(apiUser.phone || "") ? apiUser.phone : "",
+        licenseNo: "",
+        licenseExpiry: "",
+        address: NS.security.sanitizeText(apiUser.address || "", 120),
+        avatar: picture,
+        authProvider: "google",
+        status: "active",
+        createdAt: new Date().toISOString()
+      };
+      list.push(user);
+      NS.domain.audit("register", user.id, "Account created with Google sign-in.");
+    }
+    saveUsers(list);
+    NS.security.issueCsrf();
+    var profile = startSession(user);
+    NS.domain.audit("login", user.id, "Signed in with Google.");
+    return profile;
+  }
+
+  function setPhone(phone) {
+    var me = current();
+    if (!me) throw new Error("Sign in required.");
+    var normalized = NS.validation.normalizePhone(phone);
+    if (!NS.validation.phMobile(normalized)) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
+    var list = users();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === me.id) {
+        list[i].phone = normalized;
+        saveUsers(list);
+        if (NS.domain.pushUserProfileToApi) NS.domain.pushUserProfileToApi(list[i]);
+        NS.domain.audit("profile", me.id, "Mobile number added.");
+        return publicUser(list[i]);
+      }
+    }
+    throw new Error("User not found.");
+  }
+
   function logout() {
     var s = NS.store.getSession();
     if (s) NS.domain.audit("logout", s.userId, "Signed out.");
@@ -376,6 +447,8 @@
     current: current,
     login: login,
     register: register,
+    googleSignIn: googleSignIn,
+    setPhone: setPhone,
     logout: logout,
     updateProfile: updateProfile,
     updateAvatar: updateAvatar,
