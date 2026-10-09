@@ -143,7 +143,7 @@
     });
   }
 
-  var GSI_SRC = "https://accounts.google.com/gsi/client";
+  var GSI_SRC = "https://accounts.google.com/gsi/client?hl=en";
 
   function loadGsi() {
     if (global.google && global.google.accounts && global.google.accounts.id) return Promise.resolve();
@@ -214,6 +214,7 @@
           text: host.clientWidth < 260 ? "signin_with" : "continue_with",
           shape: "rectangular",
           logo_alignment: "left",
+          locale: "en",
           width: Math.min(400, host.clientWidth || 200)
         });
       })

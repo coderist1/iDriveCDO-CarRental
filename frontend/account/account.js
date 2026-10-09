@@ -27,24 +27,7 @@
     paintAvatar(document.getElementById("account-avatar"), me, "xl");
     welcome.textContent = "Hello, " + me.firstName + ".";
     var list = NS.domain.myBookings();
-    var upcoming = list.filter(function (b) {
-      return (
-        b.status === "pending" ||
-        b.status === "confirmed" ||
-        b.status === "ongoing" ||
-        b.status === "return_requested"
-      );
-    }).length;
-    stats.innerHTML =
-      '<div class="stat"><span>' +
-      list.length +
-      "</span>trips</div>" +
-      '<div class="stat"><span>' +
-      upcoming +
-      "</span>open</div>" +
-      '<div class="stat"><span>' +
-      NS.security.escapeHtml(me.role) +
-      "</span>role</div>";
+    stats.innerHTML = '<div class="stat"><span>' + list.length + "</span>trips</div>";
     recent.innerHTML = list.length
       ? list
           .slice()
