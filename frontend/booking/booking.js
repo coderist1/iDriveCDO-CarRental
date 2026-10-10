@@ -149,23 +149,6 @@
       if (form.idNumber && !form.idNumber.value) form.idNumber.value = me.licenseNo || "";
     }
 
-    var addonsHost = document.getElementById("addons");
-    addonsHost.innerHTML = NS.domain.ADDONS.map(function (a) {
-      return (
-        '<label class="check-min addon-row" data-addon="' +
-        a.id +
-        '">' +
-        '<input type="checkbox" name="addon" value="' +
-        a.id +
-        '">' +
-        "<span><strong>" +
-        NS.security.escapeHtml(a.name) +
-        "</strong> · " +
-        NS.ui.peso(a.daily) +
-        "/day</span></label>"
-      );
-    }).join("");
-
     function driveMode() {
       var chosen = form.querySelector('input[name="driveMode"]:checked');
       return chosen ? chosen.value : "self";
@@ -181,22 +164,6 @@
       if (driverWrap) {
         driverWrap.hidden = mode !== "chauffeur";
         if (form.driverDetailsId) form.driverDetailsId.required = mode === "chauffeur";
-      }
-
-      var driverRow = addonsHost.querySelector('[data-addon="driver"]');
-      var driverInput = driverRow ? driverRow.querySelector('input[name="addon"]') : null;
-      if (driverRow && driverInput) {
-        if (mode === "chauffeur") {
-          driverRow.hidden = true;
-          driverInput.checked = true;
-          driverInput.disabled = true;
-          driverRow.classList.add("is-locked");
-        } else {
-          driverRow.hidden = true;
-          driverInput.checked = false;
-          driverInput.disabled = true;
-          driverRow.classList.remove("is-locked");
-        }
       }
 
       var selfInputs = ["licenseName", "licenseNo", "licenseExpiry", "licenseAddress", "emergencyPhone"];
@@ -337,11 +304,7 @@
     }
 
     function selectedAddons() {
-      var ids = Array.prototype.map.call(form.querySelectorAll('input[name="addon"]:checked'), function (el) {
-        return el.value;
-      });
-      if (driveMode() === "chauffeur" && ids.indexOf("driver") === -1) ids.push("driver");
-      return ids;
+      return driveMode() === "chauffeur" ? ["driver"] : [];
     }
 
     var FALLBACK_IMAGE =

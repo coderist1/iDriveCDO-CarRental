@@ -18,10 +18,7 @@
   ];
 
   var ADDONS = [
-    { id: "driver", name: "Professional driver", daily: 1500 },
-    { id: "gps", name: "GPS navigation", daily: 200 },
-    { id: "child", name: "Child seat", daily: 150 },
-    { id: "insurance", name: "Full coverage insurance", daily: 450 }
+    { id: "driver", name: "Professional driver", daily: 1500 }
   ];
 
   var ACTIVE_BOOKING = { pending: 1, confirmed: 1, ongoing: 1, return_requested: 1 };
@@ -571,7 +568,7 @@
 
   /*
    * Location + addon lookups. The app models locations as plain strings and addons by
-   * string id ("driver", "gps", ...). The backend keys them by integer id, so we fetch
+   * string id ("driver"). The backend keys them by integer id, so we fetch
    * once and cache name/key -> id maps for the current page.
    */
   var _refCache = { locations: null, addons: null };
@@ -603,10 +600,7 @@
 
   /* Local addon string ids mapped to likely backend names, as a fallback match. */
   var ADDON_NAME_BY_ID = {
-    driver: "professional driver",
-    gps: "gps navigation",
-    child: "child seat",
-    insurance: "full coverage insurance"
+    driver: "professional driver"
   };
 
   function addonId(localId) {
@@ -1966,10 +1960,10 @@
         days: 3,
         pickup: "Laguindingan Airport (CGY)",
         dropoff: "Centrio Mall",
-        addons: ["gps"],
+        addons: [],
         subtotal: 5400,
-        extras: 600,
-        total: 6000,
+        extras: 0,
+        total: 5400,
         status: "confirmed",
         paymentStatus: "paid",
         payment: {

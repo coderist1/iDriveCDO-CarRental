@@ -920,19 +920,6 @@ label, .field { display: block; margin-bottom: 0.85rem; font-weight: 700; font-s
 .form-grid .field.field-span-2 {
   grid-column: 1 / -1;
 }
-.addon-list {
-  display: grid;
-  gap: 0.45rem;
-  margin: 0 0 1rem;
-}
-.addon-row {
-  padding: 0.55rem 0.7rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-}
-.addon-row strong { color: var(--ink); font-weight: 700; }
-.addon-row.is-locked { opacity: 0.72; }
 .drive-mode {
   display: grid;
   grid-template-columns: 1fr 1fr;
