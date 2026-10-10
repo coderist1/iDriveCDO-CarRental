@@ -491,7 +491,17 @@ h1, h2, h3, .brand span {
   border: 1px solid rgba(196, 80, 75, 0.12);
 }
 .profile-photo-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-.profile-action-pair { display: inline-flex; flex-wrap: nowrap; gap: 0.5rem; align-items: center; }
+.profile-photo-actions > .btn,
+.profile-photo-actions > .profile-upload-label {
+  min-height: 38px;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.88rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  margin: 0;
+}
 .profile-photo-actions .fineprint { width: 100%; margin: 0.15rem 0 0; }
 .profile-upload-label { cursor: pointer; margin: 0; }
 .password-modal {
@@ -2662,6 +2672,48 @@ textarea { min-height: 120px; resize: vertical; }
 .booking-card .btn-row { margin-top: 0.15rem; justify-content: flex-end; }
 .booking-card .fineprint { margin: 0.35rem 0 0; }
 
+/* Desk cards: details left, status top right, actions on their own row below */
+.booking-card.booking-card-stacked {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "body badges" "actions actions";
+  gap: 0.75rem 1rem;
+  align-items: start;
+}
+.booking-card-stacked > div:first-child { grid-area: body; }
+.booking-card-stacked > .card-badges {
+  grid-area: badges;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+.booking-card.booking-card-stacked > .card-actions {
+  grid-area: actions;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  align-items: stretch;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+  text-align: left;
+}
+.booking-card-stacked > .card-actions:empty { display: none; }
+.booking-card-stacked > .card-actions .btn {
+  width: 100%;
+  margin: 0;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .booking-card.booking-card-stacked { grid-template-columns: 1fr; grid-template-areas: "badges" "body" "actions"; }
+  .booking-card-stacked > .card-badges { flex-direction: row; align-items: center; }
+}
+
 /* Bulleted booking details for the Admin and Staff desk views */
 .booking-detail-list {
   list-style: none;
@@ -2824,6 +2876,8 @@ th { background: rgba(255, 255, 255, 0.35); color: var(--ink); font-weight: 800;
 .chat-line strong { display: block; }
 .chat-line span { font-size: 0.78rem; color: var(--muted); }
 .chat-line p { margin: 0.25rem 0 0; }
+.chat-line .chat-lead { margin: 0.15rem 0 0.45rem; font-weight: 700; color: var(--ink); }
+.chat-line .booking-detail-list-chat { margin: 0; max-width: none; }
 .reply-form .btn { width: auto; }
 @media (max-width: 860px) {
   .inbox-layout { grid-template-columns: 1fr; }

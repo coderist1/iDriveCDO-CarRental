@@ -43,10 +43,43 @@
     return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
   }
 
+  function blockOngoingBooking() {
+    var me = NS.auth.current();
+    if (!me || me.role === "staff" || me.role === "admin") return false;
+    var trip = NS.domain.ongoingBookingForUser ? NS.domain.ongoingBookingForUser(me.id) : null;
+    if (!trip) return false;
+    var flow = document.getElementById("booking-flow");
+    var typeStep = document.getElementById("rental-type");
+    if (flow) flow.hidden = true;
+    if (typeStep) typeStep.hidden = true;
+    var host = (flow && flow.parentNode) || document.querySelector("section.layout");
+    if (!host || document.getElementById("ongoing-trip-block")) return true;
+    var box = document.createElement("div");
+    box.id = "ongoing-trip-block";
+    box.className = "form-card";
+    box.innerHTML =
+      '<p class="eyebrow">Active trip</p>' +
+      "<h1>One car at a time</h1>" +
+      "<p>You already have a trip in progress (<strong>" +
+      NS.security.escapeHtml(trip.ref) +
+      "</strong>). Return that vehicle before booking another car.</p>" +
+      '<div class="btn-row">' +
+      '<a class="btn btn-gold" href="' +
+      NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(trip.id)) +
+      '">View active trip</a>' +
+      '<a class="btn btn-ghost" href="' +
+      NS.routes.href("myBookings") +
+      '">All bookings</a>' +
+      "</div>";
+    host.insertBefore(box, flow || host.firstChild);
+    return true;
+  }
+
   NS.pages.book = function book() {
     if (!document.getElementById("rental-type")) return;
     bindRentalChoice();
     requirePhone(function () {
+      if (blockOngoingBooking()) return;
       initBook();
       NS.domain.syncVehiclesFromApi().then(function () {
         if (NS.pages.refreshBookFleet) NS.pages.refreshBookFleet();

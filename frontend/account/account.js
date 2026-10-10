@@ -106,9 +106,9 @@
               NS.security.escapeHtml(m.fromName || m.fromRole) +
               "</strong><span>" +
               NS.ui.fmtDate(m.at) +
-              "</span><p>" +
-              NS.security.escapeHtml(m.body) +
-              "</p></div>"
+              "</span>" +
+              (NS.ui.chatMessageBodyHtml ? NS.ui.chatMessageBodyHtml(m.body, thread) : "<p>" + NS.security.escapeHtml(m.body) + "</p>") +
+              "</div>"
             );
           })
           .join("") +

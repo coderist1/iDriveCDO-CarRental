@@ -352,14 +352,13 @@
         var licenseExpiry = NS.security.sanitizeText(patch.licenseExpiry, 10);
         if (!firstName || !lastName) throw new Error("Name is required.");
         if (!NS.validation.phMobile(phone)) throw new Error("Invalid mobile number.");
-        if (list[i].role === "customer") {
-          if (!NS.validation.license(licenseNo)) throw new Error("Invalid license number.");
-          if (!NS.validation.futureDate(licenseExpiry)) throw new Error("License expiry must be in the future.");
+        if (licenseNo && licenseNo !== list[i].licenseNo) {
+          if (list[i].role === "customer" && !NS.validation.license(licenseNo)) throw new Error("Invalid license number.");
           list[i].licenseNo = licenseNo;
+        }
+        if (licenseExpiry && licenseExpiry !== list[i].licenseExpiry) {
+          if (list[i].role === "customer" && !NS.validation.futureDate(licenseExpiry)) throw new Error("License expiry must be in the future.");
           list[i].licenseExpiry = licenseExpiry;
-        } else {
-          if (licenseNo) list[i].licenseNo = licenseNo;
-          if (licenseExpiry) list[i].licenseExpiry = licenseExpiry;
         }
         list[i].firstName = firstName;
         list[i].lastName = lastName;

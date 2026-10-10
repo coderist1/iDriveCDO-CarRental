@@ -9,43 +9,7 @@
    * for the Admin and Staff desk views. Only lines that have data are shown.
    */
   function bookingDetailList(b) {
-    var esc = NS.security.escapeHtml;
-    var v = NS.domain.getVehicle(b.vehicleId);
-    var u = NS.auth.userById(b.userId);
-    var customerName = u ? ((u.firstName || "") + " " + (u.lastName || "")).trim() : "Customer";
-    var driveMode = b.driveMode === "chauffeur" ? "Chauffeur" : "Self-drive";
-    var methodLabel = { cash: "Cash", cashless: "Cashless", card: "Card" };
-    var paymentLine = b.paymentStatus === "paid"
-      ? (b.payment
-          ? "Paid · " + (methodLabel[b.payment.method] || "Cash") +
-            (b.payment.method !== "cash" && b.payment.brand ? " · " + b.payment.brand : "")
-          : "Paid")
-      : "Unpaid";
-    var rows = [
-      ["Booking ID", esc(b.ref || b.id)],
-      ["Customer", esc(customerName) + (u && u.phone ? " · " + esc(u.phone) : "") + (u && u.email ? " · " + esc(u.email) : "")],
-      ["Vehicle", esc(v ? v.name + " · " + v.plate : "—")],
-      ["Drive mode", esc(driveMode)],
-      ["Pick-up Location", esc(b.pickup || "—") + (b.pickupTime ? " · " + esc(b.pickupTime) : "")],
-      ["Drop-off Location", esc(b.dropoff || "—") + (b.returnTime ? " · " + esc(b.returnTime) : "")],
-      ["Pick-up date", NS.ui.fmtDate(b.startDate)],
-      ["Return date", NS.ui.fmtDate(b.endDate)],
-      ["Passengers", esc(String(b.numberOfPassengers || 1))],
-      ["Payment", esc(paymentLine)],
-      ["Total amount", NS.ui.peso(b.total)],
-      ["Status", esc(b.status || "—")]
-    ];
-    if (b.returnNotes) rows.push(["Return notes", esc(b.returnNotes)]);
-    if (b.notes) rows.push(["Notes", esc(b.notes)]);
-    return (
-      '<ul class="booking-detail-list">' +
-      rows
-        .map(function (r) {
-          return "<li><strong>" + r[0] + ":</strong> <span>" + r[1] + "</span></li>";
-        })
-        .join("") +
-      "</ul>"
-    );
+    return NS.ui.bookingDetailListHtml(NS.ui.bookingDetailRowsFromRecord(b));
   }
 
   /* Booking threads whose booking record is gone: rebuild what we can from the desk notice text. */
@@ -553,16 +517,16 @@
             b.id +
             '">Message</button>';
           return (
-            '<article class="booking-card"><div><p class="eyebrow">Booking ' +
+            '<article class="booking-card booking-card-stacked"><div><p class="eyebrow">Booking ' +
             NS.security.escapeHtml(b.ref) +
             "</p><h3>" +
             NS.security.escapeHtml(v ? v.name : "") +
             "</h3>" +
             bookingDetailList(b) +
-            "</div><div>" +
+            '</div><div class="card-badges">' +
             NS.ui.statusBadge(b.status) +
-            " " +
             NS.ui.statusBadge(b.paymentStatus) +
+            '</div><div class="card-actions">' +
             actions +
             "</div></article>"
           );
@@ -1339,9 +1303,9 @@
           NS.security.escapeHtml(m.fromName || m.fromRole) +
           "</strong><span>" +
           NS.ui.fmtDate(m.at) +
-          "</span><p>" +
-          NS.security.escapeHtml(m.body) +
-          "</p></div>"
+          "</span>" +
+          (NS.ui.chatMessageBodyHtml ? NS.ui.chatMessageBodyHtml(m.body, thread) : "<p>" + NS.security.escapeHtml(m.body) + "</p>") +
+          "</div>"
         );
       })
       .join("");
@@ -1382,20 +1346,19 @@
               var v = NS.domain.getVehicle(b.vehicleId);
               var u = NS.auth.userById(b.userId);
               return (
-                '<article class="booking-card"><div><p class="eyebrow">Incoming · Booking ' +
+                '<article class="booking-card booking-card-stacked"><div><p class="eyebrow">Incoming · Booking ' +
                 NS.security.escapeHtml(b.ref) +
                 "</p><h3>" +
                 NS.security.escapeHtml(v ? v.name : "") +
                 "</h3>" +
                 bookingDetailList(b) +
-                "</div><div>" +
+                '</div><div class="card-badges">' +
                 NS.ui.statusBadge(b.status) +
-                " " +
                 NS.ui.statusBadge(b.paymentStatus) +
-                '<div class="btn-row"><a class="btn btn-ghost btn-sm" href="bookings.html">Open desk</a>' +
+                '</div><div class="card-actions"><a class="btn btn-ghost btn-sm" href="bookings.html">Open desk</a>' +
                 '<button class="btn btn-gold btn-sm" data-open="' +
                 b.id +
-                '">Message customer</button></div></div></article>'
+                '">Message customer</button></div></article>'
               );
             })
             .join("")
@@ -1415,20 +1378,20 @@
               var v = NS.domain.getVehicle(b.vehicleId);
               var u = NS.auth.userById(b.userId);
               return (
-                '<article class="booking-card"><div><p class="eyebrow">Return vehicle · Booking ' +
+                '<article class="booking-card booking-card-stacked"><div><p class="eyebrow">Return vehicle · Booking ' +
                 NS.security.escapeHtml(b.ref) +
                 "</p><h3>" +
                 NS.security.escapeHtml(v ? v.name : "") +
                 "</h3>" +
                 bookingDetailList(b) +
-                "</div><div>" +
+                '</div><div class="card-badges">' +
                 NS.ui.statusBadge(b.status) +
-                '<div class="btn-row"><button class="btn btn-gold btn-sm" data-accept-return="' +
+                '</div><div class="card-actions"><button class="btn btn-ghost btn-sm" data-open="' +
                 b.id +
-                '">Accept return</button>' +
-                '<button class="btn btn-ghost btn-sm" data-open="' +
+                '">Message</button>' +
+                '<button class="btn btn-gold btn-sm" data-accept-return="' +
                 b.id +
-                '">Message</button></div></div></article>'
+                '">Accept return</button></div></article>'
               );
             })
             .join("")

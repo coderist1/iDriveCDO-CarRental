@@ -130,6 +130,8 @@
   }
 
   function backButtonHtml() {
+    var page = document.body.getAttribute("data-page") || "";
+    if (page === "home" || page === "adminHome" || page === "driverHome") return "";
     return (
       '<button class="btn btn-ghost btn-sm nav-back" id="nav-back-btn" type="button" aria-label="Go back">' +
       "Back" +
@@ -754,12 +756,102 @@
     return true;
   }
 
+  var BOOKING_NOTICE =
+    /^New booking (\S+) received\. (Chauffeur|Self-drive), pickup (.+?) on (\d{4}-\d{2}-\d{2})\. Payment: (\w+)\.(?: Notes: ([\s\S]*))?$/;
+
+  function bookingDetailListHtml(rows) {
+    return (
+      '<ul class="booking-detail-list booking-detail-list-chat">' +
+      rows
+        .map(function (r) {
+          return "<li><strong>" + r[0] + ":</strong> <span>" + r[1] + "</span></li>";
+        })
+        .join("") +
+      "</ul>"
+    );
+  }
+
+  function bookingDetailRowsFromRecord(b) {
+    var esc = NS.security.escapeHtml;
+    var v = NS.domain.getVehicle(b.vehicleId);
+    var u = NS.auth.userById(b.userId);
+    var customerName = u ? ((u.firstName || "") + " " + (u.lastName || "")).trim() : "Customer";
+    var driveMode = b.driveMode === "chauffeur" ? "Chauffeur" : "Self-drive";
+    var methodLabel = { cash: "Cash", cashless: "Cashless", card: "Card" };
+    var paymentLine =
+      b.paymentStatus === "paid"
+        ? b.payment
+          ? "Paid · " +
+            (methodLabel[b.payment.method] || "Cash") +
+            (b.payment.method !== "cash" && b.payment.brand ? " · " + b.payment.brand : "")
+          : "Paid"
+        : "Unpaid";
+    var rows = [
+      ["Booking ID", esc(b.ref || b.id)],
+      [
+        "Customer",
+        esc(customerName) +
+          (u && u.phone ? " · " + esc(u.phone) : "") +
+          (u && u.email ? " · " + esc(u.email) : "")
+      ],
+      ["Vehicle", esc(v ? v.name + " · " + v.plate : "—")],
+      ["Drive mode", esc(driveMode)],
+      ["Pick-up Location", esc(b.pickup || "—") + (b.pickupTime ? " · " + esc(b.pickupTime) : "")],
+      ["Drop-off Location", esc(b.dropoff || "—") + (b.returnTime ? " · " + esc(b.returnTime) : "")],
+      ["Pick-up date", fmtDate(b.startDate)],
+      ["Return date", fmtDate(b.endDate)],
+      ["Passengers", esc(String(b.numberOfPassengers || 1))],
+      ["Payment", esc(paymentLine)],
+      ["Total amount", peso(b.total)],
+      ["Status", esc(b.status || "—")]
+    ];
+    if (b.returnNotes) rows.push(["Return notes", esc(b.returnNotes)]);
+    if (b.notes) rows.push(["Notes", esc(b.notes)]);
+    return rows;
+  }
+
+  function bookingDetailRowsFromNotice(body, thread) {
+    var esc = NS.security.escapeHtml;
+    var m = BOOKING_NOTICE.exec(body || "");
+    var contact = thread
+      ? [thread.customerName, thread.customerPhone, thread.customerEmail].filter(Boolean).map(esc).join(" · ")
+      : "";
+    var rows = [["Booking ID", esc((thread && thread.bookingRef) || (m && m[1]) || "—")], ["Customer", contact || "—"]];
+    if (m) {
+      rows.push(
+        ["Drive mode", esc(m[2])],
+        ["Pick-up Location", esc(m[3])],
+        ["Pick-up date", fmtDate(m[4])],
+        ["Payment", esc(m[5].charAt(0).toUpperCase() + m[5].slice(1))]
+      );
+      if (m[6]) rows.push(["Notes", esc(m[6])]);
+    }
+    return rows;
+  }
+
+  function isBookingNoticeBody(body) {
+    return BOOKING_NOTICE.test(body || "") || /^New booking \S+ received\./.test(body || "");
+  }
+
+  function chatMessageBodyHtml(body, thread) {
+    if (!isBookingNoticeBody(body)) {
+      return "<p>" + NS.security.escapeHtml(body) + "</p>";
+    }
+    var booking = thread && thread.bookingId && NS.domain.getBooking ? NS.domain.getBooking(thread.bookingId) : null;
+    var rows = booking ? bookingDetailRowsFromRecord(booking) : bookingDetailRowsFromNotice(body, thread);
+    return '<p class="chat-lead">New booking received</p>' + bookingDetailListHtml(rows);
+  }
+
   NS.ui = {
     peso: peso,
     fmtDate: fmtDate,
     qs: qs,
     toast: toast,
     askYesNo: askYesNo,
+    bookingDetailListHtml: bookingDetailListHtml,
+    bookingDetailRowsFromRecord: bookingDetailRowsFromRecord,
+    chatMessageBodyHtml: chatMessageBodyHtml,
+    isBookingNoticeBody: isBookingNoticeBody,
     mountChrome: mountChrome,
     markRequired: markRequired,
     goBack: goBack,

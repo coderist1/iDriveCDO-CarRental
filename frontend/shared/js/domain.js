@@ -222,6 +222,15 @@
     };
   }
 
+  function ongoingBookingForUser(userId) {
+    if (!userId) return null;
+    var list = bookings();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].userId === userId && list[i].status === "ongoing") return list[i];
+    }
+    return null;
+  }
+
   function nextRef() {
     var d = new Date();
     var stamp =
@@ -235,6 +244,19 @@
     var me = NS.auth.current();
     if (!me) throw new Error("Sign in to book a car.");
     if (me.status !== "active") throw new Error(NS.auth.DISABLED_MSG || "Your account has been disabled. Please contact the admin.");
+    var bookingUserId = me.role === "staff" || me.role === "admin" ? payload.customerId || me.id : me.id;
+    if (me.role === "staff" || me.role === "admin") {
+      var targetCustomer = NS.auth.userById(bookingUserId);
+      if (!targetCustomer || targetCustomer.role !== "customer") throw new Error("Select a customer for this booking.");
+    }
+    var ongoingTrip = ongoingBookingForUser(bookingUserId);
+    if (ongoingTrip) {
+      throw new Error(
+        "This account already has a trip in progress (" +
+          ongoingTrip.ref +
+          "). Return that vehicle before booking another car."
+      );
+    }
     var pickup = NS.security.sanitizeText(payload.pickup, 80);
     var dropoff = NS.security.sanitizeText(payload.dropoff, 80);
     if (LOCATIONS.indexOf(pickup) === -1 || LOCATIONS.indexOf(dropoff) === -1) {
@@ -280,7 +302,7 @@
     var booking = {
       id: "bkg_" + NS.security.randomHex(8),
       ref: nextRef(),
-      userId: me.role === "staff" || me.role === "admin" ? payload.customerId || me.id : me.id,
+      userId: bookingUserId,
       vehicleId: q.vehicle.id,
       startDate: q.startDate,
       endDate: q.endDate,
@@ -328,10 +350,6 @@
     }
     if (booking.numberOfPassengers > (q.vehicle.seats || 5)) {
       throw new Error("Passengers exceed this vehicle's capacity (" + q.vehicle.seats + ").");
-    }
-    if (me.role === "staff" || me.role === "admin") {
-      var customer = NS.auth.userById(booking.userId);
-      if (!customer || customer.role !== "customer") throw new Error("Select a customer for this booking.");
     }
     var all = bookings();
     all.push(booking);
@@ -3049,6 +3067,7 @@
     getRatingForBooking: getRatingForBooking,
     ratingsForVehicle: ratingsForVehicle,
     vehicleRatingSummary: vehicleRatingSummary,
+    ongoingBookingForUser: ongoingBookingForUser,
     myBookings: myBookings,
     allBookings: allBookings,
     saveVehicle: saveVehicle,
