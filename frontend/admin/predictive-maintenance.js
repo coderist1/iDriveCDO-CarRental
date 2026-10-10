@@ -44,7 +44,7 @@
     var batteryInput = document.getElementById("ml-battery");
     var brakeInput = document.getElementById("ml-brake");
     var scoreBtn = document.getElementById("ml-score-fleet");
-    var isAdmin = NS.auth.hasRole("admin");
+    var canSchedule = NS.auth.hasRole("staff");
     var barChart = null;
     var donutChart = null;
     var rankedIds = [];
@@ -460,7 +460,7 @@
         "</p><small>Assessed " +
         NS.ui.fmtDate(prediction.predictedAt) +
         "</small></div>" +
-        (isAdmin && prediction.needsMaintenance
+        (canSchedule && prediction.needsMaintenance
           ? '<button class="btn btn-dark" type="button" id="ml-schedule-btn">Schedule maintenance</button>'
           : "");
 

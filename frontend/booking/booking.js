@@ -155,11 +155,17 @@
     var vehicles = bookableVehicles();
 
     function refillFleet() {
-      vehicles = bookableVehicles();
+      var dateForm = !selfForm.hidden ? selfForm : !chauffeurForm.hidden ? chauffeurForm : selfForm;
+      var start = dateForm.startDate && dateForm.startDate.value;
+      var end = dateForm.endDate && dateForm.endDate.value;
+      vehicles = bookableVehicles(start, end);
       [selfForm, chauffeurForm].forEach(function (form) {
         if (!form.vehicleId) return;
         var selected = form.vehicleId.value || vehicleId;
         form.vehicleId.innerHTML = vehicleOptions(selected);
+        if (selected && vehicles.every(function (v) { return v.id !== selected; })) {
+          form.vehicleId.value = vehicles[0] ? vehicles[0].id : "";
+        }
       });
       if (!vehicles.length && !typeStep.hidden) {
         showAlert(typeStep, "No vehicles are available right now.", "err");
@@ -267,11 +273,12 @@
         renderFlags(form);
         refresh();
       });
-      form.addEventListener("change", function () {
+      form.addEventListener("change", function (e) {
         if (form.startDate && form.endDate) form.endDate.min = form.startDate.value || localISO(today);
         if (form.id === "chauffeur-form") syncChauffeurIdChoice(form);
         renderFlags(form);
-        refresh();
+        if (e.target && (e.target.name === "startDate" || e.target.name === "endDate")) refillFleet();
+        else refresh();
       });
       var back = form.querySelector("[data-change-type]");
       if (back) {
@@ -737,9 +744,11 @@
     refillFleet();
   }
 
-  function bookableVehicles() {
+  function bookableVehicles(start, end) {
     return NS.domain.vehicles().filter(function (v) {
-      return String(v.status || "").toLowerCase() === "available" && Number(v.dailyRate) > 0;
+      if (String(v.status || "").toLowerCase() !== "available" || !(Number(v.dailyRate) > 0)) return false;
+      if (start && end && NS.domain.isAvailable) return NS.domain.isAvailable(v.id, start, end);
+      return true;
     });
   }
 

@@ -361,14 +361,20 @@
   function setUserStatus(userId, status, csrf) {
     NS.security.assertCsrf(csrf);
     var me = current();
-    if (!me || me.role !== "admin") throw new Error("Admin access required.");
+    if (!me || !hasRole("staff")) throw new Error("Staff access required.");
     if (me.id === userId) throw new Error("You cannot disable your own account.");
     var list = users();
     for (var i = 0; i < list.length; i++) {
       if (list[i].id === userId) {
         if (list[i].role === "admin") throw new Error("Admin accounts cannot be disabled here.");
+        if (me.role !== "admin" && list[i].role !== "customer") throw new Error("Only an admin can change staff and driver accounts.");
         list[i].status = status === "active" ? "active" : "disabled";
         saveUsers(list);
+        if (NS.api && list[i].apiId != null) {
+          NS.api.users.update(list[i].apiId, { status: list[i].status }).catch(function (err) {
+            console.warn("iDrive: account status was not saved to the server.", err);
+          });
+        }
         NS.domain.audit("user-status", me.id, list[i].email + " → " + list[i].status);
         return publicUser(list[i]);
       }

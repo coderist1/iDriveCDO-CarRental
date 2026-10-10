@@ -439,7 +439,9 @@
       "book",
       "?vehicle=" + encodeURIComponent(v.id) + (query ? "&" + query.replace(/^\?/, "") : "")
     );
-    var free = options.dateAvailable !== false && v.status === "available";
+    var state = options.availability || (options.dateAvailable !== false && v.status === "available" ? "available" : "");
+    var free = state === "available";
+    var chipLabel = { available: "Available", reserved: "Reserved", maintenance: "Under maintenance" }[state] || "Unavailable";
     var rating = NS.domain.vehicleRatingSummary ? NS.domain.vehicleRatingSummary(v.id) : { average: 0, count: 0 };
     return (
       '<article class="vehicle-card' +
@@ -453,9 +455,11 @@
       '" alt="' +
       NS.security.escapeHtml(v.name) +
       '">' +
-      (free
-        ? '<span class="avail-chip">Available</span>'
-        : '<span class="avail-chip avail-busy">Unavailable</span>') +
+      '<span class="avail-chip' +
+      (free ? "" : " avail-busy" + (state ? " avail-" + state : "")) +
+      '">' +
+      chipLabel +
+      "</span>" +
       "</a>" +
       '<div class="vehicle-body">' +
       '<p class="eyebrow">' +
@@ -474,6 +478,11 @@
       " bags</li><li>" +
       NS.security.escapeHtml(v.fuel) +
       "</li></ul>" +
+      (state === "reserved" && options.reservedUntil
+        ? '<p class="fineprint avail-note">Reserved until ' + fmtDate(options.reservedUntil) + "</p>"
+        : state === "maintenance"
+        ? '<p class="fineprint avail-note">In the shop, back soon</p>'
+        : "") +
       '<div class="vehicle-cta"><strong>' +
       (v.dailyRate ? peso(v.dailyRate) + "<span>/day</span>" : "Rate on request") +
       "</strong>" +

@@ -14,9 +14,11 @@
     var u = NS.auth.userById(b.userId);
     var customerName = u ? ((u.firstName || "") + " " + (u.lastName || "")).trim() : "Customer";
     var driveMode = b.driveMode === "chauffeur" ? "Chauffeur" : "Self-drive";
+    var methodLabel = { cash: "Cash", cashless: "Cashless", card: "Card" };
     var paymentLine = b.paymentStatus === "paid"
       ? (b.payment
-          ? (b.payment.method === "cashless" ? "Paid · Cashless · " + (b.payment.brand || "") : "Paid · Cash")
+          ? "Paid · " + (methodLabel[b.payment.method] || "Cash") +
+            (b.payment.method !== "cash" && b.payment.brand ? " · " + b.payment.brand : "")
           : "Paid")
       : "Unpaid";
     var rows = [
@@ -132,12 +134,10 @@
       link("fleet-ops.html", "Registration & service", "adminFleetOps", icon('<path d="M12 3v4"/><circle cx="12" cy="14" r="7"/><path d="M12 11v3l2 2"/>')) +
       link("predictive-maintenance.html", "Predictive maintenance", "adminPredictiveMaintenance", icon('<path d="M4 18h16"/><path d="M6 15l3-4 3 2 5-7 2 2"/><circle cx="17" cy="6" r="1"/>')) +
       link("drivers.html", "Drivers", "adminDrivers", icon('<circle cx="12" cy="8" r="3"/><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5"/>'));
-    var people = isAdmin
-      ? group(
-          "People",
-          link("customers.html", "Users", "adminCustomers", icon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'))
-        )
-      : "";
+    var people = group(
+      "People",
+      link("customers.html", isAdmin ? "Users" : "Customers", "adminCustomers", icon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'))
+    );
     var insights =
       link("reports.html", "Reports", "adminReports", icon('<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-6"/><path d="M12 16V8"/><path d="M16 16v-3"/>')) +
       link("security-log.html", "Security log", "adminSecurityLog", icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'));
@@ -249,6 +249,7 @@
     var desk = document.getElementById("vehicle-desk");
     if (!desk) return;
     var isAdmin = NS.auth.hasRole("admin");
+    var canManage = NS.auth.hasRole("staff");
     var form = document.getElementById("vehicle-form");
     var editor = document.getElementById("vehicle-editor");
     var formTitle = document.getElementById("vehicle-form-title");
@@ -259,14 +260,14 @@
     var filterType = document.getElementById("fleet-type-filter");
 
     if (heroActions) {
-      heroActions.innerHTML = isAdmin
+      heroActions.innerHTML = canManage
         ? '<button class="btn btn-gold" type="button" id="fleet-add-btn">Add vehicle</button>' +
           '<a class="btn btn-ghost" href="fleet-ops.html">Fleet ops</a>'
         : '<a class="btn btn-ghost" href="fleet-ops.html">View fleet ops</a>';
     }
 
     function openEditor(v) {
-      if (!isAdmin || !editor || !form) return;
+      if (!canManage || !editor || !form) return;
       editor.hidden = false;
       NS.ui.bindCsrf(form);
       if (v) {
@@ -307,24 +308,26 @@
       NS.ui.bindCsrf(form);
     }
 
-    function renderStats(list) {
+    function renderStats(list, stateOf) {
       if (!stats) return;
-      var available = list.filter(function (v) {
-        return v.status === "available";
-      }).length;
-      var maintenance = list.filter(function (v) {
-        return v.status === "maintenance";
-      }).length;
+      function count(state) {
+        return list.filter(function (v) {
+          return stateOf[v.id] === state;
+        }).length;
+      }
       stats.innerHTML =
         '<div class="stat"><span>' +
         list.length +
         "</span>vehicles</div>" +
         '<div class="stat"><span>' +
-        available +
+        count("available") +
         "</span>available</div>" +
         '<div class="stat"><span>' +
-        maintenance +
-        "</span>maintenance</div>" +
+        count("reserved") +
+        "</span>reserved</div>" +
+        '<div class="stat"><span>' +
+        count("maintenance") +
+        "</span>under maintenance</div>" +
         '<div class="stat"><span>' +
         list.filter(function (v) {
           return v.type === "SUV" || v.type === "Van";
@@ -335,11 +338,15 @@
     function render() {
       if (!grid) return;
       var all = NS.domain.vehicles();
-      renderStats(all);
+      var stateOf = {};
+      all.forEach(function (v) {
+        stateOf[v.id] = NS.domain.vehicleAvailability(v.id);
+      });
+      renderStats(all, stateOf);
       var statusVal = filterStatus ? filterStatus.value : "";
       var typeVal = filterType ? filterType.value : "";
       var list = all.filter(function (v) {
-        if (statusVal && v.status !== statusVal) return false;
+        if (statusVal && stateOf[v.id] !== statusVal) return false;
         if (typeVal && v.type !== typeVal) return false;
         return true;
       });
@@ -368,7 +375,9 @@
                 '"><strong>' +
                 (pct === null ? "—" : pct + "%") +
                 "</strong><em>Maintenance Risk</em></span>" +
-                NS.ui.statusBadge(v.status) +
+                '<span class="badge badge-' + stateOf[v.id] + '">' +
+                NS.domain.AVAILABILITY_LABELS[stateOf[v.id]] +
+                "</span>" +
                 "</div>" +
                 '<div class="fleet-photo-body">' +
                 "<h3>" +
@@ -381,12 +390,14 @@
                 " · " +
                 NS.ui.peso(v.dailyRate) +
                 "/day</p>" +
-                (isAdmin
+                (canManage
                   ? '<div class="btn-row"><button class="btn btn-ghost btn-sm" type="button" data-edit="' +
                     v.id +
-                    '">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-del="' +
-                    v.id +
-                    '">Remove</button></div>'
+                    '">Edit</button>' +
+                    (isAdmin
+                      ? '<button class="btn btn-ghost btn-sm" type="button" data-del="' + v.id + '">Remove</button>'
+                      : "") +
+                    "</div>"
                   : "") +
                 "</div></article>"
               );
@@ -395,9 +406,9 @@
         : "<p class='notice'>No vehicles match those filters.</p>";
     }
 
-    if (!isAdmin && editor) editor.hidden = true;
+    if (!canManage && editor) editor.hidden = true;
 
-    if (isAdmin && form) {
+    if (canManage && form) {
       NS.ui.bindCsrf(form);
       var addBtn = document.getElementById("fleet-add-btn");
       if (addBtn) addBtn.addEventListener("click", function () {
@@ -501,8 +512,11 @@
             actions += '<button class="btn btn-gold btn-sm" data-act="confirmed" data-id="' + b.id + '">Confirm</button>';
             actions += '<button class="btn btn-ghost btn-sm" data-act="rejected" data-id="' + b.id + '">Reject</button>';
           }
-          if (b.status === "pending" && b.paymentStatus !== "paid") {
-            actions += '<span class="fineprint">Awaiting customer payment</span>';
+          if (b.paymentStatus !== "paid" && b.status !== "cancelled" && b.status !== "rejected") {
+            actions +=
+              '<a class="btn btn-gold btn-sm" href="payments.html?booking=' +
+              encodeURIComponent(b.id) +
+              '">Record payment</a>';
           }
           if (b.status === "confirmed") {
             actions += '<button class="btn btn-dark btn-sm" data-act="ongoing" data-id="' + b.id + '">Start trip</button>';
@@ -592,16 +606,13 @@
 
   function adminCustomers() {
     mountAdminNav();
-    if (!NS.auth.hasRole("admin")) {
-      location.replace("index.html");
-      return;
-    }
+    var isAdmin = NS.auth.hasRole("admin");
     var host = document.getElementById("customer-table");
     function render() {
       host.innerHTML = NS.auth
         .listUsers()
         .filter(function (u) {
-          return u.role !== "admin";
+          return isAdmin ? u.role !== "admin" : u.role === "customer";
         })
         .map(function (u) {
           return (
@@ -734,6 +745,7 @@
   function adminDrivers() {
     mountAdminNav();
     var isAdmin = NS.auth.hasRole("admin");
+    var canManage = NS.auth.hasRole("staff");
     var formWrap = document.getElementById("driver-form-wrap");
     var listHost = document.getElementById("drivers-list");
     var pillsHost = document.getElementById("status-pills");
@@ -777,12 +789,12 @@
               "</p></div><div class=\"driver-card-badges\">" +
               NS.ui.statusBadge(dutyOf(d)) +
               NS.ui.statusBadge(d.status) +
-              (isAdmin
+              (canManage
                 ? '<div class="btn-row"><button class="btn btn-ghost btn-sm" data-edit="' +
                   d.id +
-                  '">Edit</button><button class="btn btn-ghost btn-sm" data-del="' +
-                  d.id +
-                  '">Remove</button></div>'
+                  '">Edit</button>' +
+                  (isAdmin ? '<button class="btn btn-ghost btn-sm" data-del="' + d.id + '">Remove</button>' : "") +
+                  "</div>"
                 : "") +
               "</div></article>"
             );
@@ -790,7 +802,7 @@
           .join("") || "<p class='notice'>No drivers yet.</p>";
     }
 
-    if (isAdmin) {
+    if (canManage) {
       formWrap.innerHTML =
         '<form id="driver-form" class="form-card">' +
         '<input type="hidden" name="id">' +
@@ -865,14 +877,14 @@
         }
       });
     } else {
-      formWrap.innerHTML = "<p class='notice'>View only. Admin manages Driver_Details.</p>";
+      formWrap.innerHTML = "<p class='notice'>View only.</p>";
     }
     render();
   }
 
   function adminFleetOps() {
     mountAdminNav();
-    var isAdmin = NS.auth.hasRole("admin");
+    var canManage = NS.auth.hasRole("staff");
     var forms = document.getElementById("fleet-ops-forms");
     var regsHost = document.getElementById("regs-list");
     var maintHost = document.getElementById("maint-list");
@@ -911,7 +923,7 @@
             (m.notes ? "<br>" + NS.security.escapeHtml(m.notes) : "") +
             "</p></div><div>" +
             NS.ui.statusBadge(m.finished ? "completed" : "pending") +
-            (isAdmin && !m.finished
+            (canManage && !m.finished
               ? '<button class="btn btn-gold btn-sm" data-finish="' + m.id + '">Mark finished</button>'
               : "") +
             "</div></article>"
@@ -937,7 +949,7 @@
         .join("") || "<p class='notice'>No fuel records.</p>";
     }
 
-    if (isAdmin) {
+    if (canManage) {
       forms.innerHTML =
         '<div class="form-card">' +
         "<h3>Save registration</h3>" +
@@ -1059,38 +1071,172 @@
         }
       });
     } else {
-      forms.innerHTML = "<p class='notice'>View only. Admin manages vehicle registration, maintenance, and fuel records.</p>";
+      forms.innerHTML = "<p class='notice'>View only.</p>";
     }
     renderLists();
   }
 
   function adminPayments() {
     mountAdminNav();
+    var esc = NS.security.escapeHtml;
     var host = document.getElementById("payments-list");
-    var list = NS.domain.allPayments();
-    host.innerHTML = list.length
-      ? '<table class="table"><thead><tr><th>Ref</th><th>Booking</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>' +
-        list
-          .map(function (p) {
-            return (
-              "<tr><td>" +
-              NS.security.escapeHtml(p.referenceNumber || p.id) +
-              "</td><td>" +
-              NS.security.escapeHtml(p.bookingRef || p.bookingId) +
-              "</td><td>" +
-              NS.ui.peso(p.amount) +
-              "</td><td>" +
-              NS.security.escapeHtml(p.paymentMethod || "") +
-              "</td><td>" +
-              NS.ui.statusBadge(p.paymentStatus || "paid") +
-              "</td><td>" +
-              NS.ui.fmtDate(p.paymentDate) +
-              "</td></tr>"
+    var form = document.getElementById("payment-form");
+    var feeNote = document.getElementById("payment-fee");
+
+    function payable() {
+      return NS.domain.allBookings().filter(function (b) {
+        return b.status !== "cancelled" && b.status !== "rejected";
+      });
+    }
+
+    function paidSoFar(bookingId) {
+      return NS.domain.payments().reduce(function (sum, p) {
+        return p.bookingId === bookingId && p.paymentStatus === "paid" ? sum + (Number(p.amount) || 0) : sum;
+      }, 0);
+    }
+
+    function fillBookings(selected) {
+      var list = payable();
+      form.bookingId.innerHTML = list.length
+        ? list
+            .map(function (b) {
+              var u = NS.auth.userById(b.userId);
+              return (
+                '<option value="' + esc(b.id) + '"' + (b.id === selected ? " selected" : "") + ">" +
+                esc((b.ref || b.id) + " · " + (u ? u.firstName + " " + u.lastName : "Customer") + " · " +
+                  NS.ui.peso(b.total).replace(/<[^>]+>/g, "") + " · " + b.paymentStatus) +
+                "</option>"
+              );
+            })
+            .join("")
+        : '<option value="">No open bookings</option>';
+    }
+
+    function fillBrands() {
+      var brands = NS.domain.PAYMENT_BRANDS[form.method.value] || [];
+      form.brand.innerHTML = brands
+        .map(function (b) {
+          return "<option>" + esc(b) + "</option>";
+        })
+        .join("");
+      form.brand.disabled = form.method.value === "cash";
+      form.last4.disabled = form.method.value === "cash";
+      if (form.method.value === "cash") form.last4.value = "";
+    }
+
+    /* Prefill the amount with the balance still owed on the selected booking. */
+    function fillAmount() {
+      var b = NS.domain.getBooking(form.bookingId.value);
+      if (!b) {
+        feeNote.textContent = "";
+        return;
+      }
+      var paid = paidSoFar(b.id);
+      var balance = Math.max(0, (Number(b.total) || 0) - paid);
+      form.amount.value = (balance || Number(b.total) || 0).toFixed(2);
+      var u = NS.auth.userById(b.userId);
+      if (u && !form.holder.value) form.holder.value = u.firstName + " " + u.lastName;
+      feeNote.innerHTML =
+        "Rental fee: " + NS.ui.peso(b.subtotal) + " (" + (b.days || 1) + " day" + (b.days === 1 ? "" : "s") + ")" +
+        (Number(b.extras) ? " + driver " + NS.ui.peso(b.extras) : "") +
+        " = <strong>" + NS.ui.peso(b.total) + "</strong> · recorded paid " + NS.ui.peso(paid) +
+        " · balance " + NS.ui.peso(balance);
+    }
+
+    function render() {
+      var list = NS.domain.allPayments();
+      host.innerHTML = list.length
+        ? '<table class="table"><thead><tr><th>Ref</th><th>Booking</th><th>Amount</th><th>Method</th><th>Payer</th><th>Date</th><th>Status</th></tr></thead><tbody>' +
+          list
+            .map(function (p) {
+              return (
+                "<tr><td>" +
+                esc(p.referenceNumber || p.id) +
+                "</td><td>" +
+                esc(p.bookingRef || p.bookingId) +
+                "</td><td>" +
+                NS.ui.peso(p.amount) +
+                "</td><td>" +
+                esc((p.paymentMethod || "") + (p.brand && p.brand !== "Cash" ? " · " + p.brand : "") + (p.last4 && /^\d{4}$/.test(p.last4) ? " ··" + p.last4 : "")) +
+                "</td><td>" +
+                esc(p.holder || "") +
+                "</td><td>" +
+                NS.ui.fmtDate(p.paymentDate) +
+                '</td><td><select class="form-select form-select-sm" data-pay-status="' + esc(p.id) + '" aria-label="Payment status">' +
+                NS.domain.PAYMENT_STATUSES.map(function (s) {
+                  return '<option value="' + s + '"' + ((p.paymentStatus || "paid") === s ? " selected" : "") + ">" + s + "</option>";
+                }).join("") +
+                "</select></td></tr>"
+              );
+            })
+            .join("") +
+          "</tbody></table>"
+        : "<p class='notice'>No payment records yet.</p>";
+    }
+
+    if (form) {
+      NS.ui.bindCsrf(form);
+      fillBookings(NS.ui.qs("booking"));
+      fillBrands();
+      form.paymentDate.value = new Date().toISOString().slice(0, 10);
+      fillAmount();
+      form.method.addEventListener("change", fillBrands);
+      form.bookingId.addEventListener("change", function () {
+        form.holder.value = "";
+        fillAmount();
+      });
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        NS.ui.askYesNo("Save this payment record?", { title: "Record payment" }).then(function (ok) {
+          if (!ok) return;
+          try {
+            var row = NS.domain.recordPayment(
+              {
+                bookingId: form.bookingId.value,
+                amount: form.amount.value,
+                paymentDate: form.paymentDate.value,
+                method: form.method.value,
+                brand: form.brand.value,
+                last4: form.last4.value,
+                status: form.status.value,
+                holder: form.holder.value,
+                referenceNumber: form.referenceNumber.value
+              },
+              form.csrf.value
             );
-          })
-          .join("") +
-        "</tbody></table>"
-      : "<p class='notice'>No payment records yet.</p>";
+            var keep = form.bookingId.value;
+            form.referenceNumber.value = "";
+            form.last4.value = "";
+            NS.ui.bindCsrf(form);
+            fillBookings(keep);
+            fillAmount();
+            render();
+            NS.ui.toast("Payment " + row.referenceNumber + " saved.", "ok");
+          } catch (err) {
+            NS.ui.bindCsrf(form);
+            NS.ui.toast(err.message, "err");
+          }
+        });
+      });
+    }
+
+    host.addEventListener("change", function (e) {
+      var id = e.target.getAttribute("data-pay-status");
+      if (!id) return;
+      try {
+        NS.domain.setPaymentStatus(id, e.target.value, NS.security.getCsrf());
+        if (form) {
+          fillBookings(form.bookingId.value);
+          fillAmount();
+        }
+        NS.ui.toast("Payment status updated.", "ok");
+      } catch (err) {
+        NS.ui.toast(err.message, "err");
+        render();
+      }
+    });
+
+    render();
   }
 
   function threadMessagesHtml(thread, hideBookingNotice) {
