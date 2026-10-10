@@ -790,7 +790,39 @@ h1, h2, h3, .brand span {
   letter-spacing: 0.02em;
 }
 .avail-chip.avail-busy { background: rgba(185, 28, 28, 0.9); }
+.avail-chip.avail-reserved { background: rgba(180, 83, 9, 0.92); }
+.avail-chip.avail-maintenance { background: rgba(55, 65, 81, 0.92); }
 .vehicle-card.is-busy { opacity: 0.72; }
+.avail-note { margin: 0 0 0.5rem; }
+.avail-legend { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
+.avail-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid #e2e2e2;
+  background: #fff;
+  color: #2a2a2a;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.avail-pill span {
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #f1f1f1;
+  font-size: 0.78rem;
+  text-align: center;
+}
+.avail-pill::before { content: ""; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #9ca3af; }
+.avail-pill-available::before { background: #16a34a; }
+.avail-pill-reserved::before { background: #b45309; }
+.avail-pill-maintenance::before { background: #374151; }
+.avail-pill-all::before { display: none; }
+.avail-pill.active { border-color: var(--primary); color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft, rgba(196, 80, 75, 0.16)); }
+.badge-reserved { background: rgba(254, 243, 199, 0.85); color: #92400e; border-color: rgba(253, 230, 138, 0.9); }
 .fleet-summary {
   margin: 0 0 1rem;
   font-weight: 700;

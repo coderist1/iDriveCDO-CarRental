@@ -154,6 +154,31 @@
     });
   }
 
+  var AVAILABILITY_LABELS = { available: "Available", reserved: "Reserved", maintenance: "Under maintenance" };
+
+  /* Latest end date of active bookings overlapping the dates (today when none given); "" when free. */
+  function reservedUntil(vehicleId, start, end) {
+    if (!start || !end) {
+      var now = new Date();
+      start = localISODate(now);
+      end = localISODate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+    }
+    var latest = "";
+    bookings().forEach(function (b) {
+      if (b.vehicleId === vehicleId && ACTIVE_BOOKING[b.status] && overlaps(start, end, b.startDate, b.endDate)) {
+        if (b.endDate > latest) latest = b.endDate;
+      }
+    });
+    return latest;
+  }
+
+  /* "available", "reserved" (an active booking overlaps the dates) or "maintenance". */
+  function vehicleAvailability(vehicleId, start, end) {
+    var v = getVehicle(vehicleId);
+    if (!v || v.status !== "available") return "maintenance";
+    return reservedUntil(vehicleId, start, end) ? "reserved" : "available";
+  }
+
   function requireStaff() {
     if (!NS.auth.hasRole("staff")) throw new Error("Staff access required.");
   }
@@ -1198,7 +1223,7 @@
 
   function saveVehicle(payload, csrf) {
     NS.security.assertCsrf(csrf);
-    requireAdmin();
+    requireStaff();
     var me = NS.auth.current();
     var item = {
       id: payload.id || "veh_" + NS.security.randomHex(6),
@@ -1369,7 +1394,7 @@
     } catch (e) {
       NS.security.issueCsrf();
     }
-    requireAdmin();
+    requireStaff();
     var item = {
       id: payload.id || "drv_" + NS.security.randomHex(6),
       fullName: NS.security.sanitizeText(payload.fullName, 80),
@@ -1552,6 +1577,12 @@
     else booking.fuelUponReturn = fuel;
     booking.updatedAt = new Date().toISOString();
     persistBooking(booking);
+    if (booking.apiId != null && NS.api) {
+      var fuelBody = booking.status === "confirmed"
+        ? { fuel_before_rent: fuel }
+        : { fuel_upon_return: fuel };
+      NS.api.bookings.update(booking.apiId, fuelBody).catch(warnApiFailure);
+    }
     audit("driver-fuel", me.id, booking.ref + " fuel " + fuel);
     return booking;
   }
@@ -1563,7 +1594,7 @@
     } catch (e) {
       NS.security.issueCsrf();
     }
-    requireAdmin();
+    requireStaff();
     var vehicle = getVehicle(payload.vehicleId);
     if (!vehicle) throw new Error("Vehicle not found.");
     var item = {
@@ -1612,7 +1643,7 @@
     } catch (e) {
       NS.security.issueCsrf();
     }
-    requireAdmin();
+    requireStaff();
     var vehicle = getVehicle(payload.vehicleId);
     if (!vehicle) throw new Error("Vehicle not found.");
     var item = {
@@ -1680,7 +1711,7 @@
     } catch (e) {
       NS.security.issueCsrf();
     }
-    requireAdmin();
+    requireStaff();
     var vehicle = getVehicle(payload.vehicleId);
     if (!vehicle) throw new Error("Vehicle not found.");
     var item = {
@@ -1716,6 +1747,128 @@
       .sort(function (a, b) {
         return String(b.paymentDate || "").localeCompare(String(a.paymentDate || ""));
       });
+  }
+
+  var PAYMENT_STATUSES = ["paid", "pending", "failed", "refunded"];
+  var PAYMENT_BRANDS = { cash: ["Cash"], cashless: ["GCash", "Maya", "GrabPay"], card: ["Visa", "Mastercard", "JCB", "AmEx"] };
+
+  function writeBooking(booking) {
+    var list = bookings();
+    for (var i = 0; i < list.length; i++) if (list[i].id === booking.id) list[i] = booking;
+    saveBookings(list);
+  }
+
+  /* Booking is "paid" while at least one of its payment records is paid. */
+  function refreshBookingPaymentStatus(booking, allowDowngrade) {
+    var paid = payments().some(function (p) {
+      return p.bookingId === booking.id && p.paymentStatus === "paid";
+    });
+    var next = paid ? "paid" : "unpaid";
+    if (booking.paymentStatus === next || (next === "unpaid" && !allowDowngrade)) return;
+    booking.paymentStatus = next;
+    booking.updatedAt = new Date().toISOString();
+    writeBooking(booking);
+    if (booking.apiId != null && NS.api) {
+      NS.api.bookings.update(booking.apiId, { payment_status: next }).catch(warnApiFailure);
+    }
+  }
+
+  /* Desk staff record a payment taken at the counter, by phone, or by card terminal. */
+  function recordPayment(payload, csrf) {
+    NS.security.assertCsrf(csrf);
+    requireStaff();
+    var me = NS.auth.current();
+    var booking = getBooking(payload.bookingId);
+    if (!booking) throw new Error("Choose a booking.");
+    if (booking.status === "cancelled" || booking.status === "rejected") {
+      throw new Error("Cancelled or rejected bookings cannot take payments.");
+    }
+    var method = PAYMENT_BRANDS[payload.method] ? payload.method : "";
+    if (!method) throw new Error("Choose a payment method.");
+    var brand = method === "cash" ? "Cash" : NS.security.sanitizeText(payload.brand, 20);
+    if (PAYMENT_BRANDS[method].indexOf(brand) === -1) throw new Error("Choose the " + (method === "card" ? "card brand" : "wallet") + ".");
+    var amount = Math.round(Number(payload.amount) * 100) / 100;
+    if (!(amount > 0)) throw new Error("Enter an amount greater than zero.");
+    if (amount > 99999999.99) throw new Error("Amount is too large.");
+    var status = PAYMENT_STATUSES.indexOf(payload.status) !== -1 ? payload.status : "paid";
+    var last4 = String(payload.last4 || "").replace(/\D/g, "");
+    if (last4 && last4.length !== 4) throw new Error("Account or card digits must be exactly 4 numbers.");
+    if (method !== "cash" && !last4) throw new Error("Enter the last 4 digits of the card or wallet number.");
+    var reference = NS.security.sanitizeText(payload.referenceNumber, 40) ||
+      "PAY-" + localISODate(new Date()).replace(/-/g, "") + "-" + NS.security.randomHex(4).toUpperCase();
+    var duplicate = payments().some(function (p) {
+      return String(p.referenceNumber).toUpperCase() === reference.toUpperCase();
+    });
+    if (duplicate) throw new Error("That reference number is already recorded.");
+    var paidAt = payload.paymentDate ? new Date(payload.paymentDate + "T12:00:00").toISOString() : new Date().toISOString();
+
+    var row = {
+      id: "pay_" + NS.security.randomHex(6),
+      bookingId: booking.id,
+      bookingRef: booking.ref,
+      amount: amount,
+      paymentMethod: method,
+      referenceNumber: reference,
+      paymentDate: paidAt,
+      paymentStatus: status,
+      brand: brand,
+      last4: last4,
+      holder: NS.security.sanitizeText(payload.holder, 80),
+      recordedBy: me.id,
+      createdAt: new Date().toISOString()
+    };
+    var pays = payments();
+    pays.unshift(row);
+    savePayments(pays);
+
+    if (status === "paid") {
+      booking.payment = { method: method, brand: brand, last4: last4 || (method === "cash" ? "CASH" : ""), holder: row.holder, authCode: reference, paidAt: paidAt };
+      booking.paymentMethod = method;
+      writeBooking(booking);
+    }
+    refreshBookingPaymentStatus(booking);
+
+    if (booking.apiId != null) {
+      pushToApi("payments", "payments", row, {
+        booking_id: booking.apiId,
+        amount: amount,
+        payment_method: method,
+        brand: brand,
+        account_last4: last4 || null,
+        holder: row.holder || null,
+        reference_number: reference,
+        payment_date: paidAt,
+        payment_status: status
+      }, "payment_id");
+      if (status === "paid" && NS.api) {
+        NS.api.bookings.update(booking.apiId, { payment_method: method }).catch(function () {});
+      }
+    }
+    audit("payment-record", me.id, booking.ref + " " + method + " " + brand + " ₱" + amount + " · " + status);
+    return row;
+  }
+
+  function setPaymentStatus(paymentId, status, csrf) {
+    NS.security.assertCsrf(csrf);
+    requireStaff();
+    if (PAYMENT_STATUSES.indexOf(status) === -1) throw new Error("Choose a valid payment status.");
+    var pays = payments();
+    var row = null;
+    for (var i = 0; i < pays.length; i++) {
+      if (pays[i].id === paymentId) {
+        pays[i].paymentStatus = status;
+        row = pays[i];
+      }
+    }
+    if (!row) throw new Error("Payment not found.");
+    savePayments(pays);
+    if (row.apiId != null && NS.api) {
+      NS.api.payments.update(row.apiId, { payment_status: status }).catch(warnApiFailure);
+    }
+    var booking = getBooking(row.bookingId);
+    if (booking) refreshBookingPaymentStatus(booking, true);
+    audit("payment-status", NS.auth.current().id, (row.bookingRef || row.bookingId) + " " + row.referenceNumber + " → " + status);
+    return row;
   }
 
   function regsForVehicle(vehicleId) {
@@ -2509,21 +2662,70 @@
     };
   }
 
+  /*
+   * Links local records that have no apiId to the server row they describe (rowKey(row) === localKey(x)),
+   * then drops older copies of that row, so the local record keeps its id and password.
+   * Returns the surviving list and a map of dropped id -> surviving id.
+   */
+  function adoptServerRows(local, rows, idKey, rowKey, localKey) {
+    var byKey = {};
+    rows.forEach(function (r) {
+      var k = rowKey(r);
+      if (k) byKey[k] = r[idKey];
+    });
+    var owner = {};
+    local.forEach(function (x) {
+      var k = x.apiId == null ? localKey(x) : null;
+      if (k && byKey[k] != null && !owner[byKey[k]]) {
+        x.apiId = byKey[k];
+        owner[x.apiId] = x.id;
+      }
+    });
+    var renamed = {};
+    var list = local.filter(function (x) {
+      var keep = !owner[x.apiId] || owner[x.apiId] === x.id;
+      if (!keep) renamed[x.id] = owner[x.apiId];
+      return keep;
+    });
+    return { list: list, renamed: renamed };
+  }
+
+  function remapBookingRefs(field, renamed) {
+    if (!Object.keys(renamed).length) return;
+    var list = bookings();
+    list.forEach(function (b) {
+      if (renamed[b[field]]) b[field] = renamed[b[field]];
+    });
+    saveBookings(list);
+  }
+
   /* Single /users endpoint carries role; we keep local-only accounts (no apiId) as-is. */
   function syncUsersFromApi(users) {
+    var adopted = adoptServerRows(NS.store.get("users", []), users, "user_id", function (r) {
+      return String(r.email || "").toLowerCase();
+    }, function (u) {
+      return u.passwordHash ? String(u.email || "").toLowerCase() : "";
+    });
     NS.store.set(
       "users",
-      mergeFromApi(NS.store.get("users", []), users, "user_id", "usr_api_", function (r, prev) {
+      mergeFromApi(adopted.list, users, "user_id", "usr_api_", function (r, prev) {
         return apiUser(r, prev);
       }, function () {
         return true;
       })
     );
+    remapBookingRefs("userId", adopted.renamed);
   }
 
   function syncDriversFromApi(rows) {
+    var userIds = apiIdIndex(NS.store.get("users", []));
+    var adopted = adoptServerRows(drivers(), rows, "driver_id", function (r) {
+      return r.user_id != null ? userIds[r.user_id] : "";
+    }, function (d) {
+      return d.userId || "";
+    });
     saveDrivers(
-      mergeFromApi(drivers(), rows, "driver_id", "drv_api_", function (r, prev) {
+      mergeFromApi(adopted.list, rows, "driver_id", "drv_api_", function (r, prev) {
         return {
           fullName: r.full_name,
           driverLicense: r.driver_license,
@@ -2532,13 +2734,14 @@
           status: String(r.status).toLowerCase() === "active" ? "active" : "inactive",
           dutyStatus: r.duty_status === "on_call" ? "on_call" : "regular",
           phone: r.phone || (prev && prev.phone) || "",
-          userId: (prev && prev.userId) || null,
+          userId: (prev && prev.userId) || (r.user_id != null && userIds[r.user_id]) || null,
           createdAt: r.created_at
         };
       }, function (d) {
         return !!d.userId;
       })
     );
+    remapBookingRefs("driverDetailsId", adopted.renamed);
   }
 
   function syncBookingsFromApi(rows) {
@@ -2548,8 +2751,20 @@
     function locName(rel) {
       return rel && rel.name ? rel.name : "";
     }
+    var adopted = adoptServerRows(bookings(), rows, "booking_id", function (r) {
+      return r.ref || "";
+    }, function (b) {
+      return b.ref || "";
+    });
+    if (Object.keys(adopted.renamed).length) {
+      var pays = payments();
+      pays.forEach(function (p) {
+        if (adopted.renamed[p.bookingId]) p.bookingId = adopted.renamed[p.bookingId];
+      });
+      savePayments(pays);
+    }
     saveBookings(
-      mergeFromApi(bookings(), rows, "booking_id", "bkg_api_", function (r, prev) {
+      mergeFromApi(adopted.list, rows, "booking_id", "bkg_api_", function (r, prev) {
         var start = apiDay(r.start_date);
         var end = apiDay(r.end_date) || start;
         var days = Number(r.days) || Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) || 1);
@@ -2600,10 +2815,18 @@
 
   function syncPaymentsFromApi(rows) {
     var bookingIds = apiIdIndex(bookings());
+    var adopted = adoptServerRows(payments(), rows, "payment_id", function (p) {
+      return String(p.reference_number || "").toUpperCase();
+    }, function (p) {
+      return String(p.referenceNumber || "").toUpperCase();
+    });
     savePayments(
-      mergeFromApi(payments(), rows, "payment_id", "pay_api_", function (p) {
+      mergeFromApi(adopted.list, rows, "payment_id", "pay_api_", function (p, prev) {
         var booking = getBooking(bookingIds[p.booking_id]);
         return {
+          brand: p.brand || (prev && prev.brand) || "",
+          last4: p.account_last4 || (prev && prev.last4) || "",
+          holder: p.holder || (prev && prev.holder) || "",
           bookingId: booking ? booking.id : null,
           bookingRef: booking ? booking.ref : "BKG-" + p.booking_id,
           amount: Number(p.amount) || 0,
@@ -2808,6 +3031,9 @@
     getBooking: getBooking,
     isAvailable: isAvailable,
     availableVehicles: availableVehicles,
+    AVAILABILITY_LABELS: AVAILABILITY_LABELS,
+    vehicleAvailability: vehicleAvailability,
+    reservedUntil: reservedUntil,
     quote: quote,
     createBooking: createBooking,
     pushBookingToApi: pushBookingToApi,
@@ -2850,6 +3076,10 @@
     fuelForVehicle: fuelForVehicle,
     payments: payments,
     allPayments: allPayments,
+    PAYMENT_STATUSES: PAYMENT_STATUSES,
+    PAYMENT_BRANDS: PAYMENT_BRANDS,
+    recordPayment: recordPayment,
+    setPaymentStatus: setPaymentStatus,
     report: report,
     fleetRepairStats: fleetRepairStats,
     seedIfNeeded: seedIfNeeded,

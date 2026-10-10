@@ -62,43 +62,82 @@
 
       var start = startInput ? startInput.value : "";
       var end = endInput ? endInput.value : "";
-      var list = (NS.domain.availableVehicles
-        ? NS.domain.availableVehicles(start, end)
-        : NS.domain.vehicles().filter(function (v) {
-            return v.status === "available";
-          })
-      ).filter(function (v) {
+      var matching = NS.domain.vehicles().filter(function (v) {
         if (type && type.value && v.type !== type.value) return false;
         if (trans && trans.value && v.transmission !== trans.value) return false;
         return true;
       });
+      var stateOf = {};
+      var counts = { all: matching.length, available: 0, reserved: 0, maintenance: 0 };
+      matching.forEach(function (v) {
+        stateOf[v.id] = NS.domain.vehicleAvailability(v.id, start, end);
+        counts[stateOf[v.id]]++;
+      });
+      var list = matching.filter(function (v) {
+        return availFilter === "all" || stateOf[v.id] === availFilter;
+      });
 
+      var rank = { available: 0, reserved: 1, maintenance: 2 };
       list.sort(function (a, b) {
+        var byState = rank[stateOf[a.id]] - rank[stateOf[b.id]];
+        if (byState) return byState;
         if (sort && sort.value === "high") return (b.dailyRate || 0) - (a.dailyRate || 0);
         if (sort && sort.value === "seats") return b.seats - a.seats;
         return (a.dailyRate || 0) - (b.dailyRate || 0);
       });
 
+      var period = start && end ? " for " + NS.ui.fmtDate(start) + " → " + NS.ui.fmtDate(end) : " today";
       if (summary) {
         summary.textContent =
-          list.length +
-          " car" +
-          (list.length === 1 ? "" : "s") +
-          " available" +
-          (start && end ? " for " + NS.ui.fmtDate(start) + " → " + NS.ui.fmtDate(end) : " now");
+          counts.available + " of " + counts.all + " car" + (counts.all === 1 ? "" : "s") + " available" + period +
+          " · " + counts.reserved + " reserved · " + counts.maintenance + " under maintenance";
+      }
+      if (legend) {
+        legend.innerHTML = [
+          ["all", "All"],
+          ["available", "Available"],
+          ["reserved", "Reserved"],
+          ["maintenance", "Under maintenance"]
+        ]
+          .map(function (o) {
+            return (
+              '<button type="button" class="avail-pill avail-pill-' + o[0] + (availFilter === o[0] ? " active" : "") +
+              '" data-avail="' + o[0] + '" aria-pressed="' + (availFilter === o[0]) + '">' +
+              o[1] + " <span>" + counts[o[0]] + "</span></button>"
+            );
+          })
+          .join("");
       }
 
       var q = dateQuery();
       host.innerHTML = list
         .map(function (v) {
-          return NS.ui.vehicleCard(v, { query: q, dateAvailable: true });
+          var state = stateOf[v.id];
+          return NS.ui.vehicleCard(v, {
+            query: q,
+            availability: state,
+            reservedUntil: state === "reserved" ? NS.domain.reservedUntil(v.id, start, end) : ""
+          });
         })
         .join("");
       if (empty) {
         empty.hidden = list.length > 0;
         empty.textContent =
-          "No cars available for those dates or filters. Try different dates or clear filters.";
+          availFilter === "all"
+            ? "No cars match those filters. Try clearing filters."
+            : "No " + (NS.domain.AVAILABILITY_LABELS[availFilter] || "").toLowerCase() + " cars for those dates or filters.";
       }
+    }
+
+    var legend = document.getElementById("fleet-legend");
+    var availFilter = ["available", "reserved", "maintenance"].indexOf(NS.ui.qs("availability")) !== -1 ? NS.ui.qs("availability") : "all";
+    if (legend) {
+      legend.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-avail]");
+        if (!btn) return;
+        availFilter = btn.getAttribute("data-avail");
+        render();
+      });
     }
 
     ["filter-type", "filter-trans", "filter-sort", "filter-start", "filter-end"].forEach(function (id) {
@@ -136,9 +175,10 @@
     var start = NS.ui.qs("start") || "";
     var end = NS.ui.qs("end") || "";
     var pickup = NS.ui.qs("pickup") || "";
-    var free =
-      v.status === "available" &&
-      (!start || !end || NS.domain.isAvailable(v.id, start, end));
+    var state = NS.domain.vehicleAvailability(v.id, start, end);
+    var until = state === "reserved" ? NS.domain.reservedUntil(v.id, start, end) : "";
+    /* Without trip dates a car reserved today can still be booked for later days. */
+    var free = state === "available" || (state === "reserved" && !(start && end));
 
     var bookQuery =
       "?vehicle=" +
@@ -179,9 +219,10 @@
       '" alt="' +
       NS.security.escapeHtml(v.name) +
       '">' +
-      (free
-        ? '<span class="avail-chip">Available</span>'
-        : '<span class="avail-chip avail-busy">Unavailable</span>') +
+      '<span class="avail-chip' + (state === "available" ? "" : " avail-busy avail-" + state) + '">' +
+      NS.domain.AVAILABILITY_LABELS[state] +
+      (until ? " until " + NS.ui.fmtDate(until) : "") +
+      "</span>" +
       "</div>" +
       '<div class="car-panel">' +
       '<p class="eyebrow">' +
@@ -234,9 +275,13 @@
         ? '<a class="btn btn-gold btn-block" href="' +
           NS.routes.href("book", bookQuery) +
           '">Book this car</a>'
-        : '<p class="notice">Not available for the selected dates. <a href="' +
-          NS.routes.href("fleet") +
-          '">See other available cars</a>.</p>') +
+        : '<p class="notice">' +
+          (state === "maintenance"
+            ? "This car is under maintenance and cannot be booked right now."
+            : "Reserved" + (until ? " until " + NS.ui.fmtDate(until) : "") + " for the selected dates.") +
+          ' <a href="' +
+          NS.routes.href("fleet", "?availability=available") +
+          '">See available cars</a>.</p>') +
       "</div></div>";
   }
 })(window);
