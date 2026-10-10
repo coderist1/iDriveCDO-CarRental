@@ -92,6 +92,7 @@
       var sync = NS.domain.syncAllFromApi().then(
         function (applied) {
           if (applied) markSynced();
+          if (NS.auth && NS.auth.current) NS.auth.current();
         },
         function (e) {
           console.warn("iDrive: could not sync from the backend; showing local data.", e);

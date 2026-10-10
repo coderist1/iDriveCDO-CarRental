@@ -261,6 +261,9 @@
       console.warn("current() check failed", e);
     }
 
+    var notice = NS.auth.takeNotice && NS.auth.takeNotice();
+    if (notice) showAlert(form, notice, "err");
+
     mountGoogleButton(form);
 
     form.addEventListener("submit", function (e) {
@@ -304,6 +307,70 @@
         } catch (ignore) {}
         showAlert(form, err.message || "Sign in failed.", "err");
       }
+    });
+  };
+
+  NS.pages.forgot = function forgot() {
+    var form = document.getElementById("forgot-form");
+    if (!form || form.getAttribute("data-bound") === "1") return;
+    form.setAttribute("data-bound", "1");
+    try {
+      if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+    } catch (e) {
+      console.warn("CSRF bind failed", e);
+    }
+    try {
+      if (NS.auth && NS.auth.current && NS.auth.current()) {
+        location.replace(NS.routes.href("profile"));
+        return;
+      }
+    } catch (e) {
+      console.warn("current() check failed", e);
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (NS.ui && NS.ui.clearErrors) NS.ui.clearErrors(form);
+      showAlert(form, "", "ok");
+      var btn = form.querySelector('button[type="submit"]');
+      var email = val(form, "email");
+      var phone = val(form, "phone");
+      var next = val(form, "password");
+      var confirm = val(form, "confirmPassword");
+      if (next !== confirm) {
+        showAlert(form, "New passwords do not match.", "err");
+        return;
+      }
+      var issues = NS.security.passwordIssues(next, email);
+      if (issues.length) {
+        showAlert(form, "New password: " + issues.join(" "), "err");
+        return;
+      }
+      if (btn) btn.disabled = true;
+      NS.ui.askYesNo("Set this as your new password?", { title: "Reset password", yes: "Yes", no: "No" }).then(function (ok) {
+        if (!ok) {
+          if (btn) btn.disabled = false;
+          return;
+        }
+        try {
+          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+        } catch (ignore) {}
+        var csrfEl = field(form, "csrf");
+        try {
+          NS.auth.resetPassword(email, phone, next, csrfEl ? csrfEl.value : "");
+          form.reset();
+          try {
+            if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+          } catch (ignore) {}
+          showAlert(form, "Password updated. You can sign in with the new password on this browser.", "ok");
+        } catch (err) {
+          try {
+            if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+          } catch (ignore) {}
+          showAlert(form, (err && err.message) || "Could not reset the password.", "err");
+        }
+        if (btn) btn.disabled = false;
+      });
     });
   };
 

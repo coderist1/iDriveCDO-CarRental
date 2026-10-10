@@ -7,6 +7,8 @@
   var NS = (global.iDrive = global.iDrive || {});
   var SESSION_MS = 30 * 60 * 1000;
   var ROLES = { driver: 1, customer: 1, staff: 2, admin: 3 };
+  var DISABLED_MSG = "Your account has been disabled. Please contact the admin.";
+  var NOTICE_KEY = "idrive_authNotice";
 
   function users() {
     return NS.store.get("users", []);
@@ -56,6 +58,8 @@
       idImage: user.idImage || "",
       avatar: user.avatar || "",
       status: user.status,
+      authProvider: user.authProvider || "password",
+      passwordSet: user.authProvider === "google" ? user.passwordSet === true : user.passwordSet !== false,
       createdAt: user.createdAt
     };
   }
@@ -72,19 +76,81 @@
     return s;
   }
 
+  function sessionUser() {
+    var s = NS.store.getSession();
+    if (!s || Date.now() > s.expiresAt) return null;
+    var list = users();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === s.userId) return list[i];
+    }
+    return null;
+  }
+
+  function leaveDisabled() {
+    try {
+      sessionStorage.setItem(NOTICE_KEY, DISABLED_MSG);
+    } catch (e) {
+      /* the login page still blocks the session */
+    }
+    logout();
+    if (!/\/auth\/login\.html/i.test(location.pathname || "")) {
+      location.replace(NS.routes.href("login"));
+    }
+  }
+
+  function takeNotice() {
+    try {
+      var msg = sessionStorage.getItem(NOTICE_KEY) || "";
+      if (msg) sessionStorage.removeItem(NOTICE_KEY);
+      return msg;
+    } catch (e) {
+      return "";
+    }
+  }
+
   function current() {
     var s = touchSession();
     if (!s) return null;
-    var user = null;
-    var list = users();
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].id === s.userId) user = list[i];
-    }
-    if (!user || user.status !== "active") {
+    var user = sessionUser();
+    if (!user) {
       logout();
       return null;
     }
+    if (user.status !== "active") {
+      leaveDisabled();
+      return null;
+    }
     return publicUser(user);
+  }
+
+  /* Re-checks the server copy so a disable applies even if this browser still says "active". */
+  function assertActive() {
+    var user = sessionUser();
+    if (!user) return Promise.reject(new Error("Sign in required."));
+    if (user.status !== "active") {
+      leaveDisabled();
+      return Promise.reject(new Error(DISABLED_MSG));
+    }
+    if (!NS.api || user.apiId == null) return Promise.resolve(publicUser(user));
+    return NS.api.users.get(user.apiId).then(
+      function (row) {
+        var data = row && row.data && row.data.email ? row.data : row;
+        var status = data && data.status;
+        if (status && status !== "active") {
+          var list = users();
+          for (var i = 0; i < list.length; i++) {
+            if (list[i].id === user.id) list[i].status = "disabled";
+          }
+          saveUsers(list);
+          leaveDisabled();
+          throw new Error(DISABLED_MSG);
+        }
+        return publicUser(sessionUser() || user);
+      },
+      function () {
+        return publicUser(user);
+      }
+    );
   }
 
   function startSession(user) {
@@ -176,6 +242,7 @@
       birthdate: idBirthdate || "",
       idImage: idImage || "",
       avatar: "",
+      passwordSet: true,
       status: "active",
       createdAt: new Date().toISOString()
     };
@@ -228,6 +295,7 @@
         address: NS.security.sanitizeText(apiUser.address || "", 120),
         avatar: picture,
         authProvider: "google",
+        passwordSet: false,
         status: "active",
         createdAt: new Date().toISOString()
       };
@@ -350,10 +418,50 @@
         var salt = NS.security.randomHex(16);
         list[i].salt = salt;
         list[i].passwordHash = NS.security.hashPassword(nextPassword, salt);
+        list[i].passwordSet = true;
         saveUsers(list);
         NS.domain.audit("password", me.id, "Password changed.");
         return true;
       }
+    }
+    throw new Error("User not found.");
+  }
+
+  /*
+   * Signed-out reset. Sign-in checks the password stored in this browser, and there is no
+   * mail server, so the mobile number already on the account is the check.
+   */
+  function resetPassword(email, phone, nextPassword, csrf) {
+    email = NS.security.sanitizeEmail(email);
+    if (!NS.validation.email(email)) throw new Error("Enter a valid email address.");
+    if (!NS.validation.phMobile(phone)) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
+    NS.security.assertCsrf(csrf);
+    NS.security.assertNotLocked(email);
+    var user = findUser(email);
+    var phoneOnFile = user ? NS.validation.normalizePhone(user.phone || "") : "";
+    var phoneGiven = NS.validation.normalizePhone(phone);
+    var phoneOk = user && phoneOnFile && phoneOnFile === phoneGiven && NS.validation.phMobile(phoneOnFile);
+    if (user && user.status !== "active" && phoneOk) throw new Error(DISABLED_MSG);
+    if (user && user.status === "active" && !NS.validation.phMobile(phoneOnFile)) {
+      throw new Error("This account has no mobile number on file. Sign in with Google, or contact the desk.");
+    }
+    if (!user || user.status !== "active" || !phoneOk) {
+      NS.security.recordLoginFailure(email);
+      throw new Error("Those details don't match an active account.");
+    }
+    var issues = NS.security.passwordIssues(nextPassword, user.email);
+    if (issues.length) throw new Error("New password: " + issues.join(" "));
+    var list = users();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id !== user.id) continue;
+      var salt = NS.security.randomHex(16);
+      list[i].salt = salt;
+      list[i].passwordHash = NS.security.hashPassword(nextPassword, salt);
+      list[i].passwordSet = true;
+      saveUsers(list);
+      NS.security.clearLoginFailures(email);
+      NS.domain.audit("password", user.id, "Password reset from the sign-in page.");
+      return true;
     }
     throw new Error("User not found.");
   }
@@ -451,6 +559,9 @@
     publicUser: publicUser,
     userById: userById,
     current: current,
+    assertActive: assertActive,
+    takeNotice: takeNotice,
+    DISABLED_MSG: DISABLED_MSG,
     login: login,
     register: register,
     googleSignIn: googleSignIn,
@@ -459,6 +570,7 @@
     updateProfile: updateProfile,
     updateAvatar: updateAvatar,
     changePassword: changePassword,
+    resetPassword: resetPassword,
     setUserStatus: setUserStatus,
     listUsers: listUsers,
     countRole: countRole,

@@ -234,6 +234,7 @@
   function createBooking(payload, csrf) {
     var me = NS.auth.current();
     if (!me) throw new Error("Sign in to book a car.");
+    if (me.status !== "active") throw new Error(NS.auth.DISABLED_MSG || "Your account has been disabled. Please contact the admin.");
     var pickup = NS.security.sanitizeText(payload.pickup, 80);
     var dropoff = NS.security.sanitizeText(payload.dropoff, 80);
     if (LOCATIONS.indexOf(pickup) === -1 || LOCATIONS.indexOf(dropoff) === -1) {
@@ -306,6 +307,7 @@
       paymentMethod: "",
       payment: null,
       notes: notes,
+      pickupPin: payload.pickupPin && payload.pickupPin.lat != null ? payload.pickupPin : null,
       dateReserve: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

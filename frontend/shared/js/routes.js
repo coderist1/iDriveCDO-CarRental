@@ -13,6 +13,7 @@
     about: "info/about.html",
     contact: "info/contact.html",
     login: "auth/login.html",
+    forgot: "auth/forgot.html",
     register: "auth/register.html",
     account: "account/account.html",
     profile: "account/profile.html",

@@ -8,13 +8,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="../shared/css/styles.css?v=20261010g">
+  <link rel="stylesheet" href="../shared/css/styles.css?v=20261010q">
 </head>
 <body data-page="profile" data-auth="user" data-base="../">
   <div id="app-nav"></div>
-  <section class="layout">
-    <form id="profile-form" class="form-card">
-      <p class="eyebrow">License file</p>
+  <section class="layout layout-narrow layout-narrow-wide">
+    <div class="form-card">
+      <p class="eyebrow">Account</p>
       <h1>Profile</h1>
       <p>Email <strong id="profile-email"></strong> cannot be changed.</p>
 
@@ -25,41 +25,50 @@
             Upload photo
             <input id="avatar-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
           </label>
-          <button class="btn btn-ghost btn-sm" id="avatar-remove" type="button">Remove</button>
+          <span class="profile-action-pair">
+            <button class="btn btn-ghost btn-sm" id="avatar-remove" type="button">Remove</button>
+            <button class="btn btn-ghost btn-sm" id="password-toggle" type="button" aria-expanded="false" aria-controls="password-form">Change password</button>
+          </span>
           <p class="fineprint">JPG, PNG, or WebP · under 5 MB · cropped square preview</p>
         </div>
       </div>
 
-      <div class="row g-2">
-        <div class="col-md-6"><label class="field">First name <input class="form-control" name="firstName" required></label></div>
-        <div class="col-md-6"><label class="field">Last name <input class="form-control" name="lastName" required></label></div>
-      </div>
-      <label class="field">Mobile <input class="form-control" name="phone" required></label>
-      <label class="field">Address <input class="form-control" name="address" maxlength="120"></label>
-      <label class="field" id="department-field" hidden>Department <input class="form-control" name="department" maxlength="60"></label>
-      <label class="field" id="license-no-field">License no. <input class="form-control" name="licenseNo"></label>
-      <label class="field" id="license-exp-field">License expiry <input class="form-control" name="licenseExpiry" type="date"></label>
-      <button class="btn btn-gold" type="submit">Save profile</button>
-    </form>
-    <form id="password-form" class="form-card">
-      <h2>Change password</h2>
-      <label class="field">Current password <input class="form-control" name="currentPassword" type="password" required></label>
-      <label class="field">New password <input class="form-control" name="nextPassword" type="password" required></label>
-      <label class="field">Confirm new password <input class="form-control" name="confirmPassword" type="password" required></label>
-      <button class="btn btn-dark" type="submit">Update password</button>
-    </form>
+      <form id="profile-form">
+        <div class="row g-2">
+          <div class="col-md-6"><label class="field">First name <input class="form-control" name="firstName" required></label></div>
+          <div class="col-md-6"><label class="field">Last name <input class="form-control" name="lastName" required></label></div>
+        </div>
+        <label class="field">Mobile <input class="form-control" name="phone" required></label>
+        <label class="field">Address <input class="form-control" name="address" maxlength="120"></label>
+        <label class="field" id="department-field" hidden>Department <input class="form-control" name="department" maxlength="60"></label>
+        <button class="btn btn-gold" type="submit">Save profile</button>
+      </form>
+    </div>
   </section>
+  <div id="password-modal" class="password-modal" hidden>
+    <form id="password-form" class="password-dialog" role="dialog" aria-modal="true" aria-labelledby="password-title">
+      <div class="password-dialog-head">
+        <h2 id="password-title">Change password</h2>
+        <button class="btn btn-ghost btn-sm" type="button" id="password-close" aria-label="Close">Close</button>
+      </div>
+      <label class="field">Current password <input class="form-control" name="currentPassword" type="password" autocomplete="current-password" required></label>
+      <label class="field">Password <input class="form-control" name="nextPassword" type="password" autocomplete="new-password" required></label>
+      <label class="field">Confirm new password <input class="form-control" name="confirmPassword" type="password" autocomplete="new-password" required></label>
+      <p class="fineprint">8+ characters with an uppercase letter, a lowercase letter, a number, and a symbol.</p>
+      <button class="btn btn-gold" type="submit">Update password</button>
+    </form>
+  </div>
   <div id="app-footer"></div>
   <div id="toast-host"></div>
   <script src="../shared/js/security.js?v=20261005a"></script>
   <script src="../shared/js/store.js?v=20261008h"></script>
   <script src="../shared/js/api.js?v=20261009g"></script>
   <script src="../shared/js/validation.js?v=20261005a"></script>
-  <script src="../shared/js/routes.js?v=20261005a"></script>
-  <script src="../shared/js/domain.js?v=20261010h"></script>
-  <script src="../auth/auth.js?v=20261010a"></script>
-  <script src="../shared/js/ui.js?v=20261010b"></script>
-  <script src="./account.js?v=20261005a"></script>
-  <script src="../shared/js/app.js?v=20261008h"></script>
+  <script src="../shared/js/routes.js?v=20261010m"></script>
+  <script src="../shared/js/domain.js?v=20261010k"></script>
+  <script src="../auth/auth.js?v=20261010n"></script>
+  <script src="../shared/js/ui.js?v=20261010p"></script>
+  <script src="./account.js?v=20261010q"></script>
+  <script src="../shared/js/app.js?v=20261010k"></script>
 </body>
 </html>

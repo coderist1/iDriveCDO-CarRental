@@ -113,7 +113,10 @@
         method === "cashless"
           ? "Confirm this cashless payment?"
           : "Confirm cash payment at pickup/desk?";
-      NS.ui.askYesNo(ask, { title: "Save edit" }).then(function (ok) {
+      var gate = NS.auth.assertActive ? NS.auth.assertActive() : Promise.resolve();
+      gate.then(function () {
+        return NS.ui.askYesNo(ask, { title: "Save edit" });
+      }).then(function (ok) {
         if (!ok) return;
         try {
           NS.ui.bindCsrf(form);
@@ -140,6 +143,8 @@
           NS.ui.bindCsrf(form);
           NS.ui.toast(err.message, "err");
         }
+      }).catch(function (err) {
+        NS.ui.toast((err && err.message) || "Your account has been disabled. Please contact the admin.", "err");
       });
     });
 

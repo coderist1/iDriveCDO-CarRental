@@ -117,10 +117,14 @@
         '<label class="field">Reply to desk<textarea class="form-control" name="body" maxlength="500" required></textarea></label>' +
         '<button class="btn btn-gold" type="submit">Send</button></form>';
       var form = document.getElementById("customer-reply");
+      if (NS.ui.markRequired) NS.ui.markRequired(form);
       NS.ui.bindCsrf(form);
       form.addEventListener("submit", function (e) {
         e.preventDefault();
-        NS.ui.askYesNo("Send this message to the desk?", { title: "Save edit" }).then(function (ok) {
+        var gate = NS.auth.assertActive ? NS.auth.assertActive() : Promise.resolve();
+        gate.then(function () {
+          return NS.ui.askYesNo("Send this message to the desk?", { title: "Save edit" });
+        }).then(function (ok) {
           if (!ok) return;
           try {
             NS.domain.replyToThread(thread.id, form.body.value, form.csrf ? form.csrf.value : "");
@@ -130,6 +134,8 @@
           } catch (err) {
             NS.ui.toast(err.message, "err");
           }
+        }).catch(function (err) {
+          NS.ui.toast((err && err.message) || "Your account has been disabled. Please contact the admin.", "err");
         });
       });
     }
@@ -154,26 +160,18 @@
     var me = NS.auth.current();
     if (!form || !me) return;
     NS.ui.bindCsrf(form);
-    NS.ui.bindCsrf(pw);
+    if (pw) NS.ui.bindCsrf(pw);
     form.firstName.value = me.firstName;
     form.lastName.value = me.lastName;
     form.phone.value = me.phone;
     if (form.address) form.address.value = me.address || "";
     if (form.department) form.department.value = me.department || "";
-    form.licenseNo.value = me.licenseNo || "";
-    form.licenseExpiry.value = me.licenseExpiry || "";
     document.getElementById("profile-email").textContent = me.email;
     var deptField = document.getElementById("department-field");
-    var licNo = document.getElementById("license-no-field");
-    var licExp = document.getElementById("license-exp-field");
     if (me.role === "staff" || me.role === "admin") {
       if (deptField) deptField.hidden = false;
-      if (form.licenseNo) form.licenseNo.required = false;
-      if (form.licenseExpiry) form.licenseExpiry.required = false;
-    } else {
-      if (deptField) deptField.hidden = true;
-      if (form.licenseNo) form.licenseNo.required = true;
-      if (form.licenseExpiry) form.licenseExpiry.required = true;
+    } else if (deptField) {
+      deptField.hidden = true;
     }
     paintAvatar(document.getElementById("profile-avatar"), me, "lg");
 
@@ -193,8 +191,11 @@
             NS.ui.toast(err.message, "err");
             return;
           }
-          NS.ui.askYesNo("Save this profile photo?", { title: "Save edit" }).then(function (ok) {
-            if (!ok) return;
+          NS.ui.askYesNo("Use this as your profile photo?", { title: "Change photo", yes: "Yes", no: "No", image: dataUrl }).then(function (ok) {
+            if (!ok) {
+              NS.ui.toast("Photo not changed.", "ok");
+              return;
+            }
             try {
               NS.ui.bindCsrf(form);
               NS.auth.updateAvatar(me.id, dataUrl, form.csrf ? form.csrf.value : "");
@@ -212,7 +213,7 @@
 
     if (removeBtn) {
       removeBtn.addEventListener("click", function () {
-        NS.ui.askYesNo("Remove your profile photo?", { title: "Save edit" }).then(function (ok) {
+        NS.ui.askYesNo("Remove your profile photo?", { title: "Change photo", yes: "Yes", no: "No" }).then(function (ok) {
           if (!ok) return;
           try {
             NS.ui.bindCsrf(form);
@@ -230,7 +231,10 @@
 
     form.addEventListener("submit", function (e) {
       e.preventDefault();
-      NS.ui.askYesNo("Save profile?", { title: "Save edit", yes: "Yes", no: "No" }).then(function (ok) {
+      var gate = NS.auth.assertActive ? NS.auth.assertActive() : Promise.resolve();
+      gate.then(function () {
+        return NS.ui.askYesNo("Save profile?", { title: "Save edit", yes: "Yes", no: "No" });
+      }).then(function (ok) {
         if (!ok) return;
         try {
           NS.ui.bindCsrf(form);
@@ -242,8 +246,8 @@
               phone: form.phone.value,
               address: form.address ? form.address.value : "",
               department: form.department ? form.department.value : "",
-              licenseNo: form.licenseNo.value,
-              licenseExpiry: form.licenseExpiry.value
+              licenseNo: me.licenseNo || "",
+              licenseExpiry: me.licenseExpiry || ""
             },
             form.csrf ? form.csrf.value : ""
           );
@@ -254,24 +258,65 @@
           NS.ui.bindCsrf(form);
           NS.ui.toast(err.message, "err");
         }
+      }).catch(function (err) {
+        NS.ui.toast((err && err.message) || "Your account has been disabled. Please contact the admin.", "err");
       });
     });
-    pw.addEventListener("submit", function (e) {
-      e.preventDefault();
-      NS.ui.askYesNo("Update password?", { title: "Save edit", yes: "Yes", no: "No" }).then(function (ok) {
-        if (!ok) return;
-        try {
+    var passwordToggle = document.getElementById("password-toggle");
+    var passwordModal = document.getElementById("password-modal");
+    var passwordClose = document.getElementById("password-close");
+    function setPasswordOpen(open) {
+      if (!passwordModal) return;
+      passwordModal.hidden = !open;
+      if (passwordToggle) passwordToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) {
+        if (pw.currentPassword) pw.currentPassword.focus();
+      } else {
+        pw.reset();
+        NS.ui.bindCsrf(pw);
+        if (passwordToggle) passwordToggle.focus();
+      }
+    }
+    if (passwordToggle && pw && passwordModal) {
+      passwordToggle.addEventListener("click", function () {
+        setPasswordOpen(true);
+      });
+      if (passwordClose) passwordClose.addEventListener("click", function () {
+        setPasswordOpen(false);
+      });
+      passwordModal.addEventListener("click", function (e) {
+        if (e.target === passwordModal) setPasswordOpen(false);
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && !passwordModal.hidden && !document.getElementById("confirm-overlay")) setPasswordOpen(false);
+      });
+    }
+    if (pw) {
+      pw.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var gate = NS.auth.assertActive ? NS.auth.assertActive() : Promise.resolve();
+        gate.then(function () {
+          if (!pw.currentPassword.value) throw new Error("Current password is required.");
           if (pw.nextPassword.value !== pw.confirmPassword.value) throw new Error("New passwords do not match.");
-          NS.ui.bindCsrf(pw);
-          NS.auth.changePassword(pw.currentPassword.value, pw.nextPassword.value, pw.csrf ? pw.csrf.value : "");
-          pw.reset();
-          NS.ui.bindCsrf(pw);
-          NS.ui.toast("Password updated.", "ok");
-        } catch (err) {
-          NS.ui.bindCsrf(pw);
-          NS.ui.toast(err.message, "err");
-        }
+          var issues = NS.security.passwordIssues(pw.nextPassword.value, me.email);
+          if (issues.length) throw new Error("New password: " + issues.join(" "));
+          return NS.ui.askYesNo("Update password?", { title: "Save edit", yes: "Yes", no: "No" });
+        }).then(function (ok) {
+          if (!ok) return;
+          try {
+            NS.ui.bindCsrf(pw);
+            NS.auth.changePassword(pw.currentPassword.value, pw.nextPassword.value, pw.csrf ? pw.csrf.value : "");
+            setPasswordOpen(false);
+            me = NS.auth.current() || me;
+            NS.ui.toast("Password updated.", "ok");
+          } catch (err) {
+            NS.ui.bindCsrf(pw);
+            NS.ui.toast(err.message, "err");
+          }
+        }).catch(function (err) {
+          NS.ui.toast((err && err.message) || "Your account has been disabled. Please contact the admin.", "err");
+        });
       });
-    });
+    }
   };
 })(window);

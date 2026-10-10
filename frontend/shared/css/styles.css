@@ -491,8 +491,36 @@ h1, h2, h3, .brand span {
   border: 1px solid rgba(196, 80, 75, 0.12);
 }
 .profile-photo-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.profile-action-pair { display: inline-flex; flex-wrap: nowrap; gap: 0.5rem; align-items: center; }
 .profile-photo-actions .fineprint { width: 100%; margin: 0.15rem 0 0; }
 .profile-upload-label { cursor: pointer; margin: 0; }
+.password-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(17, 24, 39, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.password-modal[hidden] { display: none !important; }
+.password-dialog {
+  width: min(420px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1.25rem 1.3rem 1.2rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 24px 60px rgba(17, 24, 39, 0.28);
+}
+.password-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.9rem; }
+.password-dialog-head h2 { margin: 0; font-size: 1.25rem; }
+#profile-form > .btn,
+.password-dialog > .btn { width: 100%; margin-top: 0.15rem; }
 
 .account-hero {
   display: flex;
@@ -2737,6 +2765,16 @@ th { background: rgba(255, 255, 255, 0.35); color: var(--ink); font-weight: 800;
   line-height: 1.35;
   color: var(--ink);
 }
+.confirm-image {
+  display: block;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 1.1rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #fff;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.18);
+}
 .inbox-layout {
   display: grid;
   grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.4fr);
@@ -3578,3 +3616,25 @@ body.site-mode .site-footer {
 body .auth-actions .btn.google-fallback { width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: #fff; border: 1px solid #dadce0; color: #3c4043; font-weight: 600; opacity: 0.75; cursor: not-allowed; }
 .google-g { font-weight: 800; color: #4285f4; }
 @media (max-width: 360px) { .auth-actions { grid-template-columns: 1fr; } }
+
+.forgot-row { display: flex; justify-content: flex-end; margin: -0.35rem 0 0.85rem; }
+.forgot-row a { font-size: 0.88rem; font-weight: 700; }
+.req-star { color: #c4504b; font-weight: 800; margin-left: 0.15rem; }
+.section-summary { margin: 0 0 0.6rem; color: #5c5c5c; font-size: 0.88rem; }
+.section-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 0.75rem 1.25rem; margin: 1.2rem 0 0.4rem; }
+.section-tools h2 { margin: 0; }
+.field-inline { margin: 0; min-width: 160px; }
+.shortcut-group { margin-bottom: 0.8rem; }
+.shortcut-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.6rem; }
+.role-tabs { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.4rem 0 0.8rem; }
+.role-tab { min-height: 40px; padding: 0.4rem 0.85rem; border-radius: 999px; border: 1px solid #e4e4e4; background: #fff; font-weight: 700; }
+.role-tab.active { background: #c4504b; color: #fff; border-color: #c4504b; }
+.pickup-map-block { margin: 0.2rem 0 1rem; }
+.pickup-map-tools { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+.pickup-map-tools .form-control { flex: 1; }
+.pickup-map { height: 240px; border-radius: 14px; border: 1px solid #ededed; overflow: hidden; background: #f6f6f6; }
+@media (max-width: 720px) {
+  .pickup-map-tools { flex-direction: column; align-items: stretch; }
+  .shortcut-row, .desk-split, .section-tools { display: block; }
+  .role-tab, .btn { min-height: 44px; }
+}

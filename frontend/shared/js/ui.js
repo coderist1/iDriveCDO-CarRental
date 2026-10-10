@@ -54,6 +54,9 @@
         "<h3>" +
         NS.security.escapeHtml(message) +
         "</h3>" +
+        (options.image && /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(options.image)
+          ? '<img class="confirm-image" alt="New photo preview" src="' + options.image.replace(/"/g, "") + '">'
+          : "") +
         '<div class="confirm-actions">' +
         '<button type="button" class="btn btn-ghost" data-answer="no">' +
         NS.security.escapeHtml(noLabel) +
@@ -386,6 +389,29 @@
     if (me && me.role === "driver") mountDriverChrome(me);
     else if (me && NS.auth.hasRole("staff")) mountDeskChrome(me);
     else mountCustomerChrome(me);
+    markRequired(document);
+  }
+
+  function markRequired(root) {
+    (root || document).querySelectorAll("label").forEach(function (label) {
+      if (label.querySelector(".req-star")) return;
+      var control = label.querySelector("input, select, textarea");
+      if (!control || !control.required || control.type === "hidden" || control.type === "radio") return;
+      var star = document.createElement("span");
+      star.className = "req-star";
+      star.textContent = "*";
+      star.setAttribute("aria-hidden", "true");
+      var text = null;
+      for (var i = 0; i < label.childNodes.length; i++) {
+        if (label.childNodes[i].nodeType === 3 && String(label.childNodes[i].textContent || "").trim()) {
+          text = label.childNodes[i];
+          break;
+        }
+      }
+      if (text) label.insertBefore(star, text.nextSibling);
+      else if (label.querySelector("span")) label.querySelector("span").appendChild(star);
+      else label.insertBefore(star, label.firstChild);
+    });
   }
 
   function statusBadge(status) {
@@ -735,6 +761,7 @@
     toast: toast,
     askYesNo: askYesNo,
     mountChrome: mountChrome,
+    markRequired: markRequired,
     goBack: goBack,
     statusBadge: statusBadge,
     starsDisplay: starsDisplay,

@@ -125,7 +125,7 @@
       return '<div class="side-group"><p class="side-label">' + title + "</p>" + html + "</div>";
     }
     var desk =
-      link("index.html", "Overview", "adminHome", icon('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>')) +
+      link("index.html", "Open Desk", "adminHome", icon('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>')) +
       link("inbox.html", "Inbox", "adminInbox", icon('<path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/>'), unread) +
       link("bookings.html", "Bookings", "adminBookings", icon('<path d="M8 7V5h8v2"/><rect x="5" y="7" width="14" height="13" rx="2"/>'), returns) +
       link("payments.html", "Payments", "adminPayments", icon('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>'));
@@ -136,7 +136,7 @@
       link("drivers.html", "Drivers", "adminDrivers", icon('<circle cx="12" cy="8" r="3"/><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5"/>'));
     var people = group(
       "People",
-      link("customers.html", isAdmin ? "Users" : "Customers", "adminCustomers", icon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'))
+      link("customers.html", "Manage customers", "adminCustomers", icon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'))
     );
     var insights =
       link("reports.html", "Reports", "adminReports", icon('<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-6"/><path d="M12 16V8"/><path d="M16 16v-3"/>')) +
@@ -183,18 +183,34 @@
       "</span>paid revenue</div>";
     var shortcuts = document.getElementById("desk-shortcuts");
     if (shortcuts) {
+      function jump(href, title, note) {
+        return '<a class="desk-shortcut" href="' + href + '"><strong>' + title + "</strong><span>" + note + "</span></a>";
+      }
       shortcuts.innerHTML =
-        '<a class="desk-shortcut" href="inbox.html"><strong>Inbox</strong><span>Messages & returns</span></a>' +
-        '<a class="desk-shortcut" href="bookings.html"><strong>Bookings</strong><span>Confirm and complete trips</span></a>' +
-        '<a class="desk-shortcut" href="payments.html"><strong>Payments</strong><span>Cash and cashless records</span></a>' +
-        '<a class="desk-shortcut" href="vehicles.html"><strong>Fleet</strong><span>Cars, plates, and rates</span></a>' +
-        '<a class="desk-shortcut" href="predictive-maintenance.html"><strong>Predictive maintenance</strong><span>Run ML vehicle health checks</span></a>' +
-        '<a class="desk-shortcut" href="drivers.html"><strong>Drivers</strong><span>Chauffeur roster</span></a>' +
-        '<a class="desk-shortcut" href="reports.html"><strong>Reports</strong><span>Revenue and mix</span></a>';
+        '<div class="shortcut-group"><p class="side-label">Desk</p><div class="shortcut-row">' +
+        jump("index.html", "Open Desk", "This overview") +
+        jump("bookings.html", "Bookings", "Confirm and complete trips") +
+        jump("inbox.html", "Inbox", "Messages and returns") +
+        jump("payments.html", "Payments", "Cash and cashless records") +
+        "</div></div>" +
+        '<div class="shortcut-group"><p class="side-label">People</p><div class="shortcut-row">' +
+        jump("customers.html", "Manage customers", "Search, roles, and disable") +
+        jump("drivers.html", "Drivers", "Chauffeur roster") +
+        "</div></div>" +
+        '<div class="shortcut-group"><p class="side-label">Fleet</p><div class="shortcut-row">' +
+        jump("vehicles.html", "Fleet", "Cars, plates, and rates") +
+        jump("predictive-maintenance.html", "Predictive maintenance", "Vehicle health checks") +
+        jump("reports.html", "Reports", "Revenue and mix") +
+        "</div></div>";
     }
     var recentHost = document.getElementById("admin-recent");
-    recentHost.innerHTML = incoming.length
-      ? incoming
+    var recentSorted = incoming.slice().sort(function (a, b) {
+      return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+    });
+    recentHost.innerHTML =
+      '<p class="section-summary">' + recentSorted.length + " incoming · newest first</p>" +
+      (recentSorted.length
+      ? recentSorted
           .slice(0, 8)
           .map(function (b) {
             var v = NS.domain.getVehicle(b.vehicleId);
@@ -215,12 +231,16 @@
             );
           })
           .join("")
-      : "<p class='notice'>No incoming bookings yet. New customer bookings appear here.</p>";
+      : "<p class='notice'>No incoming bookings yet. New customer bookings appear here.</p>");
     var returnsHost = document.getElementById("admin-returns");
     if (returnsHost) {
       // Overview is a read-only glance; the Inbox owns the interactive return workflow.
-      returnsHost.innerHTML = returns.length
+      returnsHost.innerHTML =
+        '<p class="section-summary">' + returns.length + " waiting for the desk</p>" +
+        (returns.length
         ? returns
+            .slice()
+            .sort(function (a, b) { return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")); })
             .slice(0, 8)
             .map(function (b) {
               var v = NS.domain.getVehicle(b.vehicleId);
@@ -240,7 +260,7 @@
               );
             })
             .join("")
-        : "<p class='notice'>No vehicle returns waiting.</p>";
+        : "<p class='notice'>No vehicle returns waiting.</p>");
     }
   }
 
@@ -607,41 +627,108 @@
   function adminCustomers() {
     mountAdminNav();
     var isAdmin = NS.auth.hasRole("admin");
-    var host = document.getElementById("customer-table");
-    function render() {
-      host.innerHTML = NS.auth
-        .listUsers()
-        .filter(function (u) {
-          return isAdmin ? u.role !== "admin" : u.role === "customer";
-        })
-        .map(function (u) {
-          return (
-            "<tr><td class=\"customer-cell\">" +
-            NS.ui.avatarHtml(u, "sm") +
-            "<span>" +
-            NS.security.escapeHtml(u.firstName + " " + u.lastName) +
-            "</span></td><td>" +
-            NS.security.escapeHtml(u.email) +
-            "</td><td>" +
-            NS.security.escapeHtml(u.phone) +
-            "</td><td>" +
-            NS.security.escapeHtml(u.role) +
-            "</td><td>" +
-            NS.ui.statusBadge(u.status) +
-            '</td><td><button class="btn btn-ghost btn-sm" data-id="' +
-            u.id +
-            '" data-status="' +
-            (u.status === "active" ? "disabled" : "active") +
-            '">' +
-            (u.status === "active" ? "Disable" : "Enable") +
-            "</button></td></tr>"
-          );
-        })
-        .join("");
+    var host = document.getElementById("user-panels");
+    var tabs = document.getElementById("user-tabs");
+    var search = document.getElementById("user-search");
+    if (!host) return;
+    var roles = isAdmin
+      ? [
+          { id: "admin", label: "Admin" },
+          { id: "staff", label: "Staff" },
+          { id: "customer", label: "Customer" },
+          { id: "driver", label: "Driver" }
+        ]
+      : [{ id: "customer", label: "Customer" }];
+    var activeRole = roles[0].id;
+
+    function matches(u, query) {
+      if (!query) return true;
+      return (u.firstName + " " + u.lastName).toLowerCase().indexOf(query) !== -1;
     }
+
+    function render() {
+      var query = search ? search.value.trim().toLowerCase() : "";
+      var people = NS.auth.listUsers();
+      if (tabs) {
+        tabs.innerHTML = roles
+          .map(function (role) {
+            var count = people.filter(function (u) {
+              return u.role === role.id && matches(u, query);
+            }).length;
+            return (
+              '<button type="button" class="role-tab' +
+              (role.id === activeRole ? " active" : "") +
+              '" data-role="' +
+              role.id +
+              '">' +
+              role.label +
+              " (" +
+              count +
+              ")</button>"
+            );
+          })
+          .join("");
+      }
+      var rows = people.filter(function (u) {
+        return u.role === activeRole && matches(u, query);
+      });
+      host.innerHTML =
+        '<p class="section-summary">' +
+        rows.length +
+        " " +
+        activeRole +
+        (query ? " matching “" + NS.security.escapeHtml(search.value.trim()) + "”" : "") +
+        ". Search checks every role tab.</p>" +
+        '<table class="table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>' +
+        (rows.length
+          ? rows
+              .map(function (u) {
+                var action =
+                  u.role === "admin"
+                    ? ""
+                    : '<button class="btn btn-ghost btn-sm" data-id="' +
+                      u.id +
+                      '" data-status="' +
+                      (u.status === "active" ? "disabled" : "active") +
+                      '">' +
+                      (u.status === "active" ? "Disable" : "Enable") +
+                      "</button>";
+                return (
+                  '<tr><td class="customer-cell">' +
+                  NS.ui.avatarHtml(u, "sm") +
+                  "<span>" +
+                  NS.security.escapeHtml(u.firstName + " " + u.lastName) +
+                  "</span></td><td>" +
+                  NS.security.escapeHtml(u.email) +
+                  "</td><td>" +
+                  NS.security.escapeHtml(u.phone) +
+                  "</td><td>" +
+                  NS.security.escapeHtml(u.role) +
+                  "</td><td>" +
+                  NS.ui.statusBadge(u.status) +
+                  "</td><td>" +
+                  action +
+                  "</td></tr>"
+                );
+              })
+              .join("")
+          : '<tr><td colspan="6">No users in this role.</td></tr>') +
+        "</tbody></table>";
+    }
+    if (tabs) {
+      tabs.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-role]");
+        if (!btn) return;
+        activeRole = btn.getAttribute("data-role");
+        render();
+      });
+    }
+    if (search) search.addEventListener("input", render);
     host.addEventListener("click", function (e) {
-      var id = e.target.getAttribute("data-id");
-      var status = e.target.getAttribute("data-status");
+      var btn = e.target.closest("[data-id]");
+      if (!btn) return;
+      var id = btn.getAttribute("data-id");
+      var status = btn.getAttribute("data-status");
       if (!id) return;
       var msg = status === "disabled" ? "Disable this customer account?" : "Enable this customer account?";
       NS.ui.askYesNo(msg, { title: "Save edit" }).then(function (ok) {
@@ -1268,8 +1355,27 @@
     var viewHost = document.getElementById("thread-view");
     var selectedId = NS.ui.qs("id") || "";
 
+    function bookingBucket(status) {
+      if (status === "pending") return "pending";
+      if (status === "completed" || status === "cancelled" || status === "rejected") return "completed";
+      return "active";
+    }
+
     function renderIncoming() {
-      var incoming = NS.domain.incomingBookings();
+      var filterEl = document.getElementById("incoming-filter");
+      var summary = document.getElementById("incoming-summary");
+      var filter = filterEl ? filterEl.value : "all";
+      var incoming = NS.domain.incomingBookings().slice().sort(function (a, b) {
+        return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+      });
+      var counts = { pending: 0, active: 0, completed: 0 };
+      incoming.forEach(function (b) { counts[bookingBucket(b.status)] += 1; });
+      if (summary) {
+        summary.textContent = incoming.length + " total · " + counts.pending + " pending · " + counts.active + " active · " + counts.completed + " done · newest first";
+      }
+      if (filter !== "all") {
+        incoming = incoming.filter(function (b) { return bookingBucket(b.status) === filter; });
+      }
       incomingHost.innerHTML = incoming.length
         ? incoming
             .map(function (b) {
@@ -1298,7 +1404,11 @@
 
     function renderReturns() {
       if (!returnsHost) return;
-      var returns = NS.domain.pendingReturns();
+      var summary = document.getElementById("returns-summary");
+      var returns = NS.domain.pendingReturns().slice().sort(function (a, b) {
+        return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
+      });
+      if (summary) summary.textContent = returns.length + " waiting · newest first";
       returnsHost.innerHTML = returns.length
         ? returns
             .map(function (b) {
@@ -1326,7 +1436,16 @@
     }
 
     function renderList() {
-      var list = NS.domain.staffThreads();
+      var filterEl = document.getElementById("thread-filter");
+      var summary = document.getElementById("thread-summary");
+      var list = NS.domain.staffThreads().slice().sort(function (a, b) {
+        var am = (a.messages && a.messages[a.messages.length - 1] && a.messages[a.messages.length - 1].at) || a.updatedAt || "";
+        var bm = (b.messages && b.messages[b.messages.length - 1] && b.messages[b.messages.length - 1].at) || b.updatedAt || "";
+        return String(bm).localeCompare(String(am));
+      });
+      var unread = list.filter(function (t) { return t.unreadStaff; }).length;
+      if (summary) summary.textContent = list.length + " conversations · " + unread + " unread · newest first";
+      if (filterEl && filterEl.value === "unread") list = list.filter(function (t) { return t.unreadStaff; });
       listHost.innerHTML = list.length
         ? list
             .map(function (t) {
@@ -1508,6 +1627,11 @@
       renderList();
       renderThread();
     });
+
+    var incomingFilter = document.getElementById("incoming-filter");
+    var threadFilter = document.getElementById("thread-filter");
+    if (incomingFilter) incomingFilter.addEventListener("change", renderIncoming);
+    if (threadFilter) threadFilter.addEventListener("change", renderList);
 
     renderIncoming();
     renderReturns();

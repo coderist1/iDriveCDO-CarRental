@@ -259,6 +259,7 @@
     [selfForm, chauffeurForm].forEach(function (form) {
       applyDefaults(form);
       snapshot(form);
+      if (NS.pickupMap) NS.pickupMap.mount(form);
       bindUploads(form);
       bindSubmit(form);
       form.addEventListener("input", function (e) {
@@ -656,7 +657,11 @@
         e.preventDefault();
         if (busy) return;
         var mode = form.id === "chauffeur-form" ? "chauffeur" : "self";
-        NS.ui.askYesNo("Save this booking and continue to payment?", { title: "Save booking", yes: "Continue", no: "Not yet" }).then(function (ok) {
+        var gate = NS.auth.assertActive ? NS.auth.assertActive() : Promise.resolve();
+        gate.then(function () {
+          return NS.ui.askYesNo("Save this booking and continue to payment?", { title: "Save booking", yes: "Continue", no: "Not yet" });
+        }).then(function (ok) {
+          if (ok === undefined) return;
           if (!ok) return;
           busy = true;
           showAlert(form, "", "ok");
@@ -723,6 +728,7 @@
               fuelBeforeRent: "Full",
               pickup: form.pickup.value,
               dropoff: form.dropoff.value,
+              pickupPin: NS.pickupMap ? NS.pickupMap.read(form) : null,
               driveMode: mode,
               driverInfo: driverInfo,
               addons: mode === "chauffeur" ? ["driver"] : [],
@@ -737,6 +743,8 @@
             showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
             location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));
           }, fail);
+        }).catch(function (err) {
+          showAlert(form, (err && err.message) || "Your account has been disabled. Please contact the admin.", "err");
         });
       });
     }
@@ -761,6 +769,8 @@
     typeStep.hidden = true;
     selfForm.hidden = mode !== "self";
     chauffeurForm.hidden = mode !== "chauffeur";
+    var shown = mode === "chauffeur" ? chauffeurForm : selfForm;
+    if (shown._pickupMap) setTimeout(function () { shown._pickupMap.invalidateSize(); }, 80);
   }
 
   function bindRentalChoice() {
@@ -1014,6 +1024,11 @@
       "<div><dt>Pickup</dt><dd>" +
       NS.security.escapeHtml(booking.pickup) +
       (booking.pickupTime ? " · " + NS.security.escapeHtml(booking.pickupTime) : "") +
+      (booking.pickupPin && booking.pickupPin.lat != null
+        ? "<div id=\"booking-pin-map\" class=\"pickup-map\"></div><p class=\"fineprint\">" +
+          NS.security.escapeHtml(booking.pickupPin.label || "Saved pin") +
+          "</p>"
+        : "") +
       "</dd></div>" +
       "<div><dt>Return</dt><dd>" +
       NS.security.escapeHtml(booking.dropoff) +
@@ -1180,6 +1195,7 @@
       });
     }
 
+    if (booking.pickupPin && NS.pickupMap) NS.pickupMap.show("booking-pin-map", booking.pickupPin);
     var cancelBtn = document.getElementById("cancel-booking");
     if (cancelBtn) {
       cancelBtn.addEventListener("click", function () {

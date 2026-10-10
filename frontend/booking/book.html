@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Book - iDrive CDO</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="../shared/css/styles.css?v=20261010g">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="../shared/css/styles.css?v=20261010q">
 </head>
 <body data-page="book" data-auth="user" data-base="../">
   <div id="app-nav"></div>
@@ -57,6 +58,18 @@
           <label class="field">Return location
             <select class="form-select" name="dropoff"></select>
           </label>
+          <div class="pickup-map-block field-span-2">
+            <p class="fineprint">Exact pickup pin. The list above stays the general area.</p>
+            <div class="pickup-map-tools">
+              <input class="form-control" type="search" data-map-search placeholder="Search a place" autocomplete="off">
+              <button class="btn btn-ghost btn-sm" type="button" data-map-locate>Use my location</button>
+            </div>
+            <div class="pickup-map" data-map></div>
+            <p class="fineprint" data-map-status></p>
+            <input type="hidden" name="pickupLat" value="">
+            <input type="hidden" name="pickupLng" value="">
+            <input type="hidden" name="pickupLabel" value="">
+          </div>
         </div>
 
         <p class="eyebrow" style="margin-top:1rem">Your details</p>
@@ -191,6 +204,18 @@
           <label class="field">Drop-off location
             <select class="form-select" name="dropoff"></select>
           </label>
+          <div class="pickup-map-block field-span-2">
+            <p class="fineprint">Exact pickup pin. The list above stays the general area.</p>
+            <div class="pickup-map-tools">
+              <input class="form-control" type="search" data-map-search placeholder="Search a place" autocomplete="off">
+              <button class="btn btn-ghost btn-sm" type="button" data-map-locate>Use my location</button>
+            </div>
+            <div class="pickup-map" data-map></div>
+            <p class="fineprint" data-map-status></p>
+            <input type="hidden" name="pickupLat" value="">
+            <input type="hidden" name="pickupLng" value="">
+            <input type="hidden" name="pickupLabel" value="">
+          </div>
           <label class="field">Passengers
             <input class="form-control" name="numberOfPassengers" type="number" min="1" max="15" value="1" required>
           </label>
@@ -299,12 +324,14 @@
   <script src="../shared/js/store.js?v=20261008h"></script>
   <script src="../shared/js/api.js?v=20261009g"></script>
   <script src="../shared/js/validation.js?v=20261010a"></script>
-  <script src="../shared/js/routes.js?v=20261005a"></script>
-  <script src="../shared/js/domain.js?v=20261010i"></script>
-  <script src="../auth/auth.js?v=20261010i"></script>
-  <script src="../shared/js/ui.js?v=20261010i"></script>
+  <script src="../shared/js/routes.js?v=20261010m"></script>
+  <script src="../shared/js/domain.js?v=20261010k"></script>
+  <script src="../auth/auth.js?v=20261010m"></script>
+  <script src="../shared/js/ui.js?v=20261010p"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="../shared/js/ocr.js?v=20261010i"></script>
-  <script src="./booking.js?v=20261010i"></script>
-  <script src="../shared/js/app.js?v=20261008h"></script>
+  <script src="../shared/js/pickup-map.js?v=20261010k"></script>
+  <script src="./booking.js?v=20261010k"></script>
+  <script src="../shared/js/app.js?v=20261010k"></script>
 </body>
 </html>
