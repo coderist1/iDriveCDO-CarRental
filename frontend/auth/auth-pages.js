@@ -107,8 +107,9 @@
           return;
         }
         setStatus("Reading your ID… this can take a few seconds.");
+        /* Read the original file: the stored copy is shrunk and recompressed, which blurs small digits. */
         NS.ocr
-          .scan(dataUrl, function (p) {
+          .scan(file, function (p) {
             setStatus("Reading your ID… " + Math.round(p * 100) + "%");
           })
           .then(function (data) {
@@ -118,11 +119,17 @@
             setHidden("reg-id-birthdate", data.birthdate);
             // Pre-fill name only if the user has not typed it yet.
             if (data.fullName) {
-              var parts = data.fullName.split(/\s+/);
               var first = field(form, "firstName");
               var lastEl = field(form, "lastName");
-              if (first && !first.value) first.value = parts[0] || "";
-              if (lastEl && !lastEl.value && parts.length > 1) lastEl.value = parts.slice(1).join(" ");
+              var given = data.nameParts ? data.nameParts.given : "";
+              var surname = data.nameParts ? data.nameParts.last : "";
+              if (!given || !surname) {
+                var parts = data.fullName.split(/\s+/);
+                given = parts[0] || "";
+                surname = parts.length > 1 ? parts.slice(1).join(" ") : "";
+              }
+              if (first && !first.value) first.value = given;
+              if (lastEl && !lastEl.value && surname) lastEl.value = surname;
             }
             var found = [];
             if (data.fullName) found.push("name");

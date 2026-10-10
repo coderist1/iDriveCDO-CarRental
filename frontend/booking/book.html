@@ -19,18 +19,18 @@
         <div class="rental-type-grid">
           <button class="rental-type-card" type="button" data-rental="self">
             <strong>Self-Drive</strong>
-            <span>You drive. The application asks for your driverâ€™s license and a live photo.</span>
+            <span>You drive. The application asks for your driver’s license and a live photo.</span>
           </button>
           <button class="rental-type-card" type="button" data-rental="chauffeur">
             <strong>With Chauffeur</strong>
-            <span>A professional driver takes the trip. You choose which ID to show, then add your itinerary. No driverâ€™s license.</span>
+            <span>A professional driver takes the trip. You choose which ID to show, then add your itinerary. No driver’s license.</span>
           </button>
         </div>
       </div>
 
       <form id="self-form" class="form-card" hidden novalidate>
         <button class="btn btn-ghost btn-sm form-step-back" type="button" data-change-type>Back to rental type</button>
-        <p class="eyebrow">Step 2 of 2 Â· Self-drive</p>
+        <p class="eyebrow">Step 2 of 2 · Self-drive</p>
         <h1 tabindex="-1">Self-drive application</h1>
         <div class="notice form-alert" hidden></div>
 
@@ -83,7 +83,7 @@
         </div>
 
         <div class="id-upload-field" data-upload="license-front" data-kind="document">
-          <p class="eyebrow">Driverâ€™s license, front</p>
+          <p class="eyebrow">Driver’s license, front</p>
           <p class="fineprint">Upload a clear photo. We read the name, license number, dates, class, and address, then you can correct them.</p>
           <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
           <input type="hidden" name="licensePhoto" value="">
@@ -97,7 +97,7 @@
           </div>
         </div>
         <div class="id-upload-field" data-upload="license-back" data-kind="document">
-          <p class="eyebrow">Driverâ€™s license, back</p>
+          <p class="eyebrow">Driver’s license, back</p>
           <p class="fineprint">The back often shows the license class and restriction codes.</p>
           <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
           <input type="hidden" name="licenseBack" value="">
@@ -163,10 +163,10 @@
 
       <form id="chauffeur-form" class="form-card" hidden novalidate>
         <button class="btn btn-ghost btn-sm form-step-back" type="button" data-change-type>Back to rental type</button>
-        <p class="eyebrow">Step 2 of 2 Â· With chauffeur</p>
+        <p class="eyebrow">Step 2 of 2 · With chauffeur</p>
         <h1 tabindex="-1">Chauffeur application</h1>
         <div class="notice form-alert" hidden></div>
-        <p class="fineprint">Chauffeur bookings include the professional driver fee. This form does not ask for a driverâ€™s license.</p>
+        <p class="fineprint">Chauffeur bookings include the professional driver fee. This form does not ask for a driver’s license.</p>
 
         <p class="eyebrow">Trip</p>
         <div class="form-grid">
@@ -279,7 +279,7 @@
         </label>
         <label class="check-min terms-check">
           <input type="checkbox" name="agreeTerms">
-          <span>I agree to the rental terms: overtime is charged when the trip runs past the booked return time; I cover the driverâ€™s meals and lodging when the trip needs them; the trip stays on the agreed route unless the desk approves a change.</span>
+          <span>I agree to the rental terms: overtime is charged when the trip runs past the booked return time; I cover the driver’s meals and lodging when the trip needs them; the trip stays on the agreed route unless the desk approves a change.</span>
         </label>
         <button class="btn btn-gold" type="submit">Continue to payment</button>
       </form>
@@ -303,8 +303,8 @@
   <script src="../shared/js/domain.js?v=20261010d"></script>
   <script src="../auth/auth.js?v=20261009g"></script>
   <script src="../shared/js/ui.js?v=20261010a"></script>
-  <script src="../shared/js/ocr.js?v=20261010a"></script>
-  <script src="./booking.js?v=20261010d"></script>
+  <script src="../shared/js/ocr.js?v=20261010full"></script>
+  <script src="./booking.js?v=20261010full"></script>
   <script src="../shared/js/app.js?v=20261008h"></script>
 </body>
 </html>

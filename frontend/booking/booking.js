@@ -425,11 +425,19 @@
         if (!inputName || !value) return;
         var input = form.elements[inputName];
         if (!input) return;
+        if (!input.tagName && input.length) {
+          /* Radio group (ID type): only choose for the renter if they haven't picked one. */
+          if (!input.value && Array.prototype.some.call(input, function (r) { return r.value === value; })) {
+            input.value = value;
+            filled.push(FIELD_LABEL[inputName] || inputName);
+            syncChauffeurIdChoice(form);
+          }
+          return;
+        }
         if (input.tagName === "SELECT" && !Array.prototype.some.call(input.options, function (opt) { return opt.value === value; })) return;
         var score = data.confidence ? Number(data.confidence[ocrKey]) || 0 : 0;
-        var selectUntouched = input.tagName === "SELECT" && input.dataset.userEdited !== "1";
-        var empty = !String(input.value || "").trim();
-        if (selectUntouched || empty) {
+        /* Prefilled profile values give way to the license; anything the renter typed stays. */
+        if (input.dataset.userEdited !== "1" || !String(input.value || "").trim()) {
           input.value = value;
           filled.push(FIELD_LABEL[inputName] || inputName);
           paintConfidence(input, score);
@@ -437,7 +445,29 @@
           paintConfidence(input, score);
         }
       });
+      (data && data.unclear ? data.unclear : []).forEach(function (ocrKey) {
+        var input = map[ocrKey] && form.elements[map[ocrKey]];
+        if (!input || !input.tagName || input.dataset.userEdited === "1") return;
+        markUnclear(input);
+      });
       return filled;
+    }
+
+    function markUnclear(input) {
+      var label = input.closest && input.closest(".field");
+      var chip = label && label.querySelector(".ocr-confidence");
+      input.classList.add("is-low-confidence");
+      if (!chip) return;
+      chip.hidden = false;
+      chip.className = "ocr-confidence is-low";
+      chip.textContent = "Couldn't read this clearly on the photo. Please type it.";
+    }
+
+    function unclearLabels(slot, data) {
+      var map = OCR_FILL[slot] || {};
+      return (data && data.unclear ? data.unclear : [])
+        .map(function (key) { return map[key] && (FIELD_LABEL[map[key]] || map[key]); })
+        .filter(Boolean);
     }
 
     function bindUploads(form) {
@@ -506,16 +536,27 @@
               }
               setStatus("Reading the ID… this can take a few seconds.");
               pick.disabled = true;
-              NS.ocr.scan(dataUrl, function (progress) {
-                setStatus("Reading the ID… " + Math.round((Number(progress) || 0) * 100) + "%");
-              }).then(function (data) {
+              var picked = slot === "chauffeur-id" && form.idType ? form.idType.value : slot.indexOf("license") === 0 ? "Driver's License" : "";
+              /* Read the original file: the stored copy is shrunk and recompressed, which blurs small digits. */
+              NS.ocr.scan(file, function (progress, attempt) {
+                setStatus((attempt ? "Photo looks turned, trying another angle… " : "Reading the ID… ") + Math.round((Number(progress) || 0) * 100) + "%");
+              }, { idType: picked }).then(function (data) {
                 pick.disabled = false;
                 var filled = applyExtracted(form, slot, data);
+                var unclear = unclearLabels(slot, data);
+                var chosen = slot === "chauffeur-id" && form.idType ? form.idType.value : "";
+                var typeNote = chosen && data.idType && data.idType !== chosen
+                  ? " This looks like a " + data.idType + ", but you chose " + chosen + ". Please pick the right ID type."
+                  : "";
                 renderFlags(form);
                 refresh();
-                setStatus(filled.length
-                  ? "Filled " + filled.join(", ") + ". Review low-confidence fields and correct anything that looks wrong."
-                  : "Photo attached, but the details could not be read. Type them in below.");
+                setStatus(
+                  (filled.length
+                    ? "Filled " + filled.join(", ") + " from the photo. Check each one against your " + (slot === "chauffeur-id" ? "ID" : "license") + "."
+                    : "Photo attached, but the details could not be read. Type them in below.") +
+                  (unclear.length ? " Couldn't read clearly: " + unclear.join(", ") + " (highlighted). Please type these." : "") +
+                  typeNote
+                );
               }).catch(function (error) {
                 pick.disabled = false;
                 setStatus((error && error.message) || "Could not read this photo. Type the details in below.");
