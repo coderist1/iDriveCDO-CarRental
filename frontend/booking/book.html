@@ -5,168 +5,291 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Book - iDrive CDO</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="../shared/css/styles.css?v=20261009k">
+  <link rel="stylesheet" href="../shared/css/styles.css?v=20261010f">
 </head>
 <body data-page="book" data-auth="user" data-base="../">
   <div id="app-nav"></div>
   <section class="layout">
-    <form id="book-form" class="form-card" novalidate>
-      <p class="eyebrow">Reservation</p>
-      <h1>Make a booking</h1>
-      <div id="form-alert" class="notice" hidden></div>
-
-      <div class="form-grid">
-        <label class="field field-span-2">
-          Vehicle
-          <select class="form-select" name="vehicleId"></select>
-        </label>
-        <label class="field">
-          Pickup date
-          <input class="form-control" name="startDate" type="date" required>
-        </label>
-        <label class="field">
-          Return date
-          <input class="form-control" name="endDate" type="date" required>
-        </label>
-        <label class="field">
-          Pickup location
-          <select class="form-select" name="pickup"></select>
-        </label>
-        <label class="field">
-          Return location
-          <select class="form-select" name="dropoff"></select>
-        </label>
-        <label class="field">
-          Pickup time
-          <input class="form-control" name="pickupTime" type="time" value="09:00" required>
-        </label>
-        <label class="field">
-          Return time
-          <input class="form-control" name="returnTime" type="time" value="09:00" required>
-        </label>
-        <label class="field">
-          Number of passengers
-          <input class="form-control" name="numberOfPassengers" type="number" min="1" max="15" value="1" required>
-        </label>
-        <label class="field">
-          Fuel before rent
-          <select class="form-select" name="fuelBeforeRent">
-            <option>Full</option>
-            <option>3/4</option>
-            <option>1/2</option>
-            <option>1/4</option>
-          </select>
-        </label>
-      </div>
-
-      <p class="eyebrow" style="margin-top:1rem">How will you drive?</p>
-      <div class="drive-mode" role="radiogroup" aria-label="Drive mode">
-        <label class="drive-option">
-          <input type="radio" name="driveMode" value="self" checked>
-          <span>
-            <strong>Self-drive</strong>
-            <small>You drive. Driver’s license details and photo required.</small>
-          </span>
-        </label>
-        <label class="drive-option">
-          <input type="radio" name="driveMode" value="chauffeur">
-          <span>
-            <strong>Chauffeur</strong>
-            <small>Our driver handles the trip. Valid ID only.</small>
-          </span>
-        </label>
-      </div>
-
-      <label class="field" id="driver-select-wrap" hidden>
-        Professional driver
-        <select class="form-select" name="driverDetailsId"></select>
-      </label>
-
-      <div id="self-drive-fields" class="driver-fields">
-        <p class="eyebrow">Driver’s license</p>
-        <div class="id-upload-field" id="selfdrive-id-upload">
-          <p class="fineprint">Have your license handy? <strong>Upload it</strong> and we'll try to fill the name, address, number, and expiry below. Review and edit before you book.</p>
-          <input id="selfdrive-id-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-          <button class="btn btn-ghost btn-sm" type="button" id="selfdrive-id-pick">Upload license to auto-fill</button>
-          <p class="fineprint" id="selfdrive-id-status"></p>
+    <div id="booking-flow">
+      <div id="rental-type" class="form-card">
+        <p class="eyebrow">Step 1 of 2</p>
+        <h1>How will you rent?</h1>
+        <p class="fineprint">Choose one option. The next step is a different application for each choice.</p>
+        <div class="notice form-alert" hidden></div>
+        <div class="rental-type-grid">
+          <button class="rental-type-card" type="button" data-rental="self">
+            <strong>Self-Drive</strong>
+            <span>You drive. The application asks for your driverâ€™s license and a live photo.</span>
+          </button>
+          <button class="rental-type-card" type="button" data-rental="chauffeur">
+            <strong>With Chauffeur</strong>
+            <span>A professional driver takes the trip. You choose which ID to show, then add your itinerary. No driverâ€™s license.</span>
+          </button>
         </div>
+      </div>
+
+      <form id="self-form" class="form-card" hidden novalidate>
+        <button class="btn btn-ghost btn-sm form-step-back" type="button" data-change-type>Back to rental type</button>
+        <p class="eyebrow">Step 2 of 2 Â· Self-drive</p>
+        <h1 tabindex="-1">Self-drive application</h1>
+        <div class="notice form-alert" hidden></div>
+
+        <p class="eyebrow">Trip</p>
         <div class="form-grid">
-          <label class="field field-span-2">
-            Full name on license
-            <input class="form-control" name="licenseName" maxlength="60" autocomplete="name">
+          <label class="field field-span-2">Vehicle
+            <select class="form-select" name="vehicleId"></select>
           </label>
-          <label class="field">
-            License number
-            <input class="form-control" name="licenseNo" maxlength="20" placeholder="N04-12-345678">
+          <label class="field">Pickup date
+            <input class="form-control" name="startDate" type="date" required>
           </label>
-          <label class="field">
-            License expiry
-            <input class="form-control" name="licenseExpiry" type="date">
+          <label class="field">Return date
+            <input class="form-control" name="endDate" type="date" required>
           </label>
-          <label class="field field-span-2">
-            Address on license
-            <input class="form-control" name="licenseAddress" maxlength="120" autocomplete="street-address">
+          <label class="field">Pickup time
+            <input class="form-control" name="pickupTime" type="time" value="09:00" required>
           </label>
-          <label class="field field-span-2">
-            Emergency contact mobile
-            <input class="form-control" name="emergencyPhone" maxlength="15" placeholder="09171234567" inputmode="tel">
+          <label class="field">Return time
+            <input class="form-control" name="returnTime" type="time" value="09:00" required>
           </label>
-          <div class="field field-span-2 license-photo-field">
-            <span class="field-label">Driver’s license photo <em>(required)</em></span>
-            <input type="hidden" name="licensePhoto" id="license-photo-data" value="">
-            <div class="license-photo-row">
-              <div id="license-photo-preview" class="license-photo-preview is-empty" aria-hidden="true">No photo yet</div>
-              <div class="license-photo-actions">
-                <input id="license-photo-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-                <button class="btn btn-ghost" type="button" id="license-photo-pick">Upload license photo</button>
-                <button class="btn btn-ghost btn-sm" type="button" id="license-photo-clear" hidden>Remove</button>
-                <p class="fineprint">Clear photo of the front of your license. JPG, PNG, or WebP.</p>
-              </div>
+          <label class="field">Pickup location
+            <select class="form-select" name="pickup"></select>
+          </label>
+          <label class="field">Return location
+            <select class="form-select" name="dropoff"></select>
+          </label>
+        </div>
+
+        <p class="eyebrow" style="margin-top:1rem">Your details</p>
+        <p class="fineprint">Self-drive renters must be at least 21. Fields marked low confidence came from the ID scan and need a careful look.</p>
+        <div class="form-grid">
+          <label class="field field-span-2">Full name
+            <input class="form-control" name="fullName" maxlength="80" autocomplete="name">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+          <label class="field">Contact number
+            <input class="form-control" name="phone" maxlength="15" inputmode="tel" autocomplete="tel" placeholder="09XXXXXXXXX">
+          </label>
+          <label class="field">Email
+            <input class="form-control" name="email" maxlength="120" autocomplete="email">
+          </label>
+          <label class="field field-span-2">Address
+            <input class="form-control" name="address" maxlength="120" autocomplete="street-address">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+          <label class="field">Date of birth
+            <input class="form-control" name="birthdate" type="date">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+        </div>
+
+        <div class="id-upload-field" data-upload="license-front" data-kind="document">
+          <p class="eyebrow">Driverâ€™s license, front</p>
+          <p class="fineprint">Upload a clear photo. We read the name, license number, dates, class, and address, then you can correct them.</p>
+          <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+          <input type="hidden" name="licensePhoto" value="">
+          <div class="license-photo-row">
+            <div class="license-photo-preview is-empty" data-preview>No photo yet</div>
+            <div class="license-photo-actions">
+              <button class="btn btn-ghost btn-sm" type="button" data-pick>Upload front</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-clear hidden>Remove</button>
+              <p class="fineprint" data-status></p>
             </div>
           </div>
         </div>
-      </div>
+        <div class="id-upload-field" data-upload="license-back" data-kind="document">
+          <p class="eyebrow">Driverâ€™s license, back</p>
+          <p class="fineprint">The back often shows the license class and restriction codes.</p>
+          <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+          <input type="hidden" name="licenseBack" value="">
+          <div class="license-photo-row">
+            <div class="license-photo-preview is-empty" data-preview>No photo yet</div>
+            <div class="license-photo-actions">
+              <button class="btn btn-ghost btn-sm" type="button" data-pick>Upload back</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-clear hidden>Remove</button>
+              <p class="fineprint" data-status></p>
+            </div>
+          </div>
+        </div>
 
-      <div id="chauffeur-fields" class="driver-fields" hidden>
-        <p class="eyebrow">Valid ID</p>
-        <div class="id-upload-field" id="chauffeur-id-upload">
-          <p class="fineprint"><strong>Upload your valid ID</strong> and we'll try to read the ID number below. Review and edit before you book.</p>
-          <input id="chauffeur-id-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-          <button class="btn btn-ghost btn-sm" type="button" id="chauffeur-id-pick">Upload ID to auto-fill</button>
-          <p class="fineprint" id="chauffeur-id-status"></p>
+        <div class="form-grid">
+          <label class="field">License number
+            <input class="form-control" name="licenseNo" maxlength="20" placeholder="N04-12-345678">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+          <label class="field">License expiry
+            <input class="form-control" name="licenseExpiry" type="date">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+          <label class="field">License issue date
+            <input class="form-control" name="licenseIssue" type="date">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+          <label class="field">License class
+            <input class="form-control" name="licenseClass" maxlength="40" placeholder="B, B1, or Non-professional">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+          <label class="field field-span-2">Restrictions
+            <input class="form-control" name="restrictions" maxlength="40" placeholder="None, or codes such as 1 or 4">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+        </div>
+
+        <div class="id-upload-field" data-upload="selfie" data-kind="selfie">
+          <p class="eyebrow">Live photo</p>
+          <p class="fineprint">Take a photo of your face so the desk can match you to the ID. It stays on this booking.</p>
+          <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="user" hidden>
+          <input type="hidden" name="selfie" value="">
+          <div class="license-photo-row">
+            <div class="license-photo-preview is-empty" data-preview>No photo yet</div>
+            <div class="license-photo-actions">
+              <button class="btn btn-ghost btn-sm" type="button" data-pick>Take or upload photo</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-clear hidden>Remove</button>
+              <p class="fineprint" data-status></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="ocr-flags" hidden></div>
+        <label class="check-min mismatch-ack" hidden>
+          <input type="checkbox" name="mismatchAck">
+          <span>I reviewed the mismatch. The name and birthdate I typed are the correct ones.</span>
+        </label>
+        <label class="check-min terms-check">
+          <input type="checkbox" name="agreeTerms">
+          <span>I agree to the rental terms: a security deposit is collected at pickup and released after the vehicle is returned in the same condition; the vehicle must come back with the same fuel level, or a refuel charge applies; I am liable for damage, loss, and traffic violations during the rental.</span>
+        </label>
+        <button class="btn btn-gold" type="submit">Continue to payment</button>
+      </form>
+
+      <form id="chauffeur-form" class="form-card" hidden novalidate>
+        <button class="btn btn-ghost btn-sm form-step-back" type="button" data-change-type>Back to rental type</button>
+        <p class="eyebrow">Step 2 of 2 Â· With chauffeur</p>
+        <h1 tabindex="-1">Chauffeur application</h1>
+        <div class="notice form-alert" hidden></div>
+        <p class="fineprint">Chauffeur bookings include the professional driver fee. This form does not ask for a driverâ€™s license.</p>
+
+        <p class="eyebrow">Trip</p>
+        <div class="form-grid">
+          <label class="field field-span-2">Vehicle
+            <select class="form-select" name="vehicleId"></select>
+          </label>
+          <label class="field">Pickup date
+            <input class="form-control" name="startDate" type="date" required>
+          </label>
+          <label class="field">Return date
+            <input class="form-control" name="endDate" type="date" required>
+          </label>
+          <label class="field">Pickup time
+            <input class="form-control" name="pickupTime" type="time" value="09:00" required>
+          </label>
+          <label class="field">Return time
+            <input class="form-control" name="returnTime" type="time" value="09:00" required>
+          </label>
+          <label class="field">Pickup location
+            <select class="form-select" name="pickup"></select>
+          </label>
+          <label class="field">Drop-off location
+            <select class="form-select" name="dropoff"></select>
+          </label>
+          <label class="field">Passengers
+            <input class="form-control" name="numberOfPassengers" type="number" min="1" max="15" value="1" required>
+          </label>
+        </div>
+
+        <p class="eyebrow" style="margin-top:1rem">Your details</p>
+        <div class="form-grid">
+          <label class="field field-span-2">Full name
+            <input class="form-control" name="fullName" maxlength="80" autocomplete="name">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+          <label class="field">Contact number
+            <input class="form-control" name="phone" maxlength="15" inputmode="tel" autocomplete="tel" placeholder="09XXXXXXXXX">
+          </label>
+          <label class="field">Email
+            <input class="form-control" name="email" maxlength="120" autocomplete="email">
+          </label>
+          <label class="field">Date of birth
+            <input class="form-control" name="birthdate" type="date">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+        </div>
+
+        <p class="eyebrow" style="margin-top:1rem">Which ID do you have?</p>
+        <div class="drive-mode id-choice" role="radiogroup" aria-label="ID type">
+          <label class="drive-option">
+            <input type="radio" name="idType" value="National ID">
+            <span><strong>National ID</strong><small>16-digit PhilSys number</small></span>
+          </label>
+          <label class="drive-option">
+            <input type="radio" name="idType" value="Passport">
+            <span><strong>Passport</strong><small>Passport number, like P1234567A</small></span>
+          </label>
+          <label class="drive-option">
+            <input type="radio" name="idType" value="UMID">
+            <span><strong>UMID</strong><small>12-digit CRN</small></span>
+          </label>
+          <label class="drive-option">
+            <input type="radio" name="idType" value="Postal ID">
+            <span><strong>Postal ID</strong><small>Number printed on the card</small></span>
+          </label>
+        </div>
+        <div class="id-upload-field" data-upload="chauffeur-id" data-kind="document">
+          <p class="eyebrow">Photo of that ID</p>
+          <p class="fineprint">Choose the ID above, then upload a clear photo. We read the name, number, and dates. If reading fails, type them yourself.</p>
+          <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+          <input type="hidden" name="idPhoto" value="">
+          <div class="license-photo-row">
+            <div class="license-photo-preview is-empty" data-preview>No photo yet</div>
+            <div class="license-photo-actions">
+              <button class="btn btn-ghost btn-sm" type="button" data-pick>Upload ID</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-clear hidden>Remove</button>
+              <p class="fineprint" data-status></p>
+            </div>
+          </div>
         </div>
         <div class="form-grid">
-          <label class="field">
-            ID type
-            <select class="form-select" name="idType">
-              <option value="National ID">National ID</option>
-              <option value="Passport">Passport</option>
-              <option value="UMID">UMID</option>
-              <option value="Postal ID">Postal ID</option>
-              <option value="Company ID">Company ID</option>
-              <option value="Student ID">Student ID</option>
-            </select>
+          <label class="field field-span-2">ID number
+            <input class="form-control" name="idNumber" maxlength="30" placeholder="Choose an ID above first">
+            <span class="ocr-confidence" hidden></span>
           </label>
-          <label class="field">
-            ID number
-            <input class="form-control" name="idNumber" maxlength="30" placeholder="ID number">
+          <label class="field">ID expiry
+            <input class="form-control" name="idExpiry" type="date">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+          <label class="field">ID issue date
+            <input class="form-control" name="idIssue" type="date">
+            <span class="ocr-confidence" hidden></span>
           </label>
         </div>
-        <p class="fineprint">Chauffeur bookings include the professional driver fee.</p>
-      </div>
 
-      <label class="field">
-        Notes for the desk
-        <textarea class="form-control" name="notes" maxlength="240" placeholder="Flight number, hotel, special request"></textarea>
-      </label>
+        <p class="eyebrow" style="margin-top:1rem">The trip</p>
+        <div class="form-grid">
+          <label class="field field-span-2">Itinerary or destination
+            <textarea class="form-control" name="itinerary" maxlength="180" rows="3" placeholder="Where you need to go, and any stops"></textarea>
+          </label>
+          <label class="field field-span-2">Special requests
+            <textarea class="form-control" name="specialRequests" maxlength="180" rows="2" placeholder="Child seat, airport meet, extra stop"></textarea>
+          </label>
+        </div>
 
-      <button class="btn btn-gold" type="submit">Continue to payment</button>
-    </form>
+        <div class="ocr-flags" hidden></div>
+        <label class="check-min mismatch-ack" hidden>
+          <input type="checkbox" name="mismatchAck">
+          <span>I reviewed the mismatch. The name and birthdate I typed are the correct ones.</span>
+        </label>
+        <label class="check-min terms-check">
+          <input type="checkbox" name="agreeTerms">
+          <span>I agree to the rental terms: overtime is charged when the trip runs past the booked return time; I cover the driverâ€™s meals and lodging when the trip needs them; the trip stays on the agreed route unless the desk approves a change.</span>
+        </label>
+        <button class="btn btn-gold" type="submit">Continue to payment</button>
+      </form>
+    </div>
+
     <aside id="book-summary" class="panel book-summary">
       <div id="book-summary-photo" class="book-summary-photo is-empty" aria-hidden="true"></div>
       <div id="book-summary-body" class="book-summary-body">
         <h3>Trip estimate</h3>
-        <p class="notice">Choose a vehicle and dates to see the total.</p>
+        <p class="notice">Choose self-drive or chauffeur to see the total.</p>
       </div>
     </aside>
   </section>
@@ -175,13 +298,13 @@
   <script src="../shared/js/security.js?v=20261005a"></script>
   <script src="../shared/js/store.js?v=20261008h"></script>
   <script src="../shared/js/api.js?v=20261009g"></script>
-  <script src="../shared/js/validation.js?v=20261005a"></script>
+  <script src="../shared/js/validation.js?v=20261010a"></script>
   <script src="../shared/js/routes.js?v=20261005a"></script>
-  <script src="../shared/js/domain.js?v=20261008h"></script>
+  <script src="../shared/js/domain.js?v=20261010d"></script>
   <script src="../auth/auth.js?v=20261009g"></script>
-  <script src="../shared/js/ui.js?v=20261009red"></script>
-  <script src="../shared/js/ocr.js?v=20261008a"></script>
-  <script src="./booking.js?v=20261009g"></script>
+  <script src="../shared/js/ui.js?v=20261010a"></script>
+  <script src="../shared/js/ocr.js?v=20261010a"></script>
+  <script src="./booking.js?v=20261010d"></script>
   <script src="../shared/js/app.js?v=20261008h"></script>
 </body>
 </html>

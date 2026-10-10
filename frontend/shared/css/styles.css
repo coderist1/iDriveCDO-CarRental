@@ -41,10 +41,14 @@ body {
   font-family: var(--sans);
   color: var(--ink);
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   line-height: 1.55;
   font-weight: 500;
   background-color: #ffffff;
 }
+body > * { flex-shrink: 0; }
+#app-footer { margin-top: auto; }
 
 body.desk-mode {
   color: var(--ink);
@@ -920,6 +924,80 @@ label, .field { display: block; margin-bottom: 0.85rem; font-weight: 700; font-s
 .form-grid .field.field-span-2 {
   grid-column: 1 / -1;
 }
+.rental-type-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+  margin-top: 0.4rem;
+}
+.rental-type-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 18px;
+  padding: 1.15rem 1.15rem 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  color: inherit;
+}
+.rental-type-card strong {
+  display: block;
+  font-size: 1.2rem;
+  color: var(--ink);
+}
+.rental-type-card span {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+.rental-type-card:hover,
+.rental-type-card:focus-visible {
+  border-color: rgba(196, 80, 75, 0.55);
+  background: rgba(196, 80, 75, 0.08);
+  outline: none;
+}
+.form-step-back { margin: 0 0 0.85rem; }
+.ocr-confidence {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #3f6212;
+}
+.ocr-confidence.is-low { color: #9a3412; }
+.form-control.is-low-confidence,
+.form-select.is-low-confidence {
+  border-color: #c2410c;
+  box-shadow: 0 0 0 1px rgba(194, 65, 12, 0.25);
+}
+.ocr-flags {
+  margin: 0.8rem 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.ocr-flags p { margin: 0; }
+.ocr-flag-bad {
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(155, 28, 28, 0.08);
+  color: #9b1c1c;
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+.ocr-flag-warn {
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(154, 52, 18, 0.08);
+  color: #9a3412;
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+.terms-check { margin: 0.9rem 0 1rem; align-items: flex-start; }
+.terms-check span { line-height: 1.45; }
 .drive-mode {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1054,7 +1132,7 @@ label, .field { display: block; margin-bottom: 0.85rem; font-weight: 700; font-s
   font-size: 1.35rem;
 }
 @media (max-width: 640px) {
-  .drive-mode { grid-template-columns: 1fr; }
+  .drive-mode, .rental-type-grid { grid-template-columns: 1fr; }
   .license-photo-row { grid-template-columns: 1fr; }
   .license-photo-preview { width: 100%; min-height: 140px; }
 }

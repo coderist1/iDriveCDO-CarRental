@@ -5,12 +5,12 @@
   NS.pages = NS.pages || {};
 
   function showAlert(form, message, type) {
-    var box = document.getElementById("form-alert");
+    var box = form ? form.querySelector(".form-alert") : document.querySelector(".form-alert");
     if (!box && form) {
       box = document.createElement("div");
-      box.id = "form-alert";
-      box.className = "notice";
-      form.insertBefore(box, form.querySelector("h1") ? form.querySelector("h1").nextSibling : form.firstChild);
+      box.className = "notice form-alert";
+      var heading = form.querySelector("h1");
+      form.insertBefore(box, heading ? heading.nextSibling : form.firstChild);
     }
     if (!box) return;
     if (!message) {
@@ -44,11 +44,14 @@
   }
 
   NS.pages.book = function book() {
-    if (!document.getElementById("book-form")) return;
+    if (!document.getElementById("rental-type")) return;
+    bindRentalChoice();
     requirePhone(function () {
-      NS.domain.syncVehiclesFromApi().then(initBook, function (e) {
+      initBook();
+      NS.domain.syncVehiclesFromApi().then(function () {
+        if (NS.pages.refreshBookFleet) NS.pages.refreshBookFleet();
+      }, function (e) {
         console.warn("iDrive: could not load vehicles from API, showing local data.", e);
-        initBook();
       });
     });
   };
@@ -56,9 +59,9 @@
   /* Accounts created with Google have no mobile number yet; collect it before the first booking. */
   function requirePhone(next) {
     var me = NS.auth.current();
-    var form = document.getElementById("book-form");
-    if (!me || me.phone) return next();
-    form.hidden = true;
+    var flow = document.getElementById("booking-flow");
+    if (!me || me.phone || !flow) return next();
+    flow.hidden = true;
     var gate = document.createElement("form");
     gate.className = "form-card phone-gate";
     gate.noValidate = true;
@@ -70,7 +73,7 @@
       '<label class="field">Mobile number ' +
       '<input class="form-control" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="09XXXXXXXXX" maxlength="13" required></label>' +
       '<button class="btn btn-gold" type="submit">Continue to booking</button>';
-    form.parentNode.insertBefore(gate, form);
+    flow.parentNode.insertBefore(gate, flow);
     gate.addEventListener("submit", function (e) {
       e.preventDefault();
       var notice = gate.querySelector(".notice");
@@ -83,396 +86,647 @@
         return;
       }
       gate.remove();
-      form.hidden = false;
+      flow.hidden = false;
       next();
     });
   }
 
+  var OCR_FILL = {
+    "license-front": {
+      fullName: "fullName",
+      idNumber: "licenseNo",
+      expiry: "licenseExpiry",
+      issueDate: "licenseIssue",
+      address: "address",
+      birthdate: "birthdate",
+      licenseClass: "licenseClass",
+      restrictions: "restrictions"
+    },
+    "license-back": {
+      licenseClass: "licenseClass",
+      restrictions: "restrictions",
+      address: "address"
+    },
+    "chauffeur-id": {
+      fullName: "fullName",
+      idNumber: "idNumber",
+      expiry: "idExpiry",
+      issueDate: "idIssue",
+      birthdate: "birthdate",
+      idType: "idType"
+    }
+  };
+
+  var FIELD_LABEL = {
+    fullName: "name",
+    licenseNo: "license number",
+    licenseExpiry: "license expiry",
+    licenseIssue: "license issue date",
+    address: "address",
+    birthdate: "birthdate",
+    licenseClass: "license class",
+    restrictions: "restrictions",
+    idNumber: "ID number",
+    idExpiry: "ID expiry",
+    idIssue: "ID issue date",
+    idType: "ID type"
+  };
+
+  function slotLabel(slot) {
+    if (slot === "chauffeur-id") return "ID";
+    return "license";
+  }
+
   function initBook() {
-    var form = document.getElementById("book-form");
-    var summary = document.getElementById("book-summary");
-    if (!form) return;
-    if (form.getAttribute("data-bound") === "1") return;
-    form.setAttribute("data-bound", "1");
+    var flow = document.getElementById("booking-flow");
+    var typeStep = document.getElementById("rental-type");
+    var selfForm = document.getElementById("self-form");
+    var chauffeurForm = document.getElementById("chauffeur-form");
+    if (!flow || !typeStep || !selfForm || !chauffeurForm) return;
+    if (flow.getAttribute("data-bound") === "1") return;
+    flow.setAttribute("data-bound", "1");
 
-    if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-
-    var vehicleId = NS.ui.qs("vehicle") || "";
-    var vehicles = NS.domain.vehicles().filter(function (v) {
-      return v.status === "available" && v.dailyRate && v.apiId;
-    });
-
-    if (!vehicles.length) {
-      showAlert(form, "No vehicles are available right now.", "err");
-      return;
+    if (NS.ui && NS.ui.bindCsrf) {
+      NS.ui.bindCsrf(selfForm);
+      NS.ui.bindCsrf(chauffeurForm);
     }
 
-    form.vehicleId.innerHTML = vehicles
-      .map(function (v) {
-        return (
-          '<option value="' +
-          v.id +
-          '"' +
-          (v.id === vehicleId ? " selected" : "") +
-          ">" +
-          NS.security.escapeHtml(v.name) +
-          " — " +
-          NS.ui.peso(v.dailyRate) +
-          "/day</option>"
-        );
-      })
-      .join("");
+    var vehicleId = NS.ui.qs("vehicle") || "";
+    var vehicles = bookableVehicles();
+
+    function refillFleet() {
+      vehicles = bookableVehicles();
+      [selfForm, chauffeurForm].forEach(function (form) {
+        if (!form.vehicleId) return;
+        var selected = form.vehicleId.value || vehicleId;
+        form.vehicleId.innerHTML = vehicleOptions(selected);
+      });
+      if (!vehicles.length && !typeStep.hidden) {
+        showAlert(typeStep, "No vehicles are available right now.", "err");
+      } else if (vehicles.length) {
+        showAlert(typeStep, "", "ok");
+      }
+      refresh();
+    }
+    NS.pages.refreshBookFleet = refillFleet;
 
     var today = new Date();
-    var start = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-    var end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 4);
+    var startDefault = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    var endDefault = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 4);
     var qStart = NS.ui.qs("start");
     var qEnd = NS.ui.qs("end");
     var qPickup = NS.ui.qs("pickup");
 
-    form.startDate.value = qStart || localISO(start);
-    form.endDate.value = qEnd || localISO(end);
-    form.startDate.min = localISO(today);
-    form.endDate.min = form.startDate.value;
-
-    form.pickup.innerHTML = locationOptions(qPickup || "Laguindingan Airport (CGY)");
-    form.dropoff.innerHTML = locationOptions("Centrio Mall");
-
-    var me = NS.auth.current();
-    if (me) {
-      if (form.licenseName) form.licenseName.value = ((me.firstName || "") + " " + (me.lastName || "")).trim();
-      if (form.licenseNo) form.licenseNo.value = me.licenseNo || "";
-      if (form.licenseExpiry) form.licenseExpiry.value = me.licenseExpiry || "";
-      if (form.emergencyPhone) form.emergencyPhone.value = me.phone || "";
-      // Pre-fill address / ID number from the ID the user added on file (optional).
-      if (form.licenseAddress && !form.licenseAddress.value) form.licenseAddress.value = me.address || "";
-      if (form.idNumber && !form.idNumber.value) form.idNumber.value = me.licenseNo || "";
+    function vehicleOptions(selected) {
+      return vehicles.map(function (v) {
+        return (
+          '<option value="' + v.id + '"' + (v.id === selected ? " selected" : "") + ">" +
+          NS.security.escapeHtml(v.name) + " — " + NS.ui.peso(v.dailyRate) + "/day</option>"
+        );
+      }).join("");
     }
 
-    function driveMode() {
-      var chosen = form.querySelector('input[name="driveMode"]:checked');
-      return chosen ? chosen.value : "self";
-    }
-
-    function syncDriveMode() {
-      var mode = driveMode();
-      var selfFields = document.getElementById("self-drive-fields");
-      var chauffeurFields = document.getElementById("chauffeur-fields");
-      var driverWrap = document.getElementById("driver-select-wrap");
-      if (selfFields) selfFields.hidden = mode !== "self";
-      if (chauffeurFields) chauffeurFields.hidden = mode !== "chauffeur";
-      if (driverWrap) {
-        driverWrap.hidden = mode !== "chauffeur";
-        if (form.driverDetailsId) form.driverDetailsId.required = mode === "chauffeur";
+    function applyDefaults(form) {
+      var selectedVehicle = form.vehicleId.value || vehicleId;
+      form.vehicleId.innerHTML = vehicleOptions(selectedVehicle);
+      form.startDate.min = localISO(today);
+      form.startDate.value = form.startDate.value || qStart || localISO(startDefault);
+      form.endDate.min = form.startDate.value;
+      form.endDate.value = form.endDate.value || qEnd || localISO(endDefault);
+      if (!form.pickup.value) form.pickup.innerHTML = locationOptions(qPickup || "Laguindingan Airport (CGY)");
+      else if (!form.pickup.options.length) form.pickup.innerHTML = locationOptions(qPickup || "Laguindingan Airport (CGY)");
+      if (!form.dropoff.options.length) form.dropoff.innerHTML = locationOptions("Centrio Mall");
+      var me = NS.auth.current() || {};
+      if (form.fullName && !form.fullName.value) {
+        form.fullName.value = ((me.firstName || "") + " " + (me.lastName || "")).trim();
       }
-
-      var selfInputs = ["licenseName", "licenseNo", "licenseExpiry", "licenseAddress", "emergencyPhone"];
-      var chauffeurInputs = ["idType", "idNumber"];
-      selfInputs.forEach(function (name) {
-        if (form[name]) form[name].required = mode === "self";
-      });
-      chauffeurInputs.forEach(function (name) {
-        if (form[name]) form[name].required = mode === "chauffeur";
-      });
+      if (form.phone && !form.phone.value) form.phone.value = me.phone || "";
+      if (form.email && !form.email.value) form.email.value = me.email || "";
+      if (form.address && !form.address.value) form.address.value = me.address || "";
     }
 
-    var licensePhotoData = document.getElementById("license-photo-data");
-    var licensePhotoInput = document.getElementById("license-photo-input");
-    var licensePhotoPreview = document.getElementById("license-photo-preview");
-    var licensePhotoPick = document.getElementById("license-photo-pick");
-    var licensePhotoClear = document.getElementById("license-photo-clear");
+    function clearScanState(form) {
+      form._scans = {};
+      form.querySelectorAll("input, select, textarea").forEach(function (el) {
+        delete el.dataset.userEdited;
+        el.classList.remove("is-low-confidence");
+      });
+      form.querySelectorAll(".ocr-confidence").forEach(function (chip) {
+        chip.hidden = true;
+        chip.textContent = "";
+      });
+      form.querySelectorAll("[data-preview]").forEach(function (preview) {
+        preview.classList.add("is-empty");
+        preview.textContent = "No photo yet";
+      });
+      form.querySelectorAll("[data-clear]").forEach(function (btn) { btn.hidden = true; });
+      form.querySelectorAll("[data-status]").forEach(function (el) { el.textContent = ""; });
+      var flags = form.querySelector(".ocr-flags");
+      if (flags) {
+        flags.hidden = true;
+        flags.innerHTML = "";
+      }
+      var ack = form.querySelector(".mismatch-ack");
+      if (ack) ack.hidden = true;
+    }
 
-    function setLicensePhoto(dataUrl) {
-      if (licensePhotoData) licensePhotoData.value = dataUrl || "";
-      if (licensePhotoPreview) {
-        if (dataUrl) {
-          licensePhotoPreview.classList.remove("is-empty");
-          licensePhotoPreview.innerHTML = '<img src="' + dataUrl.replace(/"/g, "") + '" alt="Driver license preview">';
-        } else {
-          licensePhotoPreview.classList.add("is-empty");
-          licensePhotoPreview.textContent = "No photo yet";
+    function serialize(form) {
+      return Array.prototype.map.call(form.querySelectorAll("input, textarea, select"), function (el) {
+        if (el.type === "file") return "";
+        if (el.type === "checkbox" || el.type === "radio") return el.name + "=" + (el.checked ? "1" : "0");
+        return el.name + "=" + el.value;
+      }).join("\n");
+    }
+
+    function snapshot(form) {
+      form._snapshot = serialize(form);
+    }
+
+    function resetForm(form) {
+      form.reset();
+      clearScanState(form);
+      applyDefaults(form);
+      snapshot(form);
+      showAlert(form, "", "ok");
+    }
+
+    [selfForm, chauffeurForm].forEach(function (form) {
+      applyDefaults(form);
+      snapshot(form);
+      bindUploads(form);
+      bindSubmit(form);
+      form.addEventListener("input", function (e) {
+        if (e.target && e.target.name) e.target.dataset.userEdited = "1";
+        if (e.target && e.target.classList) {
+          e.target.classList.remove("is-low-confidence");
+          var chip = e.target.parentNode && e.target.parentNode.querySelector(".ocr-confidence");
+          if (chip && (e.target.classList.contains("form-control") || e.target.classList.contains("form-select"))) {
+            chip.hidden = true;
+          }
         }
-      }
-      if (licensePhotoClear) licensePhotoClear.hidden = !dataUrl;
-      if (licensePhotoPick) licensePhotoPick.textContent = dataUrl ? "Replace license photo" : "Upload license photo";
-    }
-
-    if (licensePhotoPick && licensePhotoInput) {
-      licensePhotoPick.addEventListener("click", function () {
-        licensePhotoInput.click();
+        renderFlags(form);
+        refresh();
       });
-      licensePhotoInput.addEventListener("change", function () {
-        var file = licensePhotoInput.files && licensePhotoInput.files[0];
-        if (!file) return;
-        NS.ui.readLicensePhoto(file, function (err, dataUrl) {
-          licensePhotoInput.value = "";
-          if (err) {
-            showAlert(form, err.message || "Could not read license photo.", "err");
+      form.addEventListener("change", function () {
+        if (form.startDate && form.endDate) form.endDate.min = form.startDate.value || localISO(today);
+        if (form.id === "chauffeur-form") syncChauffeurIdChoice(form);
+        renderFlags(form);
+        refresh();
+      });
+      var back = form.querySelector("[data-change-type]");
+      if (back) {
+        back.addEventListener("click", function () {
+          var go = function () {
+            resetForm(form);
+            selfForm.hidden = true;
+            chauffeurForm.hidden = true;
+            typeStep.hidden = false;
+            refresh();
+          };
+          if (serialize(form) === form._snapshot) {
+            go();
             return;
           }
-          setLicensePhoto(dataUrl);
-          showAlert(form, "License photo attached.", "ok");
+          NS.ui.askYesNo("Changing the rental type resets what you already entered on this form.", {
+            title: "Change rental type",
+            yes: "Reset and go back",
+            no: "Stay"
+          }).then(function (ok) { if (ok) go(); });
         });
-      });
-    }
-    if (licensePhotoClear) {
-      licensePhotoClear.addEventListener("click", function () {
-        setLicensePhoto("");
-      });
-    }
-
-    /*
-     * Optional OCR auto-fill. Reads an uploaded ID/license photo and fills the
-     * matching fields. Every field stays editable; booking still works without it.
-     */
-    function bindOcrUpload(pickId, inputId, statusId, apply, alsoSetLicensePhoto) {
-      var pick = document.getElementById(pickId);
-      var input = document.getElementById(inputId);
-      var status = document.getElementById(statusId);
-      if (!pick || !input) return;
-      function setStatus(msg) {
-        if (status) status.textContent = msg || "";
       }
-      pick.addEventListener("click", function () {
-        input.click();
+    });
+
+    typeStep.querySelectorAll("[data-rental]").forEach(function (card) {
+      card.addEventListener("click", function () {
+        var mode = card.getAttribute("data-rental");
+        var form = mode === "chauffeur" ? chauffeurForm : selfForm;
+        typeStep.hidden = true;
+        selfForm.hidden = mode !== "self";
+        chauffeurForm.hidden = mode !== "chauffeur";
+        applyDefaults(form);
+        snapshot(form);
+        renderFlags(form);
+        refresh();
+        var heading = form.querySelector("h1");
+        if (heading && heading.focus) heading.focus();
       });
-      input.addEventListener("change", function () {
-        var file = input.files && input.files[0];
-        input.value = "";
-        if (!file) return;
-        NS.ui.readLicensePhoto(file, function (err, dataUrl) {
-          if (err) {
-            setStatus(err.message || "Could not read that image.");
-            return;
-          }
-          if (alsoSetLicensePhoto) setLicensePhoto(dataUrl);
-          if (!NS.ocr || !NS.ocr.scan) {
-            setStatus("Image attached. Automatic reading is unavailable; please type the details.");
-            return;
-          }
-          setStatus("Reading… this can take a few seconds.");
-          NS.ocr
-            .scan(dataUrl, function (p) {
-              setStatus("Reading… " + Math.round(p * 100) + "%");
-            })
-            .then(function (data) {
-              var filled = apply(data);
-              refresh();
-              setStatus(
-                filled.length
-                  ? "Filled " + filled.join(", ") + ". Please review and edit before booking."
-                  : "Couldn't read the details. Please type them in."
-              );
-            })
-            .catch(function (e) {
-              setStatus(e.message || "Could not read the image automatically. Please type the details.");
-            });
-        });
-      });
+    });
+
+    function activeForm() {
+      if (!selfForm.hidden) return selfForm;
+      if (!chauffeurForm.hidden) return chauffeurForm;
+      return null;
     }
 
-    bindOcrUpload("selfdrive-id-pick", "selfdrive-id-input", "selfdrive-id-status", function (data) {
-      var filled = [];
-      if (data.fullName && form.licenseName) { form.licenseName.value = data.fullName; filled.push("name"); }
-      if (data.idNumber && form.licenseNo) { form.licenseNo.value = data.idNumber; filled.push("license number"); }
-      if (data.expiry && form.licenseExpiry) { form.licenseExpiry.value = data.expiry; filled.push("expiry"); }
-      if (data.address && form.licenseAddress) { form.licenseAddress.value = data.address; filled.push("address"); }
-      return filled;
-    }, true);
-
-    bindOcrUpload("chauffeur-id-pick", "chauffeur-id-input", "chauffeur-id-status", function (data) {
-      var filled = [];
-      if (data.idNumber && form.idNumber) { form.idNumber.value = data.idNumber; filled.push("ID number"); }
-      return filled;
-    }, false);
-
-    if (form.driverDetailsId) {
-      form.driverDetailsId.innerHTML =
-        '<option value="">Select driver</option>' +
-        (NS.domain.activeDrivers ? NS.domain.activeDrivers() : [])
-          .map(function (d) {
-            var duty = d.dutyStatus === "on_call" ? "On call" : "Regular";
-            return (
-              '<option value="' +
-              d.id +
-              '">' +
-              NS.security.escapeHtml(d.fullName + " · " + duty + " · " + d.driverLicense) +
-              "</option>"
-            );
-          })
-          .join("");
-    }
-
-    function selectedAddons() {
-      return driveMode() === "chauffeur" ? ["driver"] : [];
-    }
-
-    var FALLBACK_IMAGE =
-      "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80";
-
-    function selectedVehicle() {
+    function selectedVehicle(form) {
+      if (!form) return null;
       var id = form.vehicleId.value;
-      for (var i = 0; i < vehicles.length; i++) {
-        if (vehicles[i].id === id) return vehicles[i];
-      }
+      for (var i = 0; i < vehicles.length; i++) if (vehicles[i].id === id) return vehicles[i];
       return NS.domain.getVehicle(id);
     }
+
+    var FALLBACK_IMAGE = "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80";
 
     function renderPhoto(vehicle) {
       var photoHost = document.getElementById("book-summary-photo");
       if (!photoHost) return;
-      var src = (vehicle && vehicle.image) || FALLBACK_IMAGE;
-      var name = (vehicle && vehicle.name) || "Vehicle";
-      var safeSrc = String(src)
-        .replace(/&/g, "&amp;")
-        .replace(/"/g, "&quot;")
-        .replace(/</g, "&lt;");
+      if (!vehicle) {
+        photoHost.classList.add("is-empty");
+        photoHost.innerHTML = "";
+        return;
+      }
+      var src = vehicle.image || FALLBACK_IMAGE;
+      var safeSrc = String(src).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
       photoHost.classList.remove("is-empty");
-      photoHost.innerHTML =
-        '<img src="' +
-        safeSrc +
-        '" alt="' +
-        NS.security.escapeHtml(name) +
-        '" loading="eager">';
-    }
-
-    function estimateHtml(q, warning) {
-      var mode = driveMode();
-      return (
-        "<h3>Trip estimate</h3>" +
-        (warning ? '<p class="notice">' + NS.security.escapeHtml(warning) + "</p>" : "") +
-        "<p><strong>" +
-        NS.security.escapeHtml(q.vehicle.name) +
-        "</strong></p>" +
-        "<p class='estimate-mode'>" +
-        (mode === "chauffeur" ? "Chauffeur service" : "Self-drive") +
-        "</p>" +
-        "<ul class='estimate-list'><li>" +
-        q.days +
-        " day(s) × " +
-        NS.ui.peso(q.vehicle.dailyRate) +
-        "</li>" +
-        q.addons
-          .map(function (a) {
-            return "<li>" + NS.security.escapeHtml(a.name) + " · " + NS.ui.peso(a.daily * q.days) + "</li>";
-          })
-          .join("") +
-        "</ul><p class='total'>Total " +
-        NS.ui.peso(q.total) +
-        "</p>"
-      );
+      photoHost.innerHTML = '<img src="' + safeSrc + '" alt="' + NS.security.escapeHtml(vehicle.name || "Vehicle") + '" loading="eager">';
     }
 
     function refresh() {
       var body = document.getElementById("book-summary-body");
       if (!body) return;
-      var vehicle = selectedVehicle();
+      var form = activeForm();
+      if (!form) {
+        renderPhoto(null);
+        body.innerHTML = "<h3>Trip estimate</h3><p class='notice'>Choose self-drive or chauffeur to see the total.</p>";
+        return;
+      }
+      var mode = form.id === "chauffeur-form" ? "chauffeur" : "self";
+      var vehicle = selectedVehicle(form);
       renderPhoto(vehicle);
+      var addons = mode === "chauffeur" ? ["driver"] : [];
       try {
-        form.endDate.min = form.startDate.value || localISO(today);
-        var q = NS.domain.quote(form.vehicleId.value, form.startDate.value, form.endDate.value, selectedAddons());
-        body.innerHTML = estimateHtml(q, "");
+        var quote = NS.domain.quote(form.vehicleId.value, form.startDate.value, form.endDate.value, addons);
+        body.innerHTML = estimateHtml(quote, mode, "");
       } catch (err) {
         try {
-          var soft = NS.domain.quote(
-            form.vehicleId.value,
-            form.startDate.value,
-            form.endDate.value,
-            selectedAddons(),
-            { ignoreAvailability: true }
-          );
-          body.innerHTML = estimateHtml(soft, err.message);
+          var soft = NS.domain.quote(form.vehicleId.value, form.startDate.value, form.endDate.value, addons, { ignoreAvailability: true });
+          body.innerHTML = estimateHtml(soft, mode, err.message);
         } catch (softErr) {
-          body.innerHTML =
-            "<h3>Trip estimate</h3><p class='notice'>" + NS.security.escapeHtml(err.message) + "</p>";
+          body.innerHTML = "<h3>Trip estimate</h3><p class='notice'>" + NS.security.escapeHtml(err.message) + "</p>";
         }
       }
     }
 
-    var busy = false;
-    form.addEventListener("change", function () {
-      syncDriveMode();
-      refresh();
-    });
-    form.addEventListener("input", refresh);
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      if (busy) return;
-      NS.ui.askYesNo("Save this booking and continue to payment?", { title: "Save edit" }).then(function (ok) {
-        if (!ok) return;
-        busy = true;
-        showAlert(form, "", "ok");
-        var btn = form.querySelector('button[type="submit"]');
-        if (btn) {
-          btn.disabled = true;
-          btn.textContent = "Creating booking…";
+    function estimateHtml(q, mode, warning) {
+      return (
+        "<h3>Trip estimate</h3>" +
+        (warning ? '<p class="notice">' + NS.security.escapeHtml(warning) + "</p>" : "") +
+        "<p><strong>" + NS.security.escapeHtml(q.vehicle.name) + "</strong></p>" +
+        "<p class='estimate-mode'>" + (mode === "chauffeur" ? "With chauffeur" : "Self-drive") + "</p>" +
+        "<ul class='estimate-list'><li>" + q.days + " day(s) × " + NS.ui.peso(q.vehicle.dailyRate) + "</li>" +
+        q.addons.map(function (a) {
+          return "<li>" + NS.security.escapeHtml(a.name) + " · " + NS.ui.peso(a.daily * q.days) + "</li>";
+        }).join("") +
+        "</ul><p class='total'>Total " + NS.ui.peso(q.total) + "</p>"
+      );
+    }
+
+    function valuesAgree(name, current, extracted) {
+      if (/birth|expiry|issue/i.test(name)) return String(current) === String(extracted);
+      if (/name/i.test(name)) return NS.validation.namesMatch(current, extracted);
+      return String(current).replace(/\s+/g, "").toUpperCase() === String(extracted).replace(/\s+/g, "").toUpperCase();
+    }
+
+    function syncChauffeurIdChoice(form) {
+      if (!form.idNumber || !form.idType) return;
+      var chosen = form.idType.value || "";
+      form.idNumber.placeholder = chosen ? NS.validation.idNumberHint(chosen) : "Choose an ID above first";
+      var pick = form.querySelector('[data-upload="chauffeur-id"] [data-pick]');
+      if (pick && !pick.disabled) pick.textContent = chosen ? "Upload " + chosen : "Upload ID";
+    }
+
+    function paintConfidence(input, score) {
+      if (!input || !input.closest) return;
+      var label = input.closest(".field");
+      var chip = label && label.querySelector(".ocr-confidence");
+      if (!chip) return;
+      if (!score) {
+        chip.hidden = true;
+        input.classList.remove("is-low-confidence");
+        return;
+      }
+      var low = score < ((NS.ocr && NS.ocr.LOW_CONFIDENCE) || 0.62);
+      chip.hidden = false;
+      chip.className = "ocr-confidence" + (low ? " is-low" : "");
+      chip.textContent = low
+        ? "Low confidence (" + Math.round(score * 100) + "%) — please review"
+        : Math.round(score * 100) + "% confidence";
+      input.classList.toggle("is-low-confidence", low);
+    }
+
+    function applyExtracted(form, slot, data) {
+      form._scans = form._scans || {};
+      form._scans[slot] = data || {};
+      var map = OCR_FILL[slot] || {};
+      var filled = [];
+      Object.keys(map).forEach(function (ocrKey) {
+        var inputName = map[ocrKey];
+        var value = data && data[ocrKey];
+        if (!inputName || !value) return;
+        var input = form.elements[inputName];
+        if (!input) return;
+        if (input.tagName === "SELECT" && !Array.prototype.some.call(input.options, function (opt) { return opt.value === value; })) return;
+        var score = data.confidence ? Number(data.confidence[ocrKey]) || 0 : 0;
+        var selectUntouched = input.tagName === "SELECT" && input.dataset.userEdited !== "1";
+        var empty = !String(input.value || "").trim();
+        if (selectUntouched || empty) {
+          input.value = value;
+          filled.push(FIELD_LABEL[inputName] || inputName);
+          paintConfidence(input, score);
+        } else if (valuesAgree(inputName, input.value, value)) {
+          paintConfidence(input, score);
         }
-        function fail(err) {
-          busy = false;
-          if (btn) {
-            btn.disabled = false;
-            btn.textContent = "Continue to payment";
+      });
+      return filled;
+    }
+
+    function bindUploads(form) {
+      form.querySelectorAll("[data-upload]").forEach(function (block) {
+        var slot = block.getAttribute("data-upload");
+        var kind = block.getAttribute("data-kind") || "document";
+        var fileInput = block.querySelector(".upload-file");
+        var hidden = block.querySelector('input[type="hidden"]');
+        var preview = block.querySelector("[data-preview]");
+        var pick = block.querySelector("[data-pick]");
+        var clearBtn = block.querySelector("[data-clear]");
+        var status = block.querySelector("[data-status]");
+        if (!fileInput || !pick) return;
+
+        function setStatus(msg) { if (status) status.textContent = msg || ""; }
+        function setPhoto(dataUrl) {
+          if (hidden) hidden.value = dataUrl || "";
+          if (!preview) return;
+          if (dataUrl) {
+            preview.classList.remove("is-empty");
+            preview.innerHTML = '<img src="' + String(dataUrl).replace(/"/g, "") + '" alt="">';
+          } else {
+            preview.classList.add("is-empty");
+            preview.textContent = "No photo yet";
           }
-          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-          showAlert(form, err.message || "Could not create booking.", "err");
+          if (clearBtn) clearBtn.hidden = !dataUrl;
         }
-        try {
-          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-          var csrfInput = form.querySelector('input[name="csrf"]');
-          var mode = driveMode();
-          if (mode === "self") {
-            var photoVal = licensePhotoData ? licensePhotoData.value : "";
-            if (!photoVal) {
-              throw new Error("Upload a photo of your driver's license for self-drive.");
+
+        pick.addEventListener("click", function () { fileInput.click(); });
+        if (clearBtn) {
+          clearBtn.addEventListener("click", function () {
+            setPhoto("");
+            if (form._scans) delete form._scans[slot];
+            setStatus("");
+            renderFlags(form);
+          });
+        }
+        fileInput.addEventListener("change", function () {
+          var file = fileInput.files && fileInput.files[0];
+          fileInput.value = "";
+          if (!file) return;
+          setStatus("Checking the photo…");
+          var check = NS.ocr && NS.ocr.assessQuality
+            ? NS.ocr.assessQuality(file, { profile: kind === "selfie" ? "selfie" : "document" })
+            : Promise.resolve({ ok: true, issues: [] });
+          check.then(function (result) {
+            if (!result.ok) {
+              setPhoto("");
+              setStatus(result.issues.map(function (issue) { return issue.message; }).join(" "));
+              return;
             }
+            var read = slot === "license-front" ? NS.ui.readLicensePhoto : NS.ui.readIdPhoto;
+            read(file, function (err, dataUrl) {
+              if (err) {
+                setStatus(err.message || "Could not read that image.");
+                return;
+              }
+              setPhoto(dataUrl);
+              if (kind === "selfie") {
+                setStatus("Photo attached. It is kept with this booking and is not printed on the receipt.");
+                return;
+              }
+              if (!NS.ocr || !NS.ocr.scan) {
+                setStatus("Photo attached. Automatic reading is unavailable, so type the details below.");
+                return;
+              }
+              setStatus("Reading the ID… this can take a few seconds.");
+              pick.disabled = true;
+              NS.ocr.scan(dataUrl, function (progress) {
+                setStatus("Reading the ID… " + Math.round((Number(progress) || 0) * 100) + "%");
+              }).then(function (data) {
+                pick.disabled = false;
+                var filled = applyExtracted(form, slot, data);
+                renderFlags(form);
+                refresh();
+                setStatus(filled.length
+                  ? "Filled " + filled.join(", ") + ". Review low-confidence fields and correct anything that looks wrong."
+                  : "Photo attached, but the details could not be read. Type them in below.");
+              }).catch(function (error) {
+                pick.disabled = false;
+                setStatus((error && error.message) || "Could not read this photo. Type the details in below.");
+              });
+            });
+          }).catch(function () {
+            setStatus("Could not check that photo. You can type the details in below, or try another picture.");
+          });
+        });
+      });
+    }
+
+    function renderFlags(form) {
+      var host = form.querySelector(".ocr-flags");
+      var ack = form.querySelector(".mismatch-ack");
+      if (!host) return;
+      var messages = [];
+      var mismatch = false;
+      var scans = form._scans || {};
+      var mode = form.id === "chauffeur-form" ? "chauffeur" : "self";
+      Object.keys(scans).forEach(function (slot) {
+        var data = scans[slot] || {};
+        if (data.fullName && form.fullName && form.fullName.value && !NS.validation.namesMatch(form.fullName.value, data.fullName)) {
+          mismatch = true;
+          messages.push({ level: "warn", text: "Name on the " + slotLabel(slot) + " reads as “" + data.fullName + "”, which does not match what you typed." });
+        }
+        if (data.birthdate && form.birthdate && form.birthdate.value && !NS.validation.datesMatch(form.birthdate.value, data.birthdate)) {
+          mismatch = true;
+          messages.push({ level: "warn", text: "Birthdate on the " + slotLabel(slot) + " reads as " + data.birthdate + ", which does not match what you typed." });
+        }
+      });
+
+      function expired(value, label) {
+        if (!value) return;
+        if (!NS.validation.futureDate(value) || (form.endDate.value && value < form.endDate.value)) {
+          messages.push({ level: "bad", text: label + " is expired or expires before the return date." });
+        }
+      }
+      if (mode === "self") {
+        expired(form.licenseExpiry.value, "The driver's license");
+        if (form.birthdate.value) {
+          var driveAge = NS.validation.ageOn(form.birthdate.value);
+          if (driveAge >= 0 && driveAge < 21) messages.push({ level: "bad", text: "Self-drive renters must be at least 21." });
+        }
+        if (form.licenseNo.value && !NS.validation.idNumberForType("Driver's License", form.licenseNo.value)) {
+          messages.push({ level: "bad", text: "License number should look like N04-12-345678." });
+        }
+        if (form.licenseClass.value) {
+          var fit = NS.validation.licenseFitsVehicle(form.licenseClass.value, form.restrictions.value, selectedVehicle(form));
+          if (!fit.ok) messages.push({ level: "bad", text: fit.message });
+        }
+        if (NS.validation.daylightBlocked(form.restrictions.value, form.pickupTime.value, form.returnTime.value)) {
+          messages.push({ level: "bad", text: "This license is limited to daylight driving (05:00–18:00)." });
+        }
+      } else {
+        expired(form.idExpiry.value, "The government ID");
+        if (form.birthdate.value) {
+          var age = NS.validation.ageOn(form.birthdate.value);
+          if (age >= 0 && age < 18) messages.push({ level: "bad", text: "You must be at least 18 to book." });
+        }
+        if (!form.idType.value && form.idNumber.value) {
+          messages.push({ level: "bad", text: "Choose which ID you have." });
+        } else if (form.idNumber.value && !NS.validation.idNumberForType(form.idType.value, form.idNumber.value)) {
+          messages.push({ level: "bad", text: "That ID number does not match the " + form.idType.value + " format (" + NS.validation.idNumberHint(form.idType.value) + ")." });
+        }
+      }
+
+      if (ack) {
+        ack.hidden = !mismatch;
+        if (!mismatch && form.mismatchAck) form.mismatchAck.checked = false;
+      }
+      host.hidden = messages.length === 0;
+      host.innerHTML = messages.map(function (item) {
+        return '<p class="' + (item.level === "bad" ? "ocr-flag-bad" : "ocr-flag-warn") + '">' + NS.security.escapeHtml(item.text) + "</p>";
+      }).join("");
+    }
+
+    function ocrValues(form, key) {
+      var scans = form._scans || {};
+      var values = [];
+      Object.keys(scans).forEach(function (slot) {
+        if (scans[slot] && scans[slot][key]) values.push(scans[slot][key]);
+      });
+      return values;
+    }
+
+    function bindSubmit(form) {
+      var busy = false;
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (busy) return;
+        var mode = form.id === "chauffeur-form" ? "chauffeur" : "self";
+        NS.ui.askYesNo("Save this booking and continue to payment?", { title: "Save booking", yes: "Continue", no: "Not yet" }).then(function (ok) {
+          if (!ok) return;
+          busy = true;
+          showAlert(form, "", "ok");
+          var btn = form.querySelector('button[type="submit"]');
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = "Creating booking…";
           }
-          var driverInfo =
-            mode === "chauffeur"
-              ? {
+          function fail(err) {
+            busy = false;
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = "Continue to payment";
+            }
+            if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+            showAlert(form, err.message || "Could not create booking.", "err");
+          }
+          try {
+            if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+            var csrfInput = form.querySelector('input[name="csrf"]');
+            var notes = "";
+            if (mode === "chauffeur") {
+              var itinerary = form.itinerary.value.trim();
+              var requests = form.specialRequests.value.trim();
+              notes = (itinerary ? "Itinerary: " + itinerary : "") + (requests ? (itinerary ? "\n" : "") + "Requests: " + requests : "");
+            }
+            var shared = {
+              fullName: form.fullName.value,
+              phone: form.phone.value,
+              email: form.email.value,
+              birthdate: form.birthdate.value,
+              agreed: form.agreeTerms.checked,
+              mismatchAck: !!(form.mismatchAck && form.mismatchAck.checked),
+              ocrNames: ocrValues(form, "fullName"),
+              ocrBirthdates: ocrValues(form, "birthdate")
+            };
+            var driverInfo = mode === "chauffeur"
+              ? Object.assign(shared, {
                   idType: form.idType.value,
-                  idNumber: form.idNumber.value
-                }
-              : {
-                  licenseName: form.licenseName.value,
+                  idNumber: form.idNumber.value,
+                  idExpiry: form.idExpiry.value,
+                  idIssue: form.idIssue.value,
+                  idPhoto: form.idPhoto.value,
+                  itinerary: form.itinerary.value
+                })
+              : Object.assign(shared, {
+                  address: form.address.value,
                   licenseNo: form.licenseNo.value,
                   licenseExpiry: form.licenseExpiry.value,
-                  licenseAddress: form.licenseAddress.value,
-                  emergencyPhone: form.emergencyPhone.value,
-                  licensePhoto: licensePhotoData ? licensePhotoData.value : ""
-                };
-          var booking = NS.domain.createBooking(
-            {
+                  licenseIssue: form.licenseIssue.value,
+                  licenseClass: form.licenseClass.value,
+                  restrictions: form.restrictions.value,
+                  licensePhoto: form.licensePhoto.value,
+                  licenseBack: form.licenseBack.value,
+                  selfie: form.selfie.value
+                });
+            var booking = NS.domain.createBooking({
               vehicleId: form.vehicleId.value,
               startDate: form.startDate.value,
               endDate: form.endDate.value,
-              pickupTime: form.pickupTime ? form.pickupTime.value : "09:00",
-              returnTime: form.returnTime ? form.returnTime.value : "09:00",
+              pickupTime: form.pickupTime.value,
+              returnTime: form.returnTime.value,
               numberOfPassengers: form.numberOfPassengers ? form.numberOfPassengers.value : 1,
-              fuelBeforeRent: form.fuelBeforeRent ? form.fuelBeforeRent.value : "Full",
+              fuelBeforeRent: "Full",
               pickup: form.pickup.value,
               dropoff: form.dropoff.value,
               driveMode: mode,
-              driverDetailsId: form.driverDetailsId ? form.driverDetailsId.value : "",
               driverInfo: driverInfo,
-              addons: selectedAddons(),
-              notes: form.notes.value
-            },
-            csrfInput ? csrfInput.value : ""
-          );
-        } catch (err) {
-          fail(err);
-          return;
-        }
-        if (btn) btn.textContent = "Saving to server…";
-        NS.domain.pushBookingToApi(booking.id).then(function () {
-          showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
-          location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));
-        }, fail);
+              addons: mode === "chauffeur" ? ["driver"] : [],
+              notes: notes
+            }, csrfInput ? csrfInput.value : "");
+          } catch (err) {
+            fail(err);
+            return;
+          }
+          if (btn) btn.textContent = "Saving to server…";
+          NS.domain.pushBookingToApi(booking.id).then(function () {
+            showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
+            location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));
+          }, fail);
+        });
+      });
+    }
+
+    refillFleet();
+  }
+
+  function bookableVehicles() {
+    return NS.domain.vehicles().filter(function (v) {
+      return String(v.status || "").toLowerCase() === "available" && Number(v.dailyRate) > 0;
+    });
+  }
+
+  function openRentalType(mode) {
+    var typeStep = document.getElementById("rental-type");
+    var selfForm = document.getElementById("self-form");
+    var chauffeurForm = document.getElementById("chauffeur-form");
+    if (!typeStep || !selfForm || !chauffeurForm) return;
+    typeStep.querySelectorAll("[data-rental]").forEach(function (card) { card.disabled = false; });
+    typeStep.hidden = true;
+    selfForm.hidden = mode !== "self";
+    chauffeurForm.hidden = mode !== "chauffeur";
+  }
+
+  function bindRentalChoice() {
+    var typeStep = document.getElementById("rental-type");
+    if (!typeStep || typeStep.getAttribute("data-choice") === "1") return;
+    typeStep.setAttribute("data-choice", "1");
+    typeStep.querySelectorAll("[data-rental]").forEach(function (card) {
+      card.disabled = false;
+      card.addEventListener("click", function () {
+        openRentalType(card.getAttribute("data-rental"));
       });
     });
-    syncDriveMode();
-    refresh();
   }
+
+  bindRentalChoice();
+
 
   NS.pages.bookings = function myBookings() {
     var host = document.getElementById("bookings-list");
@@ -748,12 +1002,32 @@
         ? "<p>License address: " + NS.security.escapeHtml(info.licenseAddress) + "</p>"
         : "") +
       (info.licensePhoto
-        ? '<div class="license-photo-view"><p class="eyebrow">Driver’s license photo</p><img src="' +
+        ? '<div class="license-photo-view"><p class="eyebrow">Driver’s license, front</p><img src="' +
           String(info.licensePhoto).replace(/"/g, "") +
-          '" alt="Uploaded driver license"></div>'
+          '" alt="Driver license front"></div>'
         : booking.driveMode !== "chauffeur"
           ? "<p class='notice'>No license photo on file for this booking.</p>"
           : "") +
+      (info.licenseBack
+        ? '<div class="license-photo-view"><p class="eyebrow">Driver’s license, back</p><img src="' +
+          String(info.licenseBack).replace(/"/g, "") +
+          '" alt="Driver license back"></div>'
+        : "") +
+      (info.govIdPhoto
+        ? '<div class="license-photo-view"><p class="eyebrow">Government ID</p><img src="' +
+          String(info.govIdPhoto).replace(/"/g, "") +
+          '" alt="Government ID"></div>'
+        : "") +
+      (info.idPhoto
+        ? '<div class="license-photo-view"><p class="eyebrow">Government ID</p><img src="' +
+          String(info.idPhoto).replace(/"/g, "") +
+          '" alt="Government ID"></div>'
+        : "") +
+      (info.selfie
+        ? '<div class="license-photo-view"><p class="eyebrow">Live photo</p><img src="' +
+          String(info.selfie).replace(/"/g, "") +
+          '" alt="Renter photo"></div>'
+        : "") +
       (booking.returnNotes
         ? "<p>Return notes: " + NS.security.escapeHtml(booking.returnNotes) + "</p>"
         : "") +

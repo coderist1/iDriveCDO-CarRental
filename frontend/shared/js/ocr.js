@@ -50,8 +50,127 @@
           }
         }
       }).then(function (result) {
-        return (result && result.data && result.data.text) || "";
+        var data = (result && result.data) || {};
+        return {
+          text: data.text || "",
+          words: data.words || [],
+          meanConfidence: Number(data.confidence) || 0
+        };
       });
+    });
+  }
+
+  function loadImageElement(src) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      var blobUrl = "";
+      img.onload = function () {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        resolve(img);
+      };
+      img.onerror = function () {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        reject(new Error("That file is not a usable image."));
+      };
+      if (typeof Blob !== "undefined" && src instanceof Blob) {
+        blobUrl = URL.createObjectURL(src);
+        img.src = blobUrl;
+      } else {
+        img.src = src;
+      }
+    });
+  }
+
+  /**
+   * Rejects photos that are too small, blurry, blown out, or clipped at the edges.
+   * @param {string|Blob|File} src
+   * @param {{profile?: "document"|"selfie"}} [options]
+   */
+  function assessQuality(src, options) {
+    options = options || {};
+    var selfie = options.profile === "selfie";
+    return loadImageElement(src).then(function (img) {
+      var width = img.naturalWidth || img.width;
+      var height = img.naturalHeight || img.height;
+      var issues = [];
+      var minShort = selfie ? 320 : 480;
+      if (Math.min(width, height) < minShort) {
+        issues.push({
+          code: "resolution",
+          message: "This photo is too small. Move closer so the " + (selfie ? "face" : "ID") + " fills more of the frame."
+        });
+      }
+
+      var sampleW = Math.min(width, 480);
+      var sampleH = Math.max(1, Math.round(height * (sampleW / Math.max(1, width))));
+      var canvas = document.createElement("canvas");
+      canvas.width = sampleW;
+      canvas.height = sampleH;
+      var ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, sampleW, sampleH);
+      var pixels = ctx.getImageData(0, 0, sampleW, sampleH).data;
+      var gray = new Float32Array(sampleW * sampleH);
+      var glare = 0;
+      for (var i = 0, p = 0; i < gray.length; i++, p += 4) {
+        gray[i] = 0.299 * pixels[p] + 0.587 * pixels[p + 1] + 0.114 * pixels[p + 2];
+        var spread = Math.max(pixels[p], pixels[p + 1], pixels[p + 2]) - Math.min(pixels[p], pixels[p + 1], pixels[p + 2]);
+        if (gray[i] >= 250 && spread < 8) glare++;
+      }
+      if (!selfie && glare / gray.length > 0.07) {
+        issues.push({
+          code: "glare",
+          message: "Glare is washing out the ID. Tilt it away from the light and upload again."
+        });
+      }
+
+      var lapSum = 0;
+      var lapSq = 0;
+      var n = 0;
+      for (var y = 1; y < sampleH - 1; y++) {
+        for (var x = 1; x < sampleW - 1; x++) {
+          var idx = y * sampleW + x;
+          var lap = 4 * gray[idx] - gray[idx - 1] - gray[idx + 1] - gray[idx - sampleW] - gray[idx + sampleW];
+          lapSum += lap;
+          lapSq += lap * lap;
+          n++;
+        }
+      }
+      var mean = lapSum / Math.max(1, n);
+      var variance = lapSq / Math.max(1, n) - mean * mean;
+      if (variance < (selfie ? 40 : 55)) {
+        issues.push({
+          code: "blur",
+          message: "This photo looks blurry. Hold steady and upload a sharper picture."
+        });
+      }
+
+      if (!selfie) {
+        var hits = 0;
+        var total = 0;
+        function edgeEnergy(x, y) {
+          if (x < 1 || y < 1 || x >= sampleW - 1 || y >= sampleH - 1) return 0;
+          var at = y * sampleW + x;
+          return Math.abs(gray[at] - gray[at - 1]) + Math.abs(gray[at] - gray[at + 1]);
+        }
+        for (var ex = 0; ex < sampleW; ex += 2) {
+          total += 2;
+          if (edgeEnergy(ex, 2) > 28) hits++;
+          if (edgeEnergy(ex, sampleH - 3) > 28) hits++;
+        }
+        for (var ey = 0; ey < sampleH; ey += 2) {
+          total += 2;
+          if (edgeEnergy(2, ey) > 28) hits++;
+          if (edgeEnergy(sampleW - 3, ey) > 28) hits++;
+        }
+        if (total && hits / total > 0.42) {
+          issues.push({
+            code: "cropped",
+            message: "The edges of the ID look cut off. Leave a little space around the whole card and upload again."
+          });
+        }
+      }
+
+      return { ok: issues.length === 0, issues: issues, width: width, height: height };
     });
   }
 
@@ -107,9 +226,9 @@
   /**
    * Extracts common ID fields from raw OCR text using heuristics.
    * @param {string} text
-   * @returns {{fullName:string,address:string,birthdate:string,idNumber:string,expiry:string}}
+   * @returns {{fullName:string,address:string,birthdate:string,idNumber:string,expiry:string,issueDate:string,idType:string,licenseClass:string,restrictions:string,confidence:Object}}
    */
-  function extractFields(text) {
+  function extractFields(text, words) {
     var lines = String(text || "")
       .split(/\r?\n/)
       .map(cleanLine)
@@ -153,27 +272,90 @@
     ]);
     var birthdate = toIsoDate(birthRaw);
 
-    return {
+    var issueRaw = findLabeledValue(lines, [
+      "date of issue", "date issued", "issue date", "issued", "petsa ng pagkakaloob"
+    ]);
+    var issueDate = toIsoDate(issueRaw);
+
+    var blob = String(text || "");
+    var idType = "";
+    var upper = blob.toUpperCase();
+    if (/DRIVER|LAND TRANSPORTATION|\bLTO\b/.test(upper)) idType = "Driver's License";
+    else if (/PHILSYS|NATIONAL ID|PAMBANSANG|PHILIPPINE IDENTIFICATION/.test(upper)) idType = "National ID";
+    else if (/PASSPORT/.test(upper)) idType = "Passport";
+    else if (/UMID|UNIFIED MULTI/.test(upper)) idType = "UMID";
+    else if (/POSTAL ID|PHLPOST/.test(upper)) idType = "Postal ID";
+
+    var licenseClass = findLabeledValue(lines, ["dl codes?", "license class", "classification"]);
+    var classMatch = blob.match(/\b(?:DL\s*)?CODES?\s*[:\-]?\s*([A-Z0-9][A-Z0-9,\/\s]{0,18})/i);
+    if (!licenseClass && classMatch) licenseClass = cleanLine(classMatch[1]);
+
+    var restrictions = findLabeledValue(lines, ["restrictions?", "conditions", "restriction codes?"]);
+
+    var fields = {
       fullName: fullName || "",
       address: address || "",
       birthdate: birthdate || "",
       idNumber: idNumber ? idNumber.toUpperCase().replace(/\s+/g, "") : "",
       expiry: expiry || "",
-      rawText: String(text || "")
+      issueDate: issueDate || "",
+      idType: idType || "",
+      licenseClass: licenseClass || "",
+      restrictions: restrictions || "",
+      rawText: blob
     };
+    fields.confidence = confidenceMap(fields, words || []);
+    return fields;
+  }
+
+  function confidenceMap(fields, words) {
+    var keys = ["fullName", "address", "birthdate", "idNumber", "expiry", "issueDate", "idType", "licenseClass", "restrictions"];
+    var out = {};
+    keys.forEach(function (key) {
+      out[key] = confidenceFor(fields[key], words, key === "idType" ? 0.72 : 0.45);
+    });
+    return out;
+  }
+
+  function confidenceFor(value, words, fallback) {
+    if (!value) return 0;
+    if (!words || !words.length) return fallback;
+    var tokens = String(value).toUpperCase().split(/[^A-Z0-9]+/).filter(function (token) {
+      return token.length > 1;
+    });
+    var scores = [];
+    tokens.forEach(function (token) {
+      for (var i = 0; i < words.length; i++) {
+        var word = String(words[i].text || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+        if (word && (word.indexOf(token) !== -1 || token.indexOf(word) !== -1)) {
+          scores.push((Number(words[i].confidence) || 0) / 100);
+          break;
+        }
+      }
+    });
+    if (!scores.length) return fallback;
+    var sum = scores.reduce(function (total, score) { return total + score; }, 0);
+    return Math.max(0, Math.min(0.99, Math.round((sum / scores.length) * 100) / 100));
   }
 
   /**
    * Convenience: OCR an image and return the extracted fields in one call.
+   * `readImage` may return a string (older callers) or `{text, words}`.
    */
   function scan(image, onProgress) {
-    return readImage(image, onProgress).then(extractFields);
+    return readImage(image, onProgress).then(function (raw) {
+      var text = typeof raw === "string" ? raw : (raw && raw.text) || "";
+      var words = raw && raw.words ? raw.words : [];
+      return extractFields(text, words);
+    });
   }
 
   NS.ocr = {
     isConfigured: true,
+    LOW_CONFIDENCE: 0.62,
     readImage: readImage,
     extractFields: extractFields,
+    assessQuality: assessQuality,
     scan: scan
   };
 })(window);

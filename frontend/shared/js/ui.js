@@ -548,6 +548,10 @@
     readImageFile(file, done, { maxSide: 960, maxBytes: 700000, label: "License photo" });
   }
 
+  function readIdPhoto(file, done) {
+    readImageFile(file, done, { maxSide: 900, maxBytes: 280000, label: "ID photo" });
+  }
+
   function readImageFile(file, done, options) {
     options = options || {};
     var maxSide = options.maxSide || 320;
@@ -732,6 +736,7 @@
     avatarHtml: avatarHtml,
     readImageAsAvatar: readImageAsAvatar,
     readLicensePhoto: readLicensePhoto,
+    readIdPhoto: readIdPhoto,
     downloadReceipt: downloadReceipt
   };
 })(window);

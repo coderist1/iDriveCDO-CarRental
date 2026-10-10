@@ -221,11 +221,9 @@
       addonIds.push("driver");
     }
 
-    var driverInfo = normalizeDriverInfo(driveMode, payload.driverInfo || {});
-
     var q = quote(payload.vehicleId, payload.startDate, payload.endDate, addonIds);
     if (!q.vehicle.apiId) throw new Error("This vehicle is not in the booking system yet. Choose another car.");
-    var notes = NS.security.sanitizeText(payload.notes, 240);
+    var notes = NS.security.sanitizeText(payload.notes, 400);
 
     var timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
     var pickupTime = String(payload.pickupTime || "");
@@ -233,6 +231,18 @@
     if (!timePattern.test(pickupTime) || !timePattern.test(returnTime)) {
       throw new Error("Choose a pickup and return time.");
     }
+
+    var passengers = Math.max(1, parseInt(payload.numberOfPassengers, 10) || 1);
+    if (q.vehicle.seats && passengers > q.vehicle.seats) {
+      throw new Error("This vehicle seats " + q.vehicle.seats + " passengers.");
+    }
+
+    var driverInfo = normalizeDriverInfo(driveMode, payload.driverInfo || {}, {
+      vehicle: q.vehicle,
+      endDate: q.endDate,
+      pickupTime: pickupTime,
+      returnTime: returnTime
+    });
 
     try {
       if (csrf) NS.security.assertCsrf(csrf);
@@ -276,10 +286,16 @@
       updatedAt: new Date().toISOString()
     };
     if (driveMode === "chauffeur") {
-      var driverId = NS.security.sanitizeText(payload.driverDetailsId || "", 40);
-      var driver = getDriver(driverId);
+      var driverId = payload.driverDetailsId
+        ? NS.security.sanitizeText(payload.driverDetailsId, 40)
+        : "";
+      var driver = driverId ? getDriver(driverId) : null;
+      if (!driver) {
+        var roster = activeDrivers().filter(function (d) { return d.apiId != null; });
+        driver = roster[0] || null;
+      }
       if (!driver || driver.status !== "active") {
-        throw new Error("Choose an available professional driver for chauffeur mode.");
+        throw new Error("No chauffeur is available right now. Choose self-drive, or try again later.");
       }
       booking.driverDetailsId = driver.id;
     }
@@ -689,46 +705,132 @@
     }, discard);
   }
 
-  function normalizeDriverInfo(driveMode, info) {
+  var GOVERNMENT_ID_TYPES = ["National ID", "Passport", "UMID", "Postal ID"];
+
+  function assertPhoto(dataUrl, label, maxLen) {
+    var photo = typeof dataUrl === "string" ? dataUrl.trim() : "";
+    if (!photo) throw new Error("Upload " + label + ".");
+    if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(photo)) {
+      throw new Error(label + " must be a JPG, PNG, or WebP image.");
+    }
+    if (photo.length > (maxLen || 750000)) {
+      throw new Error(label + " is too large. Choose a clearer, smaller photo.");
+    }
+    return photo;
+  }
+
+  function assertIdentity(info, minAge) {
+    var fullName = NS.security.sanitizeText(info.fullName, 80);
+    var phone = NS.validation.normalizePhone(info.phone || "");
+    var email = NS.security.sanitizeEmail(info.email || "");
+    var birthdate = NS.security.sanitizeText(info.birthdate, 10);
+    if (!fullName || fullName.length < 3) throw new Error("Enter your full name.");
+    if (!NS.validation.phMobile(phone)) throw new Error("Enter a Philippine mobile number (09XXXXXXXXX).");
+    if (!NS.validation.email(email)) throw new Error("Enter a valid email address.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) throw new Error("Enter your date of birth.");
+    var age = NS.validation.ageOn(birthdate);
+    if (age < 0 || age > 120) throw new Error("Enter a real date of birth.");
+    if (age < minAge) {
+      throw new Error(
+        minAge >= 21
+          ? "Self-drive renters must be at least 21."
+          : "You must be at least 18 to book."
+      );
+    }
+    var ocrNames = Array.isArray(info.ocrNames) ? info.ocrNames : [];
+    var ocrBirthdates = Array.isArray(info.ocrBirthdates) ? info.ocrBirthdates : [];
+    var nameMismatch = ocrNames.some(function (ocrName) {
+      return ocrName && !NS.validation.namesMatch(fullName, ocrName);
+    });
+    var birthMismatch = ocrBirthdates.some(function (ocrDate) {
+      return ocrDate && !NS.validation.datesMatch(birthdate, ocrDate);
+    });
+    if ((nameMismatch || birthMismatch) && !info.mismatchAck) {
+      throw new Error("The ID does not match the name or birthdate you typed. Correct the form, or confirm that you reviewed the mismatch.");
+    }
+    return {
+      fullName: fullName,
+      phone: phone,
+      email: email,
+      birthdate: birthdate,
+      extracted: {
+        names: ocrNames.filter(Boolean).slice(0, 4),
+        birthdates: ocrBirthdates.filter(Boolean).slice(0, 4)
+      }
+    };
+  }
+
+  function assertGovernmentId(info, endDate) {
+    var idType = NS.security.sanitizeText(info.idType, 40);
+    var idNumber = NS.security.sanitizeText(info.idNumber, 30).toUpperCase().replace(/\s+/g, "");
+    var idExpiry = NS.security.sanitizeText(info.idExpiry, 10);
+    if (GOVERNMENT_ID_TYPES.indexOf(idType) === -1) throw new Error("Choose which ID you have.");
+    if (!NS.validation.idNumberForType(idType, idNumber)) {
+      throw new Error("Enter a " + idType + " number (" + NS.validation.idNumberHint(idType) + ").");
+    }
+    if (!NS.validation.futureDate(idExpiry) || (endDate && idExpiry < endDate)) {
+      throw new Error("This government ID is expired or expires before the vehicle is returned.");
+    }
+    return {
+      idType: idType,
+      idNumber: idNumber,
+      idExpiry: idExpiry,
+      idIssue: NS.security.sanitizeText(info.idIssue || "", 10)
+    };
+  }
+
+  function normalizeDriverInfo(driveMode, info, context) {
+    context = context || {};
+    info = info || {};
+    if (!info.agreed) throw new Error("Agree to the rental terms to continue.");
+
     if (driveMode === "chauffeur") {
-      var idType = NS.security.sanitizeText(info.idType, 40);
-      var idNumber = NS.security.sanitizeText(info.idNumber, 30).toUpperCase().replace(/\s+/g, "");
-      var allowedIds = ["National ID", "Passport", "UMID", "Postal ID", "Company ID", "Student ID"];
-      if (allowedIds.indexOf(idType) === -1) throw new Error("Choose a valid ID type.");
-      if (!NS.validation.validId(idNumber)) throw new Error("Enter a valid ID number.");
-      return { idType: idType, idNumber: idNumber };
+      var who = assertIdentity(info, 18);
+      var gov = assertGovernmentId(info, context.endDate);
+      who.idType = gov.idType;
+      who.idNumber = gov.idNumber;
+      who.idExpiry = gov.idExpiry;
+      who.idIssue = gov.idIssue;
+      who.idPhoto = assertPhoto(info.idPhoto, "a photo of your government ID", 320000);
+      who.itinerary = NS.security.sanitizeText(info.itinerary, 180);
+      if (!who.itinerary) throw new Error("Enter the itinerary or destination.");
+      who.agreed = true;
+      return who;
     }
 
-    var licenseName = NS.security.sanitizeText(info.licenseName, 60);
+    var renter = assertIdentity(info, 21);
+    var address = NS.security.sanitizeText(info.address, 120);
+    if (!address) throw new Error("Enter your address.");
     var licenseNo = NS.validation.normalizeLicense(info.licenseNo);
     var licenseExpiry = NS.security.sanitizeText(info.licenseExpiry, 10);
-    var licenseAddress = NS.security.sanitizeText(info.licenseAddress, 120);
-    var emergencyPhone = NS.validation.normalizePhone(info.emergencyPhone || "");
-
-    if (!licenseName) throw new Error("Enter the full name on your driver's license.");
-    if (!NS.validation.license(licenseNo)) throw new Error("Enter a valid driver's license number.");
-    if (!NS.validation.futureDate(licenseExpiry)) throw new Error("License expiry must be today or later.");
-    if (!licenseAddress) throw new Error("Enter the address on your license.");
-    if (!NS.validation.phMobile(emergencyPhone)) {
-      throw new Error("Enter a Philippine emergency contact number (09XXXXXXXXX).");
+    var licenseClass = NS.security.sanitizeText(info.licenseClass, 40);
+    var restrictions = NS.security.sanitizeText(info.restrictions, 40);
+    if (!NS.validation.idNumberForType("Driver's License", licenseNo)) {
+      throw new Error("Enter a driver's license number (like N04-12-345678).");
     }
-    var licensePhoto = typeof info.licensePhoto === "string" ? info.licensePhoto.trim() : "";
-    if (!licensePhoto) throw new Error("Upload a photo of your driver's license for self-drive.");
-    if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(licensePhoto)) {
-      throw new Error("License photo must be a JPG, PNG, or WebP image.");
+    if (!NS.validation.futureDate(licenseExpiry) || (context.endDate && licenseExpiry < context.endDate)) {
+      throw new Error("Your driver's license is expired or expires before the return date.");
     }
-    if (licensePhoto.length > 750000) {
-      throw new Error("License photo is too large. Choose a clearer, smaller photo.");
+    var fit = NS.validation.licenseFitsVehicle(licenseClass, restrictions, context.vehicle);
+    if (!fit.ok) throw new Error(fit.message);
+    if (NS.validation.daylightBlocked(restrictions, context.pickupTime, context.returnTime)) {
+      throw new Error("This license is limited to daylight driving. Choose pickup and return times between 05:00 and 18:00.");
     }
 
-    return {
-      licenseName: licenseName,
-      licenseNo: licenseNo,
-      licenseExpiry: licenseExpiry,
-      licenseAddress: licenseAddress,
-      emergencyPhone: emergencyPhone,
-      licensePhoto: licensePhoto
-    };
+    renter.address = address;
+    renter.licenseName = renter.fullName;
+    renter.licenseNo = licenseNo;
+    renter.licenseExpiry = licenseExpiry;
+    renter.licenseAddress = address;
+    renter.emergencyPhone = renter.phone;
+    renter.licenseClass = licenseClass;
+    renter.restrictions = restrictions;
+    renter.licenseIssue = NS.security.sanitizeText(info.licenseIssue || "", 10);
+    renter.licensePhoto = assertPhoto(info.licensePhoto, "the front of your driver's license", 750000);
+    renter.licenseBack = assertPhoto(info.licenseBack, "the back of your driver's license", 320000);
+    renter.selfie = assertPhoto(info.selfie, "a live photo of yourself", 320000);
+    renter.agreed = true;
+    return renter;
   }
 
   function assertBookingAccess(booking) {
@@ -2271,24 +2373,28 @@
     if (changed) saveVehicles(list);
   }
 
-  /* Laravel `vehicles` has no rate/image/specs columns; those stay local, matched by plate number. */
-  function fromApiVehicle(row, local, seeded) {
-    var fallback = null;
+  /* Laravel `vehicles` has no rate/image/specs columns; those stay local, matched by plate then type. */
+  function catalogVehicle(row, seeded) {
+    var plate = String(row.plate_number || "").toUpperCase();
+    var byType = null;
     for (var i = 0; i < seeded.length; i++) {
-      if (seeded[i].type === row.type) {
-        fallback = seeded[i];
-        break;
-      }
+      if (plate && String(seeded[i].plate || "").toUpperCase() === plate) return seeded[i];
+      if (!byType && seeded[i].type === row.type) byType = seeded[i];
     }
+    return byType;
+  }
+
+  function fromApiVehicle(row, local, seeded) {
+    var catalog = catalogVehicle(row, seeded);
     var base = local || {
       id: "veh_api_" + row.vehicle_id,
-      transmission: "—",
-      fuel: "—",
-      luggage: 0,
-      dailyRate: null,
-      image: (fallback || seeded[0]).image,
-      description: "",
-      features: [],
+      transmission: (catalog && catalog.transmission) || "—",
+      fuel: (catalog && catalog.fuel) || "—",
+      luggage: catalog && catalog.luggage != null ? catalog.luggage : 0,
+      dailyRate: catalog ? catalog.dailyRate : null,
+      image: (catalog || seeded[0]).image,
+      description: (catalog && catalog.description) || "",
+      features: (catalog && catalog.features) || [],
       status: "available"
     };
     var apiFeatures = Array.isArray(row.features)
@@ -2314,7 +2420,9 @@
       description: row.description || base.description,
       features: (apiFeatures && apiFeatures.length) ? apiFeatures : base.features,
       status: row.status || base.status,
-      dailyRate: row.daily_rate != null ? Number(row.daily_rate) : base.dailyRate
+      dailyRate: row.daily_rate != null
+        ? Number(row.daily_rate)
+        : (base.dailyRate || (catalog && catalog.dailyRate) || null)
     });
   }
 
