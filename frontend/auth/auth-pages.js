@@ -174,6 +174,49 @@
     return NS.routes.href("home");
   }
 
+  /* First Google sign-in has no mobile. Collect one before the account can be used. */
+  function promptGooglePhone(form, user) {
+    if (document.getElementById("google-phone-form")) return;
+    form.hidden = true;
+    var gate = document.createElement("form");
+    gate.id = "google-phone-form";
+    gate.className = "form-card";
+    gate.noValidate = true;
+    gate.innerHTML =
+      '<p class="eyebrow">Account</p>' +
+      "<h1>Add your mobile number</h1>" +
+      '<p class="fineprint">Google doesn\'t share a mobile number. Add yours so the desk can reach you. Each number can belong to only one account.</p>' +
+      '<div class="notice" role="alert" hidden></div>' +
+      '<label class="field">Mobile' +
+      '<input class="form-control" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="09XXXXXXXXX" maxlength="24" required></label>' +
+      '<button class="btn btn-gold" type="submit">Save number</button>';
+    form.parentNode.insertBefore(gate, form.nextSibling);
+    var input = gate.querySelector('[name="phone"]');
+    var button = gate.querySelector('button[type="submit"]');
+    var notice = gate.querySelector(".notice");
+    NS.ui.bindAccountPhone(input, {
+      button: button,
+      userId: user.id,
+      ownPhone: function () { return ""; }
+    });
+    input.focus();
+    gate.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (input.getAttribute("data-phone-blocked") === "1") return;
+      notice.hidden = true;
+      button.disabled = true;
+      NS.auth.ensurePhoneFree(input.value, user.id).then(function () {
+        NS.auth.setPhone(input.value);
+        location.href = destinationFor(NS.auth.current() || user);
+      }).catch(function (err) {
+        button.disabled = false;
+        notice.hidden = false;
+        notice.textContent = (err && err.message) || "Could not save that mobile number.";
+        NS.ui.fieldError(input, notice.textContent);
+      });
+    });
+  }
+
   /* "Continue with Google": the credential goes to the backend, which verifies it with Google. */
   function mountGoogleButton(form) {
     var host = document.getElementById("google-signin");
@@ -205,6 +248,10 @@
               .googleSignIn(resp.credential)
               .then(function (data) {
                 var user = NS.auth.googleSignIn(data.user);
+                if (!NS.validation.canonicalPhone(user.phone)) {
+                  promptGooglePhone(form, user);
+                  return;
+                }
                 showAlert(form, "Welcome, " + user.firstName + ". Redirecting…", "ok");
                 location.href = destinationFor(user);
               })
@@ -500,6 +547,12 @@
     }
 
     mountGoogleButton(form);
+    if (NS.ui.bindAccountPhone && field(form, "phone")) {
+      NS.ui.bindAccountPhone(field(form, "phone"), {
+        button: form.querySelector('button[type="submit"]'),
+        ownPhone: function () { return ""; }
+      });
+    }
 
     var busy = false;
 
@@ -520,6 +573,7 @@
         btn.textContent = "Creating…";
       }
 
+      NS.auth.ensurePhoneFree(val(form, "phone"), null).then(function () {
       try {
         if (!NS.auth || !NS.auth.register) {
           throw new Error("Auth module failed to load. Refresh the page.");
@@ -569,7 +623,8 @@
       } catch (err) {
         busy = false;
         if (btn) {
-          btn.disabled = false;
+          var phoneInput = field(form, "phone");
+          btn.disabled = !!(phoneInput && phoneInput.getAttribute("data-phone-blocked") === "1");
           btn.textContent = "Create account";
         }
         try {
@@ -586,6 +641,17 @@
           else if (/password/i.test(msg)) NS.ui.fieldError(field(form, "password"), msg);
         } catch (ignore) {}
       }
+      }).catch(function (err) {
+        busy = false;
+        if (btn) {
+          var blockedInput = field(form, "phone");
+          btn.disabled = !!(blockedInput && blockedInput.getAttribute("data-phone-blocked") === "1");
+          btn.textContent = "Create account";
+        }
+        var phoneMsg = (err && err.message) || "Could not check that mobile number.";
+        showAlert(form, phoneMsg, "err");
+        if (NS.ui && NS.ui.fieldError) NS.ui.fieldError(field(form, "phone"), phoneMsg);
+      });
     });
   };
 })(window);

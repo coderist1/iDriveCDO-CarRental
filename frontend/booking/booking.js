@@ -104,23 +104,31 @@
       '<p class="fineprint">We need a Philippine mobile number to confirm your booking and reach you on pick-up day.</p>' +
       '<div class="notice" role="alert" hidden></div>' +
       '<label class="field">Mobile number ' +
-      '<input class="form-control" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="09XXXXXXXXX" maxlength="13" required></label>' +
+      '<input class="form-control" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="09XXXXXXXXX" maxlength="24" required></label>' +
       '<button class="btn btn-gold" type="submit">Continue to booking</button>';
     flow.parentNode.insertBefore(gate, flow);
+    var gateButton = gate.querySelector('button[type="submit"]');
+    NS.ui.bindAccountPhone(gate.phone, {
+      button: gateButton,
+      userId: me.id,
+      ownPhone: function () { return ""; }
+    });
     gate.addEventListener("submit", function (e) {
       e.preventDefault();
       var notice = gate.querySelector(".notice");
-      try {
+      if (gate.phone.getAttribute("data-phone-blocked") === "1") return;
+      gateButton.disabled = true;
+      NS.auth.ensurePhoneFree(gate.phone.value, me.id).then(function () {
         NS.auth.setPhone(gate.phone.value);
-      } catch (err) {
+        gate.remove();
+        flow.hidden = false;
+        next();
+      }).catch(function (err) {
+        gateButton.disabled = gate.phone.getAttribute("data-phone-blocked") === "1";
         notice.hidden = false;
         notice.textContent = err.message;
         gate.phone.focus();
-        return;
-      }
-      gate.remove();
-      flow.hidden = false;
-      next();
+      });
     });
   }
 
@@ -686,6 +694,16 @@
 
     function bindSubmit(form) {
       var busy = false;
+      if (form.phone && NS.ui.bindAccountPhone) {
+        NS.ui.bindAccountPhone(form.phone, {
+          button: form.querySelector('button[type="submit"]'),
+          userId: NS.auth.current() && NS.auth.current().id,
+          ownPhone: function () {
+            var current = NS.auth.current();
+            return current ? current.phone : "";
+          }
+        });
+      }
       form.addEventListener("submit", function (e) {
         e.preventDefault();
         if (busy) return;
@@ -696,6 +714,12 @@
         }).then(function (ok) {
           if (ok === undefined) return;
           if (!ok) return;
+          if (form.phone && form.phone.getAttribute("data-phone-blocked") === "1") {
+            showAlert(form, "This mobile number is already registered.", "err");
+            return;
+          }
+          var meNow = NS.auth.current();
+          return NS.auth.ensurePhoneFree(form.phone.value, meNow && meNow.id).then(function () {
           busy = true;
           showAlert(form, "", "ok");
           var btn = form.querySelector('button[type="submit"]');
@@ -776,6 +800,7 @@
             showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
             location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));
           }, fail);
+          });
         }).catch(function (err) {
           showAlert(form, (err && err.message) || "Your account has been disabled. Please contact the admin.", "err");
         });

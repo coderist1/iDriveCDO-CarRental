@@ -27,6 +27,39 @@
     return null;
   }
 
+  var PHONE_TAKEN = "This mobile number is already registered.";
+
+  /** Another account on this browser already uses this mobile, or null. */
+  function phoneOwner(phone, exceptUserId) {
+    var canon = NS.validation.canonicalPhone(phone);
+    if (!canon) return null;
+    var list = users();
+    for (var i = 0; i < list.length; i++) {
+      if (exceptUserId && list[i].id === exceptUserId) continue;
+      if (NS.validation.canonicalPhone(list[i].phone) === canon) return list[i];
+    }
+    return null;
+  }
+
+  /** Resolves with the +63 number, or rejects when it is invalid or already registered. */
+  function ensurePhoneFree(phone, exceptUserId) {
+    var canon = NS.validation.canonicalPhone(phone);
+    if (!canon) return Promise.reject(new Error("Use a Philippine mobile number (09XXXXXXXXX)."));
+    if (phoneOwner(canon, exceptUserId)) return Promise.reject(new Error(PHONE_TAKEN));
+    if (exceptUserId) {
+      var mine = users().filter(function (u) { return u.id === exceptUserId; })[0];
+      if (mine && NS.validation.canonicalPhone(mine.phone) === canon) return Promise.resolve(canon);
+    }
+    if (!NS.api || !NS.api.post) return Promise.resolve(canon);
+    return NS.api.post("/users/phone-available", { phone: canon }).then(function (res) {
+      if (res && res.taken) throw new Error(PHONE_TAKEN);
+      return canon;
+    }).catch(function (err) {
+      if (err && err.message === PHONE_TAKEN) throw err;
+      throw new Error("Could not check that mobile number. Try again.");
+    });
+  }
+
   var AVATAR_MAX = 320000;
 
   function normalizeAvatar(value) {
@@ -196,13 +229,14 @@
     var email = NS.security.sanitizeEmail(payload.email);
     var firstName = NS.security.sanitizeText(payload.firstName, 40);
     var lastName = NS.security.sanitizeText(payload.lastName, 40);
-    var phone = NS.validation.normalizePhone(payload.phone);
+    var phone = NS.validation.canonicalPhone(payload.phone);
     var password = payload.password || "";
 
     if (!firstName) throw new Error("First name is required.");
     if (!lastName) throw new Error("Last name is required.");
     if (!NS.validation.email(email)) throw new Error("Enter a valid email address.");
-    if (!NS.validation.phMobile(phone)) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
+    if (!phone) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
+    if (phoneOwner(phone, null)) throw new Error(PHONE_TAKEN);
     if (!payload.ageConfirm) throw new Error("You must confirm you are 21 or older.");
     if (!payload.terms) throw new Error("You must accept the rental terms.");
     var issues = NS.security.passwordIssues(password, email);
@@ -289,7 +323,7 @@
         role: ROLES[apiUser.role] ? apiUser.role : "customer",
         firstName: NS.security.sanitizeText(apiUser.first_name || "", 40) || email.split("@")[0],
         lastName: NS.security.sanitizeText(apiUser.last_name || "", 40),
-        phone: NS.validation.phMobile(apiUser.phone || "") ? apiUser.phone : "",
+        phone: NS.validation.canonicalPhone(apiUser.phone || ""),
         licenseNo: "",
         licenseExpiry: "",
         address: NS.security.sanitizeText(apiUser.address || "", 120),
@@ -312,8 +346,9 @@
   function setPhone(phone) {
     var me = current();
     if (!me) throw new Error("Sign in required.");
-    var normalized = NS.validation.normalizePhone(phone);
-    if (!NS.validation.phMobile(normalized)) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
+    var normalized = NS.validation.canonicalPhone(phone);
+    if (!normalized) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
+    if (phoneOwner(normalized, me.id)) throw new Error(PHONE_TAKEN);
     var list = users();
     for (var i = 0; i < list.length; i++) {
       if (list[i].id === me.id) {
@@ -345,13 +380,14 @@
     var list = users();
     for (var i = 0; i < list.length; i++) {
       if (list[i].id === userId) {
-        var phone = NS.security.sanitizeText(patch.phone, 15);
+        var phone = NS.validation.canonicalPhone(patch.phone);
         var firstName = NS.security.sanitizeText(patch.firstName, 40);
         var lastName = NS.security.sanitizeText(patch.lastName, 40);
         var licenseNo = NS.security.sanitizeText(patch.licenseNo, 30).toUpperCase();
         var licenseExpiry = NS.security.sanitizeText(patch.licenseExpiry, 10);
         if (!firstName || !lastName) throw new Error("Name is required.");
-        if (!NS.validation.phMobile(phone)) throw new Error("Invalid mobile number.");
+        if (!phone) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
+        if (phoneOwner(phone, list[i].id)) throw new Error(PHONE_TAKEN);
         if (licenseNo && licenseNo !== list[i].licenseNo) {
           if (list[i].role === "customer" && !NS.validation.license(licenseNo)) throw new Error("Invalid license number.");
           list[i].licenseNo = licenseNo;
@@ -605,6 +641,8 @@
     DISABLED_MSG: DISABLED_MSG,
     login: login,
     register: register,
+    phoneOwner: phoneOwner,
+    ensurePhoneFree: ensurePhoneFree,
     googleSignIn: googleSignIn,
     setPhone: setPhone,
     logout: logout,

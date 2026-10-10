@@ -164,6 +164,16 @@
     form.firstName.value = me.firstName;
     form.lastName.value = me.lastName;
     form.phone.value = me.phone;
+    if (NS.ui.bindAccountPhone) {
+      NS.ui.bindAccountPhone(form.phone, {
+        button: form.querySelector('button[type="submit"]'),
+        userId: me.id,
+        ownPhone: function () {
+          var current = NS.auth.current();
+          return current ? current.phone : "";
+        }
+      });
+    }
     if (form.address) form.address.value = me.address || "";
     if (form.department) form.department.value = me.department || "";
     document.getElementById("profile-email").textContent = me.email;
@@ -231,7 +241,13 @@
 
     form.addEventListener("submit", function (e) {
       e.preventDefault();
-      var gate = NS.auth.assertActive ? NS.auth.assertActive() : Promise.resolve();
+      if (form.phone && form.phone.getAttribute("data-phone-blocked") === "1") {
+        NS.ui.fieldError(form.phone, "This mobile number is already registered.");
+        return;
+      }
+      var gate = NS.auth.ensurePhoneFree(form.phone.value, me.id).then(function () {
+        return NS.auth.assertActive ? NS.auth.assertActive() : Promise.resolve();
+      });
       gate.then(function () {
         return NS.ui.askYesNo("Save profile?", { title: "Save edit", yes: "Yes", no: "No" });
       }).then(function (ok) {

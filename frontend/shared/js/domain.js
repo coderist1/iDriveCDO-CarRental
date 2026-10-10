@@ -610,11 +610,13 @@
     if (user.role !== "customer") return Promise.reject(new Error("Bookings must belong to a customer account."));
     if (user.apiId != null) return Promise.resolve(user.apiId);
     /* Backend contract: POST /users/sync with first_name/last_name/phone/address/license_*. */
+    var phone = NS.validation.canonicalPhone(user.phone || "");
+    if (!phone) return Promise.reject(new Error("Add a mobile number before booking."));
     var body = {
       email: user.email,
       first_name: user.firstName || (user.email || "").split("@")[0] || "Guest",
       last_name: user.lastName || "-",
-      phone: NS.validation.normalizePhone(user.phone || "") || "09000000000"
+      phone: phone
     };
     if (user.address) body.address = user.address;
     if (user.licenseNo) body.license_no = user.licenseNo;
@@ -3005,7 +3007,8 @@
       first_name: user.firstName || "",
       last_name: user.lastName || ""
     };
-    if (user.phone) body.phone = NS.validation.normalizePhone(user.phone);
+    var canonPhone = NS.validation.canonicalPhone(user.phone || "");
+    if (canonPhone) body.phone = canonPhone;
     if (user.address) body.address = user.address;
     if (user.department) body.department = user.department;
     if (user.licenseNo) body.license_no = user.licenseNo;

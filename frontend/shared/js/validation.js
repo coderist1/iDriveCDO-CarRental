@@ -7,14 +7,25 @@
     return /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(value || ""));
   }
 
-  function phMobile(value) {
+  /** Account mobiles: 0917…, 63917…, and +63917… all become +63917…. Empty string if it is not a mobile. */
+  function canonicalPhone(value) {
     var digits = String(value || "").replace(/\D+/g, "");
-    if (digits.length === 12 && digits.indexOf("63") === 0) digits = "0" + digits.slice(2);
-    if (digits.length === 10 && digits.charAt(0) === "9") digits = "0" + digits;
-    return /^09\d{9}$/.test(digits);
+    var national = "";
+    if (digits.length === 12 && digits.indexOf("63") === 0) national = digits.slice(2);
+    else if (digits.length === 11 && digits.charAt(0) === "0") national = digits.slice(1);
+    else if (digits.length === 10) national = digits;
+    if (!/^9\d{9}$/.test(national)) return "";
+    return "+63" + national;
   }
 
+  function phMobile(value) {
+    return canonicalPhone(value) !== "";
+  }
+
+  /** 09XXXXXXXXX form, used by driver numbers and booking documents. */
   function normalizePhone(value) {
+    var canon = canonicalPhone(value);
+    if (canon) return "0" + canon.slice(3);
     var digits = String(value || "").replace(/\D+/g, "");
     if (digits.length === 12 && digits.indexOf("63") === 0) digits = "0" + digits.slice(2);
     if (digits.length === 10 && digits.charAt(0) === "9") digits = "0" + digits;
@@ -193,6 +204,7 @@
   NS.validation = {
     email: email,
     phMobile: phMobile,
+    canonicalPhone: canonicalPhone,
     normalizePhone: normalizePhone,
     license: license,
     normalizeLicense: normalizeLicense,

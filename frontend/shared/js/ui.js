@@ -544,6 +544,93 @@
     input.classList.toggle("is-invalid", !!message);
   }
 
+  var PHONE_TAKEN = "This mobile number is already registered.";
+  var PHONE_INVALID = "Use a Philippine mobile number (09XXXXXXXXX).";
+
+  /**
+   * Live check for an account mobile. Disables the submit button while the number
+   * is invalid or already registered. The signed-in user's own number is allowed.
+   */
+  function bindAccountPhone(input, options) {
+    if (!input || input.getAttribute("data-phone-bound") === "1") return;
+    input.setAttribute("data-phone-bound", "1");
+    options = options || {};
+    var button = options.button || null;
+    var timer = null;
+
+    function ownCanon() {
+      var raw = options.ownPhone ? options.ownPhone() : "";
+      return NS.validation.canonicalPhone(raw || "");
+    }
+
+    function setBlocked(blocked) {
+      input.setAttribute("data-phone-blocked", blocked ? "1" : "0");
+      if (button) button.disabled = !!blocked;
+    }
+
+    function run() {
+      var raw = input.value;
+      var canon = NS.validation.canonicalPhone(raw);
+      if (!String(raw || "").trim()) {
+        fieldError(input, "");
+        setBlocked(false);
+        return;
+      }
+      if (!canon) {
+        fieldError(input, PHONE_INVALID);
+        setBlocked(true);
+        return;
+      }
+      if (ownCanon() && ownCanon() === canon) {
+        fieldError(input, "");
+        setBlocked(false);
+        return;
+      }
+      var local = NS.auth && NS.auth.phoneOwner ? NS.auth.phoneOwner(canon, options.userId || "") : null;
+      if (local) {
+        fieldError(input, PHONE_TAKEN);
+        setBlocked(true);
+        return;
+      }
+      if (!NS.api || !NS.api.post) {
+        fieldError(input, "");
+        setBlocked(false);
+        return;
+      }
+      setBlocked(true);
+      var seq = String(Number(input.getAttribute("data-phone-seq") || "0") + 1);
+      input.setAttribute("data-phone-seq", seq);
+      NS.api.post("/users/phone-available", { phone: canon }).then(function (res) {
+        if (input.getAttribute("data-phone-seq") !== seq) return;
+        if (ownCanon() === canon) {
+          fieldError(input, "");
+          setBlocked(false);
+          return;
+        }
+        if (res && res.taken) {
+          fieldError(input, PHONE_TAKEN);
+          setBlocked(true);
+          return;
+        }
+        fieldError(input, "");
+        setBlocked(false);
+      }).catch(function () {
+        if (input.getAttribute("data-phone-seq") !== seq) return;
+        fieldError(input, "");
+        setBlocked(false);
+      });
+    }
+
+    input.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(run, 400);
+    });
+    input.addEventListener("blur", function () {
+      clearTimeout(timer);
+      run();
+    });
+  }
+
   function clearErrors(form) {
     var errs = form.querySelectorAll(".field-error");
     for (var i = 0; i < errs.length; i++) errs[i].textContent = "";
@@ -860,6 +947,7 @@
     vehicleCard: vehicleCard,
     bindCsrf: bindCsrf,
     fieldError: fieldError,
+    bindAccountPhone: bindAccountPhone,
     clearErrors: clearErrors,
     avatarHtml: avatarHtml,
     readImageAsAvatar: readImageAsAvatar,
