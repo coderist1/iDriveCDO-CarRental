@@ -311,14 +311,12 @@
   };
 
   NS.pages.forgot = function forgot() {
-    var form = document.getElementById("forgot-form");
-    if (!form || form.getAttribute("data-bound") === "1") return;
-    form.setAttribute("data-bound", "1");
-    try {
-      if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-    } catch (e) {
-      console.warn("CSRF bind failed", e);
-    }
+    var emailForm = document.getElementById("forgot-email-form");
+    var codeForm = document.getElementById("forgot-code-form");
+    var oldForm = document.getElementById("forgot-old-form");
+    var accountRow = document.getElementById("forgot-account");
+    if (!emailForm || !codeForm || !oldForm || codeForm.getAttribute("data-bound") === "1") return;
+    codeForm.setAttribute("data-bound", "1");
     try {
       if (NS.auth && NS.auth.current && NS.auth.current()) {
         location.replace(NS.routes.href("profile"));
@@ -327,49 +325,149 @@
     } catch (e) {
       console.warn("current() check failed", e);
     }
+    NS.ui.bindCsrf(codeForm);
+    NS.ui.bindCsrf(oldForm);
 
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      if (NS.ui && NS.ui.clearErrors) NS.ui.clearErrors(form);
-      showAlert(form, "", "ok");
-      var btn = form.querySelector('button[type="submit"]');
-      var email = val(form, "email");
-      var phone = val(form, "phone");
+    var chosenEmail = "";
+
+    function notice(message, type) {
+      var box = document.getElementById("form-alert");
+      if (!box) return;
+      box.hidden = !message;
+      box.textContent = message || "";
+      box.style.borderColor = type === "ok" ? "rgba(196, 80, 75,0.35)" : "rgba(155,28,28,0.45)";
+      box.style.color = type === "ok" ? "#a63f3b" : "#9b1c1c";
+      if (message) NS.ui.toast(message, type === "ok" ? "ok" : "err");
+    }
+
+    function checkNewPassword(form) {
       var next = val(form, "password");
-      var confirm = val(form, "confirmPassword");
-      if (next !== confirm) {
-        showAlert(form, "New passwords do not match.", "err");
-        return;
+      if (next !== val(form, "confirmPassword")) {
+        notice("New passwords do not match.", "err");
+        return null;
       }
-      var issues = NS.security.passwordIssues(next, email);
+      var issues = NS.security.passwordIssues(next, chosenEmail);
       if (issues.length) {
-        showAlert(form, "New password: " + issues.join(" "), "err");
-        return;
+        notice("New password: " + issues.join(" "), "err");
+        return null;
       }
-      if (btn) btn.disabled = true;
-      NS.ui.askYesNo("Set this as your new password?", { title: "Reset password", yes: "Yes", no: "No" }).then(function (ok) {
-        if (!ok) {
-          if (btn) btn.disabled = false;
+      return next;
+    }
+
+    function showStep(method) {
+      emailForm.hidden = !!method;
+      accountRow.hidden = !method;
+      codeForm.hidden = method !== "code";
+      oldForm.hidden = method !== "old";
+      document.getElementById("forgot-account-email").textContent = chosenEmail;
+    }
+
+    emailForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      notice("", "ok");
+      try {
+        var method = NS.auth.resetMethodFor(val(emailForm, "email"));
+        chosenEmail = NS.security.sanitizeEmail(val(emailForm, "email"));
+        showStep(method);
+        var first = method === "code" ? document.getElementById("send-code-btn") : field(oldForm, "currentPassword");
+        if (first) first.focus();
+      } catch (err) {
+        notice((err && err.message) || "Could not find that account.", "err");
+      }
+    });
+
+    document.getElementById("forgot-change-email").addEventListener("click", function () {
+      notice("", "ok");
+      codeForm.reset();
+      oldForm.reset();
+      chosenEmail = "";
+      showStep(null);
+      field(emailForm, "email").focus();
+    });
+
+    var sendBtn = document.getElementById("send-code-btn");
+    var cooldownTimer = null;
+    function startCooldown(seconds) {
+      var left = seconds;
+      sendBtn.disabled = true;
+      sendBtn.textContent = "Resend in " + left + "s";
+      clearInterval(cooldownTimer);
+      cooldownTimer = setInterval(function () {
+        left -= 1;
+        if (left <= 0) {
+          clearInterval(cooldownTimer);
+          sendBtn.disabled = false;
+          sendBtn.textContent = "Resend code";
           return;
         }
+        sendBtn.textContent = "Resend in " + left + "s";
+      }, 1000);
+    }
+    sendBtn.addEventListener("click", function () {
+      notice("", "ok");
+      var label = sendBtn.textContent;
+      sendBtn.disabled = true;
+      sendBtn.textContent = "Sending…";
+      NS.auth.sendResetCode(chosenEmail).then(function (message) {
+        notice(message, "ok");
+        startCooldown(60);
+        var codeInput = field(codeForm, "code");
+        if (codeInput) codeInput.focus();
+      }).catch(function (err) {
+        sendBtn.disabled = false;
+        sendBtn.textContent = label;
+        notice((err && err.message) || "Could not send the code.", "err");
+      });
+    });
+
+    codeForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      notice("", "ok");
+      var next = checkNewPassword(codeForm);
+      if (!next) return;
+      var btn = codeForm.querySelector('button[type="submit"]');
+      NS.ui.askYesNo("Set this as your new password?", { title: "Reset password", yes: "Yes", no: "No" }).then(function (ok) {
+        if (!ok) return;
+        NS.ui.bindCsrf(codeForm);
+        btn.disabled = true;
+        return NS.auth
+          .resetPasswordWithCode(chosenEmail, val(codeForm, "code"), next, val(codeForm, "csrf"))
+          .then(function () {
+            codeForm.reset();
+            NS.ui.bindCsrf(codeForm);
+            notice("Password updated. You can sign in with the new password on this browser.", "ok");
+          })
+          .catch(function (err) {
+            NS.ui.bindCsrf(codeForm);
+            notice((err && err.message) || "Could not reset the password.", "err");
+          })
+          .then(function () {
+            btn.disabled = false;
+          });
+      });
+    });
+
+    oldForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      notice("", "ok");
+      if (!val(oldForm, "currentPassword")) {
+        notice("Enter your old password.", "err");
+        return;
+      }
+      var next = checkNewPassword(oldForm);
+      if (!next) return;
+      NS.ui.askYesNo("Change to this new password?", { title: "Change password", yes: "Yes", no: "No" }).then(function (ok) {
+        if (!ok) return;
+        NS.ui.bindCsrf(oldForm);
         try {
-          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-        } catch (ignore) {}
-        var csrfEl = field(form, "csrf");
-        try {
-          NS.auth.resetPassword(email, phone, next, csrfEl ? csrfEl.value : "");
-          form.reset();
-          try {
-            if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-          } catch (ignore) {}
-          showAlert(form, "Password updated. You can sign in with the new password on this browser.", "ok");
+          NS.auth.resetPasswordWithOld(chosenEmail, val(oldForm, "currentPassword"), next, val(oldForm, "csrf"));
+          oldForm.reset();
+          NS.ui.bindCsrf(oldForm);
+          notice("Password changed. You can sign in with the new password.", "ok");
         } catch (err) {
-          try {
-            if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-          } catch (ignore) {}
-          showAlert(form, (err && err.message) || "Could not reset the password.", "err");
+          NS.ui.bindCsrf(oldForm);
+          notice((err && err.message) || "Could not change the password.", "err");
         }
-        if (btn) btn.disabled = false;
       });
     });
   };

@@ -426,28 +426,25 @@
     throw new Error("User not found.");
   }
 
-  /*
-   * Signed-out reset. Sign-in checks the password stored in this browser, and there is no
-   * mail server, so the mobile number already on the account is the check.
-   */
-  function resetPassword(email, phone, nextPassword, csrf) {
+  function resetTarget(email) {
     email = NS.security.sanitizeEmail(email);
     if (!NS.validation.email(email)) throw new Error("Enter a valid email address.");
-    if (!NS.validation.phMobile(phone)) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
-    NS.security.assertCsrf(csrf);
     NS.security.assertNotLocked(email);
     var user = findUser(email);
-    var phoneOnFile = user ? NS.validation.normalizePhone(user.phone || "") : "";
-    var phoneGiven = NS.validation.normalizePhone(phone);
-    var phoneOk = user && phoneOnFile && phoneOnFile === phoneGiven && NS.validation.phMobile(phoneOnFile);
-    if (user && user.status !== "active" && phoneOk) throw new Error(DISABLED_MSG);
-    if (user && user.status === "active" && !NS.validation.phMobile(phoneOnFile)) {
-      throw new Error("This account has no mobile number on file. Sign in with Google, or contact the desk.");
-    }
-    if (!user || user.status !== "active" || !phoneOk) {
+    if (user && user.status !== "active") throw new Error(DISABLED_MSG);
+    if (!user) {
       NS.security.recordLoginFailure(email);
-      throw new Error("Those details don't match an active account.");
+      throw new Error("No account uses that email.");
     }
+    return user;
+  }
+
+  /** "code" for Google accounts (emailed code), "old" for email-and-password accounts. */
+  function resetMethodFor(email) {
+    return resetTarget(email).authProvider === "google" ? "code" : "old";
+  }
+
+  function storeNewPassword(user, nextPassword, auditDetail) {
     var issues = NS.security.passwordIssues(nextPassword, user.email);
     if (issues.length) throw new Error("New password: " + issues.join(" "));
     var list = users();
@@ -458,11 +455,56 @@
       list[i].passwordHash = NS.security.hashPassword(nextPassword, salt);
       list[i].passwordSet = true;
       saveUsers(list);
-      NS.security.clearLoginFailures(email);
-      NS.domain.audit("password", user.id, "Password reset from the sign-in page.");
+      NS.security.clearLoginFailures(user.email);
+      NS.domain.audit("password", user.id, auditDetail);
       return true;
     }
     throw new Error("User not found.");
+  }
+
+  /** Emails a 6-digit code through the backend. Resolves with the server message. */
+  function sendResetCode(email) {
+    var user;
+    try {
+      user = resetTarget(email);
+      if (user.authProvider !== "google") throw new Error("This account uses a password. Reset it with your old password.");
+    } catch (err) {
+      return Promise.reject(err);
+    }
+    return NS.api.post("/auth/password-code", { email: user.email }).then(function (res) {
+      return (res && res.message) || "Code sent. Check your email.";
+    });
+  }
+
+  /* Sign-in checks the password stored in this browser, so the new password is saved here once the backend accepts the code. */
+  function resetPasswordWithCode(email, code, nextPassword, csrf) {
+    try {
+      NS.security.assertCsrf(csrf);
+      var user = resetTarget(email);
+      if (user.authProvider !== "google") throw new Error("This account uses a password. Reset it with your old password.");
+      code = String(code || "").replace(/\D/g, "");
+      if (code.length !== 6) throw new Error("Enter the 6-digit code from the email.");
+      var issues = NS.security.passwordIssues(nextPassword, user.email);
+      if (issues.length) throw new Error("New password: " + issues.join(" "));
+    } catch (err) {
+      return Promise.reject(err);
+    }
+    return NS.api.post("/auth/password-code/verify", { email: user.email, code: code }).then(function () {
+      return storeNewPassword(user, nextPassword, "Password reset with an emailed code.");
+    });
+  }
+
+  function resetPasswordWithOld(email, currentPassword, nextPassword, csrf) {
+    NS.security.assertCsrf(csrf);
+    var user = resetTarget(email);
+    if (user.authProvider === "google") throw new Error("This account signs in with Google. Reset it with an emailed code.");
+    if (!user.passwordHash) throw new Error("This account has no password yet. Contact the desk.");
+    if (NS.security.hashPassword(currentPassword || "", user.salt) !== user.passwordHash) {
+      NS.security.recordLoginFailure(user.email);
+      throw new Error("Old password is incorrect.");
+    }
+    if (currentPassword === nextPassword) throw new Error("New password must be different from the old one.");
+    return storeNewPassword(user, nextPassword, "Password changed from the sign-in page using the old password.");
   }
 
   function setUserStatus(userId, status, csrf) {
@@ -569,7 +611,10 @@
     updateProfile: updateProfile,
     updateAvatar: updateAvatar,
     changePassword: changePassword,
-    resetPassword: resetPassword,
+    resetMethodFor: resetMethodFor,
+    sendResetCode: sendResetCode,
+    resetPasswordWithCode: resetPasswordWithCode,
+    resetPasswordWithOld: resetPasswordWithOld,
     setUserStatus: setUserStatus,
     listUsers: listUsers,
     countRole: countRole,

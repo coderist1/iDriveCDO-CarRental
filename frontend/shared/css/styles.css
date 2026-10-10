@@ -3673,6 +3673,14 @@ body .auth-actions .btn.google-fallback { width: 100%; min-height: 44px; display
 
 .forgot-row { display: flex; justify-content: flex-end; margin: -0.35rem 0 0.85rem; }
 .forgot-row a { font-size: 0.88rem; font-weight: 700; }
+.forgot-form[hidden] { display: none; }
+.forgot-form > .btn { width: 100%; }
+.forgot-email-row { display: flex; gap: 0.5rem; align-items: stretch; }
+.forgot-email-row .form-control { flex: 1; min-width: 0; }
+.forgot-email-row .btn { white-space: nowrap; margin: 0; }
+.forgot-account { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0 0 0.8rem; padding: 0.6rem 0.8rem; border: 1px solid #ececec; border-radius: 12px; background: #fafafa; overflow-wrap: anywhere; }
+.forgot-account[hidden] { display: none; }
+.forgot-account .btn { margin: 0; flex-shrink: 0; }
 .req-star { color: #c4504b; font-weight: 800; margin-left: 0.15rem; }
 .section-summary { margin: 0 0 0.6rem; color: #5c5c5c; font-size: 0.88rem; }
 .section-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 0.75rem 1.25rem; margin: 1.2rem 0 0.4rem; }
