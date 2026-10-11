@@ -1,2 +1,7 @@
 ml-api
-.dockerignore
+start-server.bat
+**/*.pyc
+**/__pycache__
+.git
+.gitignore
+*.md

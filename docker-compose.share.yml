@@ -1,0 +1,33 @@
+# Give this file to someone who only has Docker. They do not need the source folders.
+# Copy docker.env.example to .env next to this file and fill APP_KEY + database values.
+name: idrive-cdo
+
+services:
+  api:
+    image: horvedock/idrive-cdo-api:1.0
+    container_name: idrive-api
+    env_file:
+      - .env
+    environment:
+      APP_URL: http://localhost:8000
+      FRONTEND_URLS: http://localhost:8080,http://127.0.0.1:8080
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  ml:
+    image: horvedock/idrive-cdo-ml:1.0
+    container_name: idrive-ml
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  web:
+    image: horvedock/idrive-cdo-web:1.0
+    container_name: idrive-web
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+      - ml
+    restart: unless-stopped

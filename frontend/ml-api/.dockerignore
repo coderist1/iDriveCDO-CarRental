@@ -1,5 +1,8 @@
 __pycache__
 *.pyc
 *.pyo
+.venv
+venv
 start-ml-api.bat
 train_export.py
+.git

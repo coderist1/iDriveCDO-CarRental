@@ -1,28 +1,37 @@
 # Local stack for iDrive CDO.
 # From this folder: docker compose up --build
 # The Laravel API is the sibling repo at ../../Backend/iDriveCDO-CarRental-Backend.
+# Default image names are the copies published on Docker Hub.
 
 name: idrive-cdo
 
 services:
   web:
-    image: horvedock/idrive-cdo-web:latest
-    build: ./frontend
+    image: ${IDRIVE_WEB_IMAGE:-horvedock/idrive-cdo-web:latest}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "8080:80"
     depends_on:
       - api
-      - ml-api
+      - ml
+    restart: unless-stopped
 
-  ml-api:
-    image: horvedock/idrive-cdo-ml-api:latest
-    build: ./frontend/ml-api
+  ml:
+    image: ${IDRIVE_ML_IMAGE:-horvedock/idrive-cdo-ml-api:latest}
+    build:
+      context: ./frontend/ml-api
+      dockerfile: Dockerfile
     ports:
       - "8001:8001"
+    restart: unless-stopped
 
   api:
-    image: horvedock/idrive-cdo-api:latest
-    build: ../../Backend/iDriveCDO-CarRental-Backend
+    image: ${IDRIVE_API_IMAGE:-horvedock/idrive-cdo-api:latest}
+    build:
+      context: ${IDRIVE_BACKEND_DIR:-../../Backend/iDriveCDO-CarRental-Backend}
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
@@ -47,6 +56,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
 
   db:
     image: postgres:16-alpine
@@ -65,6 +75,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    restart: unless-stopped
 
 volumes:
   idrive-pg:
