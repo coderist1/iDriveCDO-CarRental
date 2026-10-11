@@ -46,7 +46,7 @@ VALUES
    'active', '2026-01-15 08:00:00'),
   ('usr_driver', 'driver@idrivecdo.ph',
    '$2y$12$om0C83I0ieIWEsUukXmNAe.DzPqGxNdTo4kc0.L5Hq/z3eGVKopAa',
-   'driver', 'Rico', 'Manalo', '09170001111', 'Carmen, Cagayan de Oro', 'Chauffeur',
+   'driver', 'Rico', 'Manalo', '+639170001111', 'Carmen, Cagayan de Oro', 'Chauffeur',
    'N02-98-112233', '2028-06-30', NULL, 'active', '2026-01-15 08:00:00');
 
 UPDATE users

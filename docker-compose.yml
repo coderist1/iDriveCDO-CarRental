@@ -1,0 +1,70 @@
+# Local stack for iDrive CDO.
+# From this folder: docker compose up --build
+# The Laravel API is the sibling repo at ../../Backend/iDriveCDO-CarRental-Backend.
+
+name: idrive-cdo
+
+services:
+  web:
+    image: horvedock/idrive-cdo-web:latest
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+      - ml-api
+
+  ml-api:
+    image: horvedock/idrive-cdo-ml-api:latest
+    build: ./frontend/ml-api
+    ports:
+      - "8001:8001"
+
+  api:
+    image: horvedock/idrive-cdo-api:latest
+    build: ../../Backend/iDriveCDO-CarRental-Backend
+    ports:
+      - "8000:8000"
+    environment:
+      APP_NAME: iDrive CDO
+      APP_ENV: local
+      APP_KEY: base64:lJn40ooioJGVoNPlIWCwwH7U7pB+6l0FtVt0SEUA6NA=
+      APP_DEBUG: "true"
+      APP_URL: http://127.0.0.1:8000
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_DATABASE: idrive
+      DB_USERNAME: idrive
+      DB_PASSWORD: idrive
+      DB_SSLMODE: disable
+      DB_PERSISTENT: "false"
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      MAIL_MAILER: log
+      FRONTEND_URLS: http://localhost:8080,http://127.0.0.1:8080
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: idrive
+      POSTGRES_PASSWORD: idrive
+      POSTGRES_DB: idrive
+    ports:
+      - "5432:5432"
+    volumes:
+      - idrive-pg:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idrive -d idrive"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  idrive-pg:
