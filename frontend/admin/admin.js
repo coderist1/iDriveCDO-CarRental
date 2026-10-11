@@ -492,6 +492,7 @@
     out.licenseAddress = out.licenseAddress || doc.license_address || "";
     out.idType = out.idType || doc.id_type || "";
     out.idNumber = out.idNumber || doc.id_number || "";
+    out.idExpiry = out.idExpiry || (doc.id_expiry ? String(doc.id_expiry).slice(0, 10) : "");
     return out;
   }
 
@@ -525,6 +526,7 @@
     add("Restrictions", info.restrictions);
     add("ID type", info.idType);
     add("ID number", info.idNumber);
+    if (info.idType) add("Expiry date", info.idExpiry || "Not on file");
     add("Date of birth", info.birthdate);
     var shots = idPhotos(info);
     modal.innerHTML =
@@ -539,7 +541,7 @@
       "</div></div></article>";
     var photos = modal.querySelector(".id-check-photos");
     if (!shots.length) {
-      photos.innerHTML = '<p class="fineprint">No ID photo was saved with this booking.</p>';
+      photos.innerHTML = '<p class="fineprint">No ID photo is on file for this booking. Bookings made before ID photos were saved to the server only have the typed details. Use "Message customer" to ask for a clear photo of the ID, or check the original ID at pick-up.</p>';
     } else {
       shots.forEach(function (shot) {
         var fig = document.createElement("figure");
@@ -1667,14 +1669,21 @@
         });
     }
 
+    function openBookingConversation(bookingId) {
+      var thread = NS.domain.ensureBookingThread(bookingId);
+      selectedId = thread.id;
+      renderList();
+      renderThread();
+      viewHost.scrollIntoView({ behavior: "smooth", block: "start" });
+      var reply = viewHost.querySelector('textarea[name="body"]');
+      if (reply) reply.focus({ preventScroll: true });
+    }
+
     incomingHost.addEventListener("click", function (e) {
       var id = e.target.getAttribute("data-open");
       if (!id) return;
       try {
-        var thread = NS.domain.ensureBookingThread(id);
-        selectedId = thread.id;
-        renderList();
-        renderThread();
+        openBookingConversation(id);
       } catch (err) {
         NS.ui.toast(err.message, "err");
       }
@@ -1690,10 +1699,7 @@
         var id = e.target.getAttribute("data-open");
         if (!id) return;
         try {
-          var thread = NS.domain.ensureBookingThread(id);
-          selectedId = thread.id;
-          renderList();
-          renderThread();
+          openBookingConversation(id);
         } catch (err) {
           NS.ui.toast(err.message, "err");
         }

@@ -678,6 +678,7 @@
     if (booking.driveMode === "chauffeur") {
       if (!info.idType || !info.idNumber) return null;
       var idBody = { id_type: info.idType, id_number: info.idNumber };
+      if (info.idExpiry) idBody.id_expiry = info.idExpiry;
       if (info.idPhoto) idBody.id_photo = info.idPhoto;
       return idBody;
     }
