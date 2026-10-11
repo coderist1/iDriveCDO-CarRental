@@ -576,12 +576,28 @@
       openIdCheck(booking, info);
       return;
     }
-    NS.api.get("/bookings/" + encodeURIComponent(booking.apiId) + "/id-document").then(function (res) {
-      openIdCheck(booking, identityFromDocument(info, res && res.document));
-    }).catch(function () {
-      openIdCheck(booking, info);
-      NS.ui.toast("Could not load the saved ID photo. Showing what is on this browser.", "err");
-    });
+    var path = "/bookings/" + encodeURIComponent(booking.apiId) + "/id-document";
+    function load() {
+      return NS.api.get(path, { timeoutMs: 30000 });
+    }
+    NS.ui.toast("Loading the saved ID…", "ok");
+    load()
+      .catch(function (err) {
+        if (err && err.status >= 400 && err.status < 500) throw err;
+        return load();
+      })
+      .then(
+        function (res) {
+          openIdCheck(booking, identityFromDocument(info, res && res.document));
+        },
+        function (err) {
+          openIdCheck(booking, info);
+          var reason = err && err.status === 404
+            ? "This booking is not on the server."
+            : (err && err.message) || "The server could not be reached.";
+          NS.ui.toast("Could not load the saved ID photo (" + reason + ") Showing what is on this browser.", "err");
+        }
+      );
   }
 
   function adminBookings() {
