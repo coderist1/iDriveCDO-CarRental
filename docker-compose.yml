@@ -54,7 +54,6 @@ services:
       SESSION_DRIVER: database
       CACHE_STORE: database
       QUEUE_CONNECTION: database
-      MAIL_MAILER: log
       FRONTEND_URLS: http://localhost:8080,http://127.0.0.1:8080
     depends_on:
       db:
