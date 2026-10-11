@@ -529,6 +529,14 @@ h1, h2, h3, .brand span {
 }
 .password-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.9rem; }
 .password-dialog-head h2 { margin: 0; font-size: 1.25rem; }
+.id-check-dialog { width: min(880px, 100%); }
+.id-check-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(220px, 0.7fr); gap: 1rem; align-items: start; }
+.id-check-photo { margin: 0 0 0.85rem; }
+.id-check-photo figcaption { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 800; }
+.id-check-photo img { width: 100%; max-height: 420px; object-fit: contain; background: #f6f6f6; border: 1px solid #eee; border-radius: 12px; }
+@media (max-width: 720px) {
+  .id-check-layout { grid-template-columns: 1fr; }
+}
 #profile-form > .btn,
 .password-dialog > .btn { width: 100%; margin-top: 0.15rem; }
 

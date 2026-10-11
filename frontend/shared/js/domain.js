@@ -677,7 +677,9 @@
     var info = booking.driverInfo || {};
     if (booking.driveMode === "chauffeur") {
       if (!info.idType || !info.idNumber) return null;
-      return { id_type: info.idType, id_number: info.idNumber };
+      var idBody = { id_type: info.idType, id_number: info.idNumber };
+      if (info.idPhoto) idBody.id_photo = info.idPhoto;
+      return idBody;
     }
     /* self-drive: all license fields are required together by the backend */
     var hasAll = info.licenseName && info.licenseNo && info.licenseExpiry &&

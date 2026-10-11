@@ -479,6 +479,109 @@
     render();
   }
 
+  var ID_PHOTO_RE = /^data:image\/(jpeg|jpg|png|webp);base64,/i;
+
+  function identityFromDocument(info, doc) {
+    var out = Object.assign({}, info || {});
+    if (!doc) return out;
+    if (doc.license_photo) out.licensePhoto = out.licensePhoto || doc.license_photo;
+    if (doc.id_photo) out.idPhoto = out.idPhoto || doc.id_photo;
+    out.licenseName = out.licenseName || doc.license_name || "";
+    out.licenseNo = out.licenseNo || doc.license_no || "";
+    out.licenseExpiry = out.licenseExpiry || (doc.license_expiry ? String(doc.license_expiry).slice(0, 10) : "");
+    out.licenseAddress = out.licenseAddress || doc.license_address || "";
+    out.idType = out.idType || doc.id_type || "";
+    out.idNumber = out.idNumber || doc.id_number || "";
+    return out;
+  }
+
+  function idPhotos(info) {
+    var shots = [];
+    function add(label, src) {
+      if (src && ID_PHOTO_RE.test(src)) shots.push({ label: label, src: src });
+    }
+    add("Driver's license, front", info.licensePhoto);
+    add("Driver's license, back", info.licenseBack);
+    add("Government ID", info.idPhoto);
+    return shots;
+  }
+
+  function openIdCheck(booking, info) {
+    var old = document.getElementById("id-check-modal");
+    if (old) old.remove();
+    var esc = NS.security.escapeHtml;
+    var modal = document.createElement("div");
+    modal.id = "id-check-modal";
+    modal.className = "password-modal";
+    var fields = [];
+    function add(label, value) {
+      if (value) fields.push("<li><strong>" + esc(label) + ":</strong> <span>" + esc(value) + "</span></li>");
+    }
+    add("Name on ID", info.licenseName || info.fullName);
+    add("License number", info.licenseNo);
+    add("License expiry", info.licenseExpiry);
+    add("Address on ID", info.licenseAddress || info.address);
+    add("License class", info.licenseClass);
+    add("Restrictions", info.restrictions);
+    add("ID type", info.idType);
+    add("ID number", info.idNumber);
+    add("Date of birth", info.birthdate);
+    var shots = idPhotos(info);
+    modal.innerHTML =
+      '<article class="password-dialog id-check-dialog" role="dialog" aria-modal="true" aria-labelledby="id-check-title">' +
+      '<div class="password-dialog-head"><h2 id="id-check-title">ID check · ' +
+      esc(booking.ref || booking.id) +
+      '</h2><button class="btn btn-ghost btn-sm" type="button" data-id-close>Close</button></div>' +
+      '<div class="id-check-layout"><div class="id-check-photos"></div><div><p class="eyebrow">Typed details</p>' +
+      (fields.length
+        ? '<ul class="booking-detail-list">' + fields.join("") + "</ul>"
+        : '<p class="fineprint">No ID details were saved with this booking.</p>') +
+      "</div></div></article>";
+    var photos = modal.querySelector(".id-check-photos");
+    if (!shots.length) {
+      photos.innerHTML = '<p class="fineprint">No ID photo was saved with this booking.</p>';
+    } else {
+      shots.forEach(function (shot) {
+        var fig = document.createElement("figure");
+        fig.className = "id-check-photo";
+        var cap = document.createElement("figcaption");
+        cap.textContent = shot.label;
+        var img = document.createElement("img");
+        img.alt = shot.label;
+        img.src = shot.src;
+        fig.appendChild(cap);
+        fig.appendChild(img);
+        photos.appendChild(fig);
+      });
+    }
+    function close() {
+      modal.remove();
+      document.removeEventListener("keydown", onKey);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") close();
+    }
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal || e.target.closest("[data-id-close]")) close();
+    });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(modal);
+  }
+
+  function showBookingId(booking) {
+    var info = booking.driverInfo || {};
+    if (!booking.apiId || !NS.api) {
+      openIdCheck(booking, info);
+      return;
+    }
+    NS.api.get("/bookings/" + encodeURIComponent(booking.apiId) + "/id-document").then(function (res) {
+      openIdCheck(booking, identityFromDocument(info, res && res.document));
+    }).catch(function () {
+      openIdCheck(booking, info);
+      NS.ui.toast("Could not load the saved ID photo. Showing what is on this browser.", "err");
+    });
+  }
+
   function adminBookings() {
     mountAdminNav();
     var host = document.getElementById("admin-bookings");
@@ -513,6 +616,10 @@
               '<button class="btn btn-gold btn-sm" data-accept-return="' + b.id + '">Accept return</button>';
           }
           actions +=
+            '<button class="btn btn-ghost btn-sm" data-id-photo="' +
+            b.id +
+            '">View ID</button>';
+          actions +=
             '<button class="btn btn-ghost btn-sm" data-msg="' +
             b.id +
             '">Message</button>';
@@ -535,6 +642,16 @@
     }
     document.getElementById("status-filter").addEventListener("change", render);
     host.addEventListener("click", function (e) {
+      var idPhoto = e.target.getAttribute("data-id-photo");
+      if (idPhoto) {
+        var booking = NS.domain.getBooking(idPhoto);
+        if (!booking) {
+          NS.ui.toast("Booking not found.", "err");
+          return;
+        }
+        showBookingId(booking);
+        return;
+      }
       var msgId = e.target.getAttribute("data-msg");
       if (msgId) {
         try {
