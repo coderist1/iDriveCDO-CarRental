@@ -125,7 +125,8 @@
     if (page === "car" || page === "book") return NS.routes.href("fleet");
     if (page === "bookingDetail" || page === "payment") return NS.routes.href("myBookings");
     if (page === "profile") return NS.routes.href("account");
-    if (page === "login" || page === "register") return NS.routes.href("home");
+    if (page === "login" || page === "register" || page === "forgot") return NS.routes.href("home");
+    if (page === "resetPassword") return NS.routes.href("forgot");
     return NS.routes.href("home");
   }
 

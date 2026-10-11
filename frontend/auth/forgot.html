@@ -30,17 +30,14 @@
       </p>
 
       <form id="forgot-code-form" class="forgot-form" novalidate hidden>
-        <p class="fineprint">This account signs in with Google. We'll email a 6-digit code to your Gmail. Enter it here with your new password.</p>
+        <p class="fineprint">This account signs in with Google. We'll email a 6-digit code to your Gmail. Confirm the code, then you'll set a new password on the next page.</p>
         <label class="field">Code
           <span class="forgot-email-row">
             <input class="form-control" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" required>
             <button class="btn btn-ghost btn-sm" type="button" id="send-code-btn">Send code</button>
           </span>
         </label>
-        <label class="field">New password <input class="form-control" name="password" type="password" autocomplete="new-password" required></label>
-        <label class="field">Confirm new password <input class="form-control" name="confirmPassword" type="password" autocomplete="new-password" required></label>
-        <p class="fineprint">8+ characters with an uppercase letter, a lowercase letter, a number, and a symbol.</p>
-        <button class="btn btn-gold" type="submit">Reset password</button>
+        <button class="btn btn-gold" type="submit">Confirm code</button>
       </form>
 
       <form id="forgot-old-form" class="forgot-form" novalidate hidden>
@@ -61,11 +58,11 @@
   <script src="../shared/js/store.js?v=20261008h"></script>
   <script src="../shared/js/api.js?v=20261009g"></script>
   <script src="../shared/js/validation.js?v=20261011a"></script>
-  <script src="../shared/js/routes.js?v=20261010m"></script>
+  <script src="../shared/js/routes.js?v=20261011a"></script>
   <script src="../shared/js/domain.js?v=20261011d"></script>
-  <script src="../auth/auth.js?v=20261011e"></script>
-  <script src="../shared/js/ui.js?v=20261011d"></script>
-  <script src="./auth-pages.js?v=20261011d"></script>
+  <script src="../auth/auth.js?v=20261011f"></script>
+  <script src="../shared/js/ui.js?v=20261011e"></script>
+  <script src="./auth-pages.js?v=20261011e"></script>
   <script src="../shared/js/app.js?v=20261010k"></script>
 </body>
 </html>

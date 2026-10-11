@@ -512,21 +512,75 @@
     });
   }
 
-  /* Sign-in checks the password stored in this browser, so the new password is saved here once the backend accepts the code. */
-  function resetPasswordWithCode(email, code, nextPassword, csrf) {
+  var RESET_TICKET_KEY = "idrive_reset_ticket";
+  var RESET_TICKET_MS = 10 * 60 * 1000;
+
+  function readResetTicket() {
     try {
-      NS.security.assertCsrf(csrf);
-      var user = resetTarget(email);
+      var raw = sessionStorage.getItem(RESET_TICKET_KEY);
+      if (!raw) return null;
+      var ticket = JSON.parse(raw);
+      if (!ticket || !ticket.email || !ticket.at || Date.now() - ticket.at > RESET_TICKET_MS) {
+        sessionStorage.removeItem(RESET_TICKET_KEY);
+        return null;
+      }
+      return ticket;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveResetTicket(email) {
+    sessionStorage.setItem(
+      RESET_TICKET_KEY,
+      JSON.stringify({ email: email, at: Date.now(), token: NS.security.randomHex(16) })
+    );
+  }
+
+  function clearResetTicket() {
+    try {
+      sessionStorage.removeItem(RESET_TICKET_KEY);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  /** Confirms the emailed code, then allows the new-password page for a short time. */
+  function verifyResetCode(email, code) {
+    var user;
+    try {
+      user = resetTarget(email);
       if (user.authProvider !== "google") throw new Error("This account uses a password. Reset it with your old password.");
       code = String(code || "").replace(/\D/g, "");
       if (code.length !== 6) throw new Error("Enter the 6-digit code from the email.");
-      var issues = NS.security.passwordIssues(nextPassword, user.email);
-      if (issues.length) throw new Error("New password: " + issues.join(" "));
     } catch (err) {
       return Promise.reject(err);
     }
     return NS.api.post("/auth/password-code/verify", { email: user.email, code: code }).then(function () {
-      return storeNewPassword(user, nextPassword, "Password reset with an emailed code.");
+      saveResetTicket(user.email);
+      return user.email;
+    });
+  }
+
+  function completeVerifiedReset(nextPassword, csrf) {
+    try {
+      if (csrf) NS.security.assertCsrf(csrf);
+      else NS.security.issueCsrf();
+    } catch (e) {
+      NS.security.issueCsrf();
+    }
+    var ticket = readResetTicket();
+    if (!ticket) throw new Error("Confirm the email code first. It may have expired.");
+    var user = resetTarget(ticket.email);
+    storeNewPassword(user, nextPassword, "Password reset with an emailed code.");
+    clearResetTicket();
+    return true;
+  }
+
+  /* Sign-in checks the password stored in this browser, so the new password is saved here once the backend accepts the code. */
+  function resetPasswordWithCode(email, code, nextPassword, csrf) {
+    return verifyResetCode(email, code).then(function () {
+      return completeVerifiedReset(nextPassword, csrf);
     });
   }
 
@@ -651,6 +705,9 @@
     changePassword: changePassword,
     resetMethodFor: resetMethodFor,
     sendResetCode: sendResetCode,
+    verifyResetCode: verifyResetCode,
+    completeVerifiedReset: completeVerifiedReset,
+    readResetTicket: readResetTicket,
     resetPasswordWithCode: resetPasswordWithCode,
     resetPasswordWithOld: resetPasswordWithOld,
     setUserStatus: setUserStatus,

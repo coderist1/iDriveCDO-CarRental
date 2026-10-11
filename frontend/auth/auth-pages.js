@@ -470,27 +470,19 @@
     codeForm.addEventListener("submit", function (e) {
       e.preventDefault();
       notice("", "ok");
-      var next = checkNewPassword(codeForm);
-      if (!next) return;
+      var code = val(codeForm, "code");
+      if (String(code || "").replace(/\D/g, "").length !== 6) {
+        notice("Enter the 6-digit code from the email.", "err");
+        return;
+      }
       var btn = codeForm.querySelector('button[type="submit"]');
-      NS.ui.askYesNo("Set this as your new password?", { title: "Reset password", yes: "Yes", no: "No" }).then(function (ok) {
-        if (!ok) return;
-        NS.ui.bindCsrf(codeForm);
-        btn.disabled = true;
-        return NS.auth
-          .resetPasswordWithCode(chosenEmail, val(codeForm, "code"), next, val(codeForm, "csrf"))
-          .then(function () {
-            codeForm.reset();
-            NS.ui.bindCsrf(codeForm);
-            notice("Password updated. You can sign in with the new password on this browser.", "ok");
-          })
-          .catch(function (err) {
-            NS.ui.bindCsrf(codeForm);
-            notice((err && err.message) || "Could not reset the password.", "err");
-          })
-          .then(function () {
-            btn.disabled = false;
-          });
+      btn.disabled = true;
+      NS.auth.verifyResetCode(chosenEmail, code).then(function () {
+        location.assign(NS.routes.href("resetPassword"));
+      }).catch(function (err) {
+        notice((err && err.message) || "That code is not valid.", "err");
+      }).then(function () {
+        btn.disabled = false;
       });
     });
 
@@ -514,6 +506,61 @@
         } catch (err) {
           NS.ui.bindCsrf(oldForm);
           notice((err && err.message) || "Could not change the password.", "err");
+        }
+      });
+    });
+  };
+
+  NS.pages.resetPassword = function resetPassword() {
+    var form = document.getElementById("reset-password-form");
+    if (!form || form.getAttribute("data-bound") === "1") return;
+    form.setAttribute("data-bound", "1");
+    try {
+      if (NS.auth && NS.auth.current && NS.auth.current()) {
+        location.replace(NS.routes.href("profile"));
+        return;
+      }
+    } catch (e) {
+      console.warn("current() check failed", e);
+    }
+    var ticket = NS.auth.readResetTicket && NS.auth.readResetTicket();
+    if (!ticket) {
+      location.replace(NS.routes.href("forgot"));
+      return;
+    }
+    var emailEl = document.getElementById("reset-account-email");
+    if (emailEl) emailEl.textContent = ticket.email;
+    NS.ui.bindCsrf(form);
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      showAlert(form, "", "ok");
+      var next = val(form, "password");
+      if (next !== val(form, "confirmPassword")) {
+        showAlert(form, "New passwords do not match.", "err");
+        return;
+      }
+      var issues = NS.security.passwordIssues(next, ticket.email);
+      if (issues.length) {
+        showAlert(form, "New password: " + issues.join(" "), "err");
+        return;
+      }
+      NS.ui.askYesNo("Save this as your new password?", { title: "Save password", yes: "Yes", no: "No" }).then(function (ok) {
+        if (!ok) return;
+        NS.ui.bindCsrf(form);
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+        try {
+          NS.auth.completeVerifiedReset(next, val(form, "csrf"));
+          form.reset();
+          showAlert(form, "Password updated. You can sign in with the new password.", "ok");
+          setTimeout(function () {
+            location.assign(NS.routes.href("login"));
+          }, 1200);
+        } catch (err) {
+          NS.ui.bindCsrf(form);
+          showAlert(form, (err && err.message) || "Could not save the password.", "err");
+          if (btn) btn.disabled = false;
         }
       });
     });

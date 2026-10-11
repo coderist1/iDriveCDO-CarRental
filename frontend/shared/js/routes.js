@@ -14,6 +14,7 @@
     contact: "info/contact.html",
     login: "auth/login.html",
     forgot: "auth/forgot.html",
+    resetPassword: "auth/reset-password.html",
     register: "auth/register.html",
     account: "account/account.html",
     profile: "account/profile.html",
