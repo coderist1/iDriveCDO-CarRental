@@ -1,0 +1,40 @@
+name: idrive-cdo
+
+services:
+  api:
+    image: ${IDRIVE_API_IMAGE:-horvedock/idrive-cdo-api:1.0}
+    build:
+      context: ${IDRIVE_BACKEND_DIR:-../../Backend/iDriveCDO-CarRental-Backend}
+      dockerfile: Dockerfile
+    container_name: idrive-api
+    env_file:
+      - ${IDRIVE_BACKEND_ENV:-../../Backend/iDriveCDO-CarRental-Backend/.env}
+    environment:
+      APP_URL: http://localhost:8000
+      FRONTEND_URLS: http://localhost:8080,http://127.0.0.1:8080
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  ml:
+    image: ${IDRIVE_ML_IMAGE:-horvedock/idrive-cdo-ml:1.0}
+    build:
+      context: ./frontend/ml-api
+      dockerfile: Dockerfile
+    container_name: idrive-ml
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  web:
+    image: ${IDRIVE_WEB_IMAGE:-horvedock/idrive-cdo-web:1.0}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: idrive-web
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+      - ml
+    restart: unless-stopped
