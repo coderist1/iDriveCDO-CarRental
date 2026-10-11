@@ -34,6 +34,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - path: ${IDRIVE_BACKEND_ENV:-../../Backend/iDriveCDO-CarRental-Backend/.env}
+        required: false
     environment:
       APP_NAME: iDrive CDO
       APP_ENV: local
