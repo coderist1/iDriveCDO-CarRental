@@ -576,10 +576,11 @@
       openIdCheck(booking, info);
       return;
     }
-    NS.api.get("/bookings/" + encodeURIComponent(booking.apiId) + "/id-document").then(function (res) {
+    NS.api.get("/bookings/" + encodeURIComponent(booking.apiId) + "/id-document", { timeoutMs: 30000 }).then(function (res) {
       openIdCheck(booking, identityFromDocument(info, res && res.document));
-    }).catch(function () {
+    }).catch(function (err) {
       openIdCheck(booking, info);
+      if (err && err.status === 404) return;
       NS.ui.toast("Could not load the saved ID photo. Showing what is on this browser.", "err");
     });
   }

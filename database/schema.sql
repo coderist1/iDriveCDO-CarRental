@@ -283,6 +283,8 @@ CREATE TABLE booking_renter_documents (
   license_photo   text,
   id_type         varchar,
   id_number       varchar,
+  id_expiry       date,
+  id_photo        text,
   created_at      timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT booking_renter_documents_pkey PRIMARY KEY (booking_id),
   CONSTRAINT booking_renter_documents_license_check CHECK (license_no IS NULL OR license_no ~* '^[A-Z0-9][A-Z0-9-]{5,19}$'),
