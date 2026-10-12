@@ -41,6 +41,20 @@
     return null;
   }
 
+  /** Laravel validation text, or the fetch error — never a generic "try again". */
+  function phoneCheckError(err) {
+    var errors = err && err.data && err.data.errors;
+    if (errors) {
+      if (errors.phone && errors.phone.length) return errors.phone.join(" ");
+      return Object.keys(errors)
+        .map(function (k) {
+          return errors[k].join(" ");
+        })
+        .join(" ");
+    }
+    return (err && err.message) || "Could not check that mobile number.";
+  }
+
   /** Resolves with the +63 number, or rejects when it is invalid or already registered. */
   function ensurePhoneFree(phone, exceptUserId) {
     var canon = NS.validation.canonicalPhone(phone);
@@ -56,7 +70,7 @@
       return canon;
     }).catch(function (err) {
       if (err && err.message === PHONE_TAKEN) throw err;
-      throw new Error("Could not check that mobile number. Try again.");
+      throw new Error(phoneCheckError(err));
     });
   }
 
@@ -697,6 +711,7 @@
     register: register,
     phoneOwner: phoneOwner,
     ensurePhoneFree: ensurePhoneFree,
+    phoneCheckError: phoneCheckError,
     googleSignIn: googleSignIn,
     setPhone: setPhone,
     logout: logout,

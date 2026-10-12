@@ -558,6 +558,8 @@
     options = options || {};
     var button = options.button || null;
     var timer = null;
+    var lastNational = "";
+    var lastOutcome = null;
 
     function ownCanon() {
       var raw = options.ownPhone ? options.ownPhone() : "";
@@ -569,26 +571,49 @@
       if (button) button.disabled = !!blocked;
     }
 
+    function applyOutcome(outcome) {
+      if (outcome && outcome.taken) {
+        fieldError(input, PHONE_TAKEN);
+        setBlocked(true);
+        return;
+      }
+      if (outcome && outcome.error) {
+        fieldError(input, outcome.error);
+        setBlocked(true);
+        return;
+      }
+      fieldError(input, "");
+      setBlocked(false);
+    }
+
     function run() {
       var raw = input.value;
       var canon = NS.validation.canonicalPhone(raw);
       if (!String(raw || "").trim()) {
+        lastNational = "";
+        lastOutcome = null;
         fieldError(input, "");
         setBlocked(false);
         return;
       }
       if (!canon) {
+        lastNational = "";
+        lastOutcome = null;
         fieldError(input, PHONE_INVALID);
         setBlocked(true);
         return;
       }
       if (ownCanon() && ownCanon() === canon) {
+        lastNational = "";
+        lastOutcome = null;
         fieldError(input, "");
         setBlocked(false);
         return;
       }
       var local = NS.auth && NS.auth.phoneOwner ? NS.auth.phoneOwner(canon, options.userId || "") : null;
       if (local) {
+        lastNational = "";
+        lastOutcome = null;
         fieldError(input, PHONE_TAKEN);
         setBlocked(true);
         return;
@@ -598,27 +623,35 @@
         setBlocked(false);
         return;
       }
+      var national = NS.validation.normalizePhone(canon);
+      if (lastNational === national && lastOutcome) {
+        applyOutcome(lastOutcome);
+        return;
+      }
       setBlocked(true);
       var seq = String(Number(input.getAttribute("data-phone-seq") || "0") + 1);
       input.setAttribute("data-phone-seq", seq);
       NS.api.post("/users/phone-available", { phone: canon }).then(function (res) {
         if (input.getAttribute("data-phone-seq") !== seq) return;
         if (ownCanon() === canon) {
+          lastNational = "";
+          lastOutcome = null;
           fieldError(input, "");
           setBlocked(false);
           return;
         }
-        if (res && res.taken) {
-          fieldError(input, PHONE_TAKEN);
-          setBlocked(true);
-          return;
-        }
-        fieldError(input, "");
-        setBlocked(false);
-      }).catch(function () {
+        lastNational = national;
+        lastOutcome = { taken: !!(res && res.taken) };
+        applyOutcome(lastOutcome);
+      }).catch(function (err) {
         if (input.getAttribute("data-phone-seq") !== seq) return;
-        fieldError(input, "");
-        setBlocked(false);
+        lastNational = national;
+        lastOutcome = {
+          error: NS.auth && NS.auth.phoneCheckError
+            ? NS.auth.phoneCheckError(err)
+            : (err && err.message) || "Could not check that mobile number."
+        };
+        applyOutcome(lastOutcome);
       });
     }
 
