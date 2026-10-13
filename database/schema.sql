@@ -283,6 +283,7 @@ CREATE TABLE booking_renter_documents (
   license_name    varchar,
   license_no      varchar,
   license_expiry  date,
+  dl_codes        varchar(40),
   license_address varchar,
   emergency_phone varchar,
   license_photo   text,
