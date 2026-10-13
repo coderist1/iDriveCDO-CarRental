@@ -259,9 +259,9 @@
         navLink(NS.routes.href("myBookings"), "View Booking Status", "bookings") +
         navLink(NS.routes.href("about"), "About", "about") +
         navLink(NS.routes.href("contact"), "Contact", "contact") +
-        '<a class="nav-phone" href="tel:0888562100">' +
+        '<a class="nav-phone" href="tel:09269864450">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>' +
-        "088 856 2100</a>" +
+        "0926 986 4450</a>" +
         account +
         "</nav></header>";
       bindNavChrome();
@@ -278,7 +278,7 @@
         "</a></div>" +
         '<div class="sf-row">' +
         '<div class="sf-contact">' +
-        '<a class="sf-phone" href="tel:0888562100">088 856 2100</a>' +
+        '<a class="sf-phone" href="tel:09269864450">0926 986 4450</a>' +
         '<a class="btn sf-btn" href="' +
         NS.routes.href("fleet") +
         '">Book a car</a>' +
@@ -291,7 +291,7 @@
         "</nav></div>" +
         '<div class="sf-bottom">' +
         "<div>" +
-        "<p>2F Limketkai Drive, Cagayan de Oro City 9000 · Desk 7:00 AM – 9:00 PM daily · hello@idrivecdo.ph</p>" +
+        "<p>Capistrano Montalvan Streets, Cagayan de Oro, Philippines, 9000</p>" +
         '<p class="fineprint">Frontend-only demo. Payments are simulated and never sent to a server.</p>' +
         "</div>" +
         '<div class="sf-social">' +
@@ -393,6 +393,7 @@
     else if (me && NS.auth.hasRole("staff")) mountDeskChrome(me);
     else mountCustomerChrome(me);
     markRequired(document);
+    bindTerms();
   }
 
   function markRequired(root) {
@@ -773,7 +774,10 @@
     var paymentLine = "Unpaid";
     if (payment) {
       if (payment.method === "cashless") {
-        paymentLine = "Cashless · " + payment.brand + " ·••" + payment.last4 + " · " + payment.authCode;
+        paymentLine =
+          "Cashless · " +
+          (payment.brand || "Instapay") +
+          (payment.authCode ? " · " + payment.authCode : "");
       } else if (payment.method === "cash") {
         paymentLine = "Cash · " + payment.authCode;
       } else {
@@ -837,7 +841,13 @@
       "<tr><th>Pickup</th><td>" +
       NS.security.escapeHtml(booking.pickup) +
       "</td></tr>" +
-      "<tr><th>Return</th><td>" +
+      "<tr><th>" +
+      (booking.driveMode === "chauffeur"
+        ? "Drop-off"
+        : NS.domain.isSelfDeliver && NS.domain.isSelfDeliver(booking)
+          ? "Deliver to"
+          : "Return") +
+      "</th><td>" +
       NS.security.escapeHtml(booking.dropoff) +
       "</td></tr>" +
       "<tr><th>Dates</th><td>" +
@@ -850,6 +860,11 @@
       "<tr><th>Payment</th><td>" +
       NS.security.escapeHtml(paymentLine) +
       "</td></tr>" +
+      (payment && payment.receipt
+        ? "<tr><th>Receipt</th><td><img src='" +
+          String(payment.receipt).replace(/'/g, "") +
+          "' alt='Payment receipt' style='width:min(100%,320px);border-radius:12px'></td></tr>"
+        : "") +
       "<tr><th>Payment status</th><td>" +
       NS.security.escapeHtml(booking.paymentStatus || "") +
       "</td></tr>" +
@@ -918,7 +933,14 @@
       ["Vehicle", esc(v ? v.name + " · " + v.plate : "—")],
       ["Drive mode", esc(driveMode)],
       ["Pick-up Location", esc(b.pickup || "—") + (b.pickupTime ? " · " + esc(b.pickupTime) : "")],
-      ["Drop-off Location", esc(b.dropoff || "—") + (b.returnTime ? " · " + esc(b.returnTime) : "")],
+      [
+        b.driveMode === "chauffeur"
+          ? "Drop-off Location"
+          : NS.domain.isSelfDeliver && NS.domain.isSelfDeliver(b)
+            ? "Deliver to"
+            : "Return Location",
+        esc(b.dropoff || "—") + (b.returnTime ? " · " + esc(b.returnTime) : "")
+      ],
       ["Pick-up date", fmtDate(b.startDate)],
       ["Return date", fmtDate(b.endDate)],
       ["Passengers", esc(String(b.numberOfPassengers || 1))],
@@ -963,12 +985,78 @@
     return '<p class="chat-lead">New booking received</p>' + bookingDetailListHtml(rows);
   }
 
+  function termsBodyHtml(kind) {
+    var terms = NS.domain && NS.domain.rentalTerms ? NS.domain.rentalTerms(kind) : null;
+    if (!terms) return "<p>Rental terms are unavailable right now.</p>";
+    var esc = NS.security.escapeHtml;
+    var html = terms.intro ? "<p>" + esc(terms.intro) + "</p>" : "";
+    (terms.sections || []).forEach(function (section) {
+      html += "<section><h3>" + esc(section.heading) + "</h3><ul>";
+      (section.items || []).forEach(function (item) {
+        html += "<li>" + esc(item) + "</li>";
+      });
+      html += "</ul></section>";
+    });
+    return html;
+  }
+
+  function closeTermsModal() {
+    var overlay = document.getElementById("terms-modal");
+    if (!overlay) return;
+    document.removeEventListener("keydown", onTermsKey);
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  }
+
+  function onTermsKey(e) {
+    if (e.key === "Escape") closeTermsModal();
+  }
+
+  function openTerms(kind) {
+    closeTermsModal();
+    var terms = NS.domain && NS.domain.rentalTerms ? NS.domain.rentalTerms(kind) : { title: "Rental terms" };
+    var overlay = document.createElement("div");
+    overlay.id = "terms-modal";
+    overlay.className = "password-modal terms-modal";
+    overlay.innerHTML =
+      '<article class="password-dialog terms-dialog" role="dialog" aria-modal="true" aria-labelledby="terms-title">' +
+      '<div class="password-dialog-head">' +
+      '<h2 id="terms-title">' +
+      NS.security.escapeHtml(terms.title || "Rental terms") +
+      "</h2>" +
+      '<button type="button" class="btn btn-ghost btn-sm" data-terms-close>Close</button>' +
+      "</div>" +
+      '<div class="terms-body">' +
+      termsBodyHtml(kind) +
+      "</div>" +
+      '<button type="button" class="btn btn-gold" data-terms-close>Close</button>' +
+      "</article>";
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay || e.target.closest("[data-terms-close]")) closeTermsModal();
+    });
+    document.addEventListener("keydown", onTermsKey);
+    document.body.appendChild(overlay);
+    var closeBtn = overlay.querySelector("[data-terms-close]");
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function bindTerms() {
+    if (document.documentElement.getAttribute("data-terms-bound") === "1") return;
+    document.documentElement.setAttribute("data-terms-bound", "1");
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-terms-open]");
+      if (!btn) return;
+      e.preventDefault();
+      openTerms(btn.getAttribute("data-terms-open") || "account");
+    });
+  }
+
   NS.ui = {
     peso: peso,
     fmtDate: fmtDate,
     qs: qs,
     toast: toast,
     askYesNo: askYesNo,
+    openTerms: openTerms,
     bookingDetailListHtml: bookingDetailListHtml,
     bookingDetailRowsFromRecord: bookingDetailRowsFromRecord,
     chatMessageBodyHtml: chatMessageBodyHtml,

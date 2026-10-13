@@ -68,16 +68,22 @@
         return true;
       });
       var stateOf = {};
-      var counts = { all: matching.length, available: 0, reserved: 0, maintenance: 0 };
+      var counts = { all: 0, available: 0, reserved: 0 };
       matching.forEach(function (v) {
-        stateOf[v.id] = NS.domain.vehicleAvailability(v.id, start, end);
-        counts[stateOf[v.id]]++;
+        var state = NS.domain.vehicleAvailability(v.id, start, end);
+        if (state === "maintenance") return;
+        stateOf[v.id] = state;
+        counts.all++;
+        counts[state]++;
+      });
+      matching = matching.filter(function (v) {
+        return !!stateOf[v.id];
       });
       var list = matching.filter(function (v) {
         return availFilter === "all" || stateOf[v.id] === availFilter;
       });
 
-      var rank = { available: 0, reserved: 1, maintenance: 2 };
+      var rank = { available: 0, reserved: 1 };
       list.sort(function (a, b) {
         var byState = rank[stateOf[a.id]] - rank[stateOf[b.id]];
         if (byState) return byState;
@@ -90,14 +96,13 @@
       if (summary) {
         summary.textContent =
           counts.available + " of " + counts.all + " car" + (counts.all === 1 ? "" : "s") + " available" + period +
-          " · " + counts.reserved + " reserved · " + counts.maintenance + " under maintenance";
+          " · " + counts.reserved + " reserved";
       }
       if (legend) {
         legend.innerHTML = [
           ["all", "All"],
           ["available", "Available"],
-          ["reserved", "Reserved"],
-          ["maintenance", "Under maintenance"]
+          ["reserved", "Reserved"]
         ]
           .map(function (o) {
             return (
@@ -130,7 +135,7 @@
     }
 
     var legend = document.getElementById("fleet-legend");
-    var availFilter = ["available", "reserved", "maintenance"].indexOf(NS.ui.qs("availability")) !== -1 ? NS.ui.qs("availability") : "all";
+    var availFilter = ["available", "reserved"].indexOf(NS.ui.qs("availability")) !== -1 ? NS.ui.qs("availability") : "all";
     if (legend) {
       legend.addEventListener("click", function (e) {
         var btn = e.target.closest("[data-avail]");

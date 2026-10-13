@@ -7,6 +7,7 @@
 -- ---------------------------------------------------------------------------
 
 INSERT INTO locations (name, sort_order) VALUES
+  ('Montalvan Burgos, Cagayan de Oro', 0),
   ('Laguindingan Airport (CGY)', 1),
   ('Divisoria / Downtown CDO', 2),
   ('SM City CDO Downtown Premier', 3),
