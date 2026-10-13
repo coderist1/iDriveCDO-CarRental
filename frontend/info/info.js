@@ -5,6 +5,12 @@
   NS.pages = NS.pages || {};
 
   NS.pages.contact = function contact() {
+    if (NS.pickupMap && NS.pickupMap.show) {
+      NS.pickupMap.show("contact-pickup-map", {
+        lat: 8.482522,
+        lng: 124.643822
+      });
+    }
     var form = document.getElementById("contact-form");
     if (!form) return;
     NS.ui.bindCsrf(form);
@@ -24,7 +30,6 @@
             {
               name: form.name.value,
               email: form.email.value,
-              topic: form.topic.value,
               message: form.message.value
             },
             form.csrf ? form.csrf.value : ""

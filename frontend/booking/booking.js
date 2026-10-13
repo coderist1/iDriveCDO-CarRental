@@ -233,6 +233,36 @@
       }).join("");
     }
 
+    function selfHandover(form) {
+      if (!form || !form.handover) return "pickup";
+      return form.handover.value === "deliver" ? "deliver" : "pickup";
+    }
+
+    function syncSelfHandover(form) {
+      if (!form || form.id !== "self-form") return;
+      var office = NS.domain.OFFICE_PICKUP || "Montalvan Burgos, Cagayan de Oro";
+      var mode = selfHandover(form);
+      form.querySelectorAll("[data-handover-panel]").forEach(function (panel) {
+        panel.hidden = panel.getAttribute("data-handover-panel") !== mode;
+      });
+      if (form.pickup) form.pickup.value = office;
+      if (form.dropoff) {
+        if (mode === "pickup") {
+          form.dropoff.value = office;
+          form.dropoff.required = false;
+        } else {
+          if (form.dropoff.value === office) form.dropoff.value = "";
+          form.dropoff.required = true;
+          var maps = form._pickupMaps || (form._pickupMap ? [form._pickupMap] : []);
+          setTimeout(function () {
+            maps.forEach(function (map) {
+              if (map && map.invalidateSize) map.invalidateSize();
+            });
+          }, 80);
+        }
+      }
+    }
+
     function applyDefaults(form) {
       var selectedVehicle = form.vehicleId.value || vehicleId;
       form.vehicleId.innerHTML = vehicleOptions(selectedVehicle);
@@ -240,9 +270,18 @@
       form.startDate.value = form.startDate.value || qStart || localISO(startDefault);
       form.endDate.min = form.startDate.value;
       form.endDate.value = form.endDate.value || qEnd || localISO(endDefault);
-      if (!form.pickup.value) form.pickup.innerHTML = locationOptions(qPickup || "Laguindingan Airport (CGY)");
-      else if (!form.pickup.options.length) form.pickup.innerHTML = locationOptions(qPickup || "Laguindingan Airport (CGY)");
-      if (!form.dropoff.options.length) form.dropoff.innerHTML = locationOptions("Centrio Mall");
+      if (form.pickup && form.pickup.tagName === "SELECT") {
+        if (!form.pickup.value) form.pickup.innerHTML = locationOptions(qPickup || "Laguindingan Airport (CGY)");
+        else if (!form.pickup.options.length) form.pickup.innerHTML = locationOptions(qPickup || "Laguindingan Airport (CGY)");
+      } else if (form.pickup && form.id === "self-form") {
+        form.pickup.value = NS.domain.OFFICE_PICKUP || "Montalvan Burgos, Cagayan de Oro";
+        syncSelfHandover(form);
+      } else if (form.pickup && qPickup && !form.pickup.value) {
+        form.pickup.value = qPickup;
+      }
+      if (form.dropoff && form.dropoff.tagName === "SELECT") {
+        if (!form.dropoff.options.length) form.dropoff.innerHTML = locationOptions("Centrio Mall");
+      }
       var me = NS.auth.current() || {};
       if (form.fullName && !form.fullName.value) {
         form.fullName.value = ((me.firstName || "") + " " + (me.lastName || "")).trim();
@@ -318,6 +357,7 @@
       form.addEventListener("change", function (e) {
         if (form.startDate && form.endDate) form.endDate.min = form.startDate.value || localISO(today);
         if (form.id === "chauffeur-form") syncChauffeurIdChoice(form);
+        if (form.id === "self-form" && e.target && e.target.name === "handover") syncSelfHandover(form);
         renderFlags(form);
         if (e.target && (e.target.name === "startDate" || e.target.name === "endDate")) refillFleet();
         else refresh();
@@ -645,6 +685,9 @@
         }
       }
       if (mode === "self") {
+        if (selfHandover(form) === "deliver" && form.dropoff && form.dropoff.value.trim().length < 5) {
+          messages.push({ level: "bad", text: "Enter where to deliver the car." });
+        }
         expired(form.licenseExpiry.value, "The driver's license");
         if (form.birthdate.value) {
           var driveAge = NS.validation.ageOn(form.birthdate.value);
@@ -661,6 +704,12 @@
           messages.push({ level: "bad", text: "This license is limited to daylight driving (05:00–18:00)." });
         }
       } else {
+        if (form.pickup && form.pickup.tagName !== "SELECT" && form.pickup.value.trim().length < 5) {
+          messages.push({ level: "bad", text: "Enter a pickup location." });
+        }
+        if (form.dropoff && form.dropoff.tagName !== "SELECT" && form.dropoff.value.trim().length < 5) {
+          messages.push({ level: "bad", text: "Enter a drop-off location." });
+        }
         expired(form.idExpiry.value, "The government ID");
         if (form.birthdate.value) {
           var age = NS.validation.ageOn(form.birthdate.value);
@@ -775,6 +824,7 @@
                   licenseBack: form.licenseBack.value,
                   selfie: form.selfie.value
                 });
+            var handover = mode === "self" ? selfHandover(form) : "";
             var booking = NS.domain.createBooking({
               vehicleId: form.vehicleId.value,
               startDate: form.startDate.value,
@@ -785,7 +835,9 @@
               fuelBeforeRent: "Full",
               pickup: form.pickup.value,
               dropoff: form.dropoff.value,
-              pickupPin: NS.pickupMap ? NS.pickupMap.read(form) : null,
+              handover: handover,
+              pickupPin: mode === "self" && handover === "pickup" ? null : NS.pickupMap ? NS.pickupMap.read(form) : null,
+              dropoffPin: NS.pickupMap && NS.pickupMap.readDropoff ? NS.pickupMap.readDropoff(form) : null,
               driveMode: mode,
               driverInfo: driverInfo,
               addons: mode === "chauffeur" ? ["driver"] : [],
@@ -828,7 +880,14 @@
     selfForm.hidden = mode !== "self";
     chauffeurForm.hidden = mode !== "chauffeur";
     var shown = mode === "chauffeur" ? chauffeurForm : selfForm;
-    if (shown._pickupMap) setTimeout(function () { shown._pickupMap.invalidateSize(); }, 80);
+    var maps = shown._pickupMaps || (shown._pickupMap ? [shown._pickupMap] : []);
+    if (maps.length) {
+      setTimeout(function () {
+        maps.forEach(function (map) {
+          if (map && map.invalidateSize) map.invalidateSize();
+        });
+      }, 80);
+    }
   }
 
   function bindRentalChoice() {
@@ -1082,15 +1141,31 @@
       "<div><dt>Pickup</dt><dd>" +
       NS.security.escapeHtml(booking.pickup) +
       (booking.pickupTime ? " · " + NS.security.escapeHtml(booking.pickupTime) : "") +
-      (booking.pickupPin && booking.pickupPin.lat != null
+      (booking.driveMode === "chauffeur" && booking.pickupPin && booking.pickupPin.lat != null
         ? "<div id=\"booking-pin-map\" class=\"pickup-map\"></div><p class=\"fineprint\">" +
           NS.security.escapeHtml(booking.pickupPin.label || "Saved pin") +
           "</p>"
         : "") +
       "</dd></div>" +
-      "<div><dt>Return</dt><dd>" +
+      "<div><dt>" +
+      (booking.driveMode === "chauffeur"
+        ? "Drop-off"
+        : NS.domain.isSelfDeliver && NS.domain.isSelfDeliver(booking)
+          ? "Deliver to"
+          : "Return") +
+      "</dt><dd>" +
       NS.security.escapeHtml(booking.dropoff) +
       (booking.returnTime ? " · " + NS.security.escapeHtml(booking.returnTime) : "") +
+      ((booking.driveMode === "self" ? booking.pickupPin : booking.dropoffPin) &&
+      (booking.driveMode === "self" ? booking.pickupPin : booking.dropoffPin).lat != null
+        ? "<div id=\"" +
+          (booking.driveMode === "self" ? "booking-pin-map" : "booking-dropoff-map") +
+          "\" class=\"pickup-map\"></div><p class=\"fineprint\">" +
+          NS.security.escapeHtml(
+            (booking.driveMode === "self" ? booking.pickupPin.label : booking.dropoffPin.label) || "Saved pin"
+          ) +
+          "</p>"
+        : "") +
       "</dd></div>" +
       "<div><dt>Fuel before</dt><dd>" +
       NS.security.escapeHtml(booking.fuelBeforeRent || "—") +
@@ -1114,10 +1189,13 @@
         ? NS.security.escapeHtml(
             (booking.payment.method === "cashless" ? "Cashless · " : "Cash · ") +
               booking.payment.brand +
-              (booking.payment.method === "cash"
-                ? " · " + booking.payment.authCode
-                : " ·••" + booking.payment.last4 + " · " + booking.payment.authCode)
-          )
+              (booking.payment.authCode ? " · " + booking.payment.authCode : "")
+          ) +
+          (booking.payment.receipt
+            ? '<div class="license-photo-view"><p class="eyebrow">Payment receipt</p><img src="' +
+              String(booking.payment.receipt).replace(/"/g, "") +
+              '" alt="Payment receipt"></div>'
+            : "")
         : "Unpaid") +
       "</dd></div>" +
       "</dl>" +
@@ -1254,6 +1332,7 @@
     }
 
     if (booking.pickupPin && NS.pickupMap) NS.pickupMap.show("booking-pin-map", booking.pickupPin);
+    if (booking.dropoffPin && NS.pickupMap) NS.pickupMap.show("booking-dropoff-map", booking.dropoffPin);
     var cancelBtn = document.getElementById("cancel-booking");
     if (cancelBtn) {
       cancelBtn.addEventListener("click", function () {

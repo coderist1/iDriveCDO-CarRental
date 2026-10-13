@@ -65,10 +65,6 @@
     }
 
     var v = NS.domain.getVehicle(booking.vehicleId);
-    var me = NS.auth.current();
-    if (me && form.walletAccount && !form.walletAccount.value) {
-      form.walletAccount.value = me.phone || "";
-    }
 
     box.innerHTML =
       "<h1>Pay " +
@@ -94,12 +90,65 @@
       if (cashless) cashless.hidden = method !== "cashless";
 
       if (form.cashConfirm) form.cashConfirm.required = method === "cash";
-      ["wallet", "walletAccount"].forEach(function (name) {
-        if (form[name]) form[name].required = method === "cashless";
-      });
 
       var btn = form.querySelector('button[type="submit"]');
-      if (btn) btn.textContent = method === "cash" ? "Confirm cash payment" : "Pay with wallet";
+      if (btn) btn.textContent = method === "cash" ? "Confirm cash payment" : "Submit payment receipt";
+    }
+
+    function bindReceipt() {
+      var pick = document.getElementById("pay-receipt-pick");
+      var input = document.getElementById("pay-receipt-input");
+      var preview = document.getElementById("pay-receipt-preview");
+      var clear = document.getElementById("pay-receipt-clear");
+      var status = document.getElementById("pay-receipt-status");
+      var hidden = form.paymentReceipt;
+      if (!pick || !input || !hidden) return;
+
+      function setStatus(msg) {
+        if (status) status.textContent = msg || "";
+      }
+
+      function showPreview(dataUrl) {
+        if (!preview) return;
+        if (dataUrl) {
+          preview.classList.remove("is-empty");
+          preview.innerHTML = '<img src="' + dataUrl.replace(/"/g, "") + '" alt="Payment receipt preview">';
+        } else {
+          preview.classList.add("is-empty");
+          preview.textContent = "No receipt yet";
+        }
+        if (clear) clear.hidden = !dataUrl;
+        pick.textContent = dataUrl ? "Replace receipt" : "Upload receipt";
+      }
+
+      pick.addEventListener("click", function () {
+        input.click();
+      });
+      if (clear) {
+        clear.addEventListener("click", function () {
+          hidden.value = "";
+          input.value = "";
+          showPreview("");
+          setStatus("");
+        });
+      }
+      input.addEventListener("change", function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        setStatus("Reading receipt…");
+        var read = NS.ui.readLicensePhoto || NS.ui.readIdPhoto;
+        read(file, function (err, dataUrl) {
+          if (err) {
+            hidden.value = "";
+            showPreview("");
+            setStatus(err.message);
+            return;
+          }
+          hidden.value = dataUrl;
+          showPreview(dataUrl);
+          setStatus("Receipt attached.");
+        });
+      });
     }
 
     form.addEventListener("change", function (e) {
@@ -111,7 +160,7 @@
       var method = payMethod();
       var ask =
         method === "cashless"
-          ? "Confirm this cashless payment?"
+          ? "Submit this Instapay receipt?"
           : "Confirm cash payment at pickup/desk?";
       var gate = NS.auth.assertActive ? NS.auth.assertActive() : Promise.resolve();
       gate.then(function () {
@@ -124,8 +173,7 @@
             method === "cashless"
               ? {
                   method: "cashless",
-                  wallet: form.wallet.value,
-                  account: form.walletAccount.value
+                  receipt: form.paymentReceipt ? form.paymentReceipt.value : ""
                 }
               : {
                   method: "cash",
@@ -148,6 +196,7 @@
       });
     });
 
+    bindReceipt();
     syncMethod();
   };
 })(window);

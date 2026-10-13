@@ -6,7 +6,10 @@
 
   var NS = (global.iDrive = global.iDrive || {});
 
+  var OFFICE_PICKUP = "Montalvan Burgos, Cagayan de Oro";
+
   var LOCATIONS = [
+    OFFICE_PICKUP,
     "Laguindingan Airport (CGY)",
     "Divisoria / Downtown CDO",
     "SM City CDO Downtown Premier",
@@ -257,13 +260,22 @@
           "). Return that vehicle before booking another car."
       );
     }
-    var pickup = NS.security.sanitizeText(payload.pickup, 80);
-    var dropoff = NS.security.sanitizeText(payload.dropoff, 80);
-    if (LOCATIONS.indexOf(pickup) === -1 || LOCATIONS.indexOf(dropoff) === -1) {
-      throw new Error("Choose a valid CDO pickup and return location.");
-    }
-
     var driveMode = payload.driveMode === "chauffeur" ? "chauffeur" : "self";
+    var pickup = NS.security.sanitizeText(payload.pickup, 120);
+    var dropoff = NS.security.sanitizeText(payload.dropoff, 120);
+    var handover = "";
+    if (driveMode === "self") {
+      pickup = OFFICE_PICKUP;
+      handover = payload.handover === "deliver" ? "deliver" : "pickup";
+      if (handover === "pickup") {
+        dropoff = OFFICE_PICKUP;
+      } else if (dropoff.length < 5) {
+        throw new Error("Enter where to deliver the car.");
+      }
+    } else {
+      if (pickup.length < 5) throw new Error("Enter a pickup location.");
+      if (dropoff.length < 5) throw new Error("Enter a drop-off location.");
+    }
     var addonIds = (payload.addons || []).slice();
     if (driveMode === "chauffeur" && addonIds.indexOf("driver") === -1) {
       addonIds.push("driver");
@@ -312,6 +324,7 @@
       days: q.days,
       pickup: pickup,
       dropoff: dropoff,
+      handover: handover,
       driveMode: driveMode,
       driverOption: driveMode === "chauffeur" ? "Chauffeur" : "Self-drive",
       driverDetailsId: null,
@@ -329,7 +342,12 @@
       paymentMethod: "",
       payment: null,
       notes: notes,
-      pickupPin: payload.pickupPin && payload.pickupPin.lat != null ? payload.pickupPin : null,
+      pickupPin: driveMode === "self" && handover === "pickup"
+        ? null
+        : payload.pickupPin && payload.pickupPin.lat != null
+          ? payload.pickupPin
+          : null,
+      dropoffPin: payload.dropoffPin && payload.dropoffPin.lat != null ? payload.dropoffPin : null,
       dateReserve: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -661,6 +679,14 @@
     return _refCache.locations[String(name || "").trim().toLowerCase()] || null;
   }
 
+  function firstLocationId(names) {
+    for (var i = 0; i < names.length; i++) {
+      var id = locationId(names[i]);
+      if (id) return id;
+    }
+    return null;
+  }
+
   /* Local addon string ids mapped to likely backend names, as a fallback match. */
   var ADDON_NAME_BY_ID = {
     driver: "professional driver"
@@ -720,6 +746,25 @@
       var addonIds = (booking.addons || [])
         .map(addonId)
         .filter(function (x) { return x != null; });
+      var pickupLocId = firstLocationId([
+        booking.pickup,
+        OFFICE_PICKUP,
+        "iDrive CDO Main Office"
+      ]);
+      var dropLocId = firstLocationId([booking.dropoff]) || pickupLocId;
+      var notes = booking.notes || "";
+      if (booking.driveMode !== "chauffeur") {
+        var deliverLine =
+          booking.handover === "deliver" && booking.dropoff
+            ? "Deliver to: " + booking.dropoff
+            : "Pick up at: " + OFFICE_PICKUP;
+        if (notes.indexOf("Deliver to:") === -1 && notes.indexOf("Pick up at:") === -1) {
+          notes = notes ? deliverLine + "\n" + notes : deliverLine;
+        }
+      } else if (booking.driveMode === "chauffeur") {
+        var routeLine = "Pickup: " + (booking.pickup || "") + " · Drop-off: " + (booking.dropoff || "");
+        if (notes.indexOf("Pickup:") === -1) notes = notes ? routeLine + "\n" + notes : routeLine;
+      }
       var body = {
         vehicle_id: vehicle && vehicle.apiId,
         user_id: apiUserId,
@@ -729,13 +774,13 @@
         end_date: booking.endDate,
         pickup_time: booking.pickupTime,
         return_time: booking.returnTime,
-        pickup_location_id: locationId(booking.pickup),
-        dropoff_location_id: locationId(booking.dropoff),
+        pickup_location_id: pickupLocId,
+        dropoff_location_id: dropLocId,
         number_of_passengers: booking.numberOfPassengers,
         fuel_before_rent: booking.fuelBeforeRent || "Full",
         subtotal: booking.subtotal,
         payment_status: "unpaid",
-        notes: booking.notes || null,
+        notes: notes || null,
         date_reserve: new Date().toISOString(),
         addon_ids: addonIds
       };
@@ -910,22 +955,17 @@
     var payment;
 
     if (method === "cashless") {
-      var wallet = NS.security.sanitizeText(payload.wallet, 20);
-      var account = NS.validation.normalizePhone(payload.account || "");
-      var allowedWallets = ["GCash", "Maya", "GrabPay"];
-      if (allowedWallets.indexOf(wallet) === -1) throw new Error("Choose a cashless wallet.");
-      if (!NS.validation.phMobile(account)) {
-        throw new Error("Enter the mobile number linked to your wallet (09XXXXXXXXX).");
-      }
+      var receipt = assertPhoto(payload.receipt, "your Instapay payment receipt", 750000);
       payment = {
         method: "cashless",
-        brand: wallet,
-        last4: account.slice(-4),
-        holder: account,
-        authCode: "CASHLESS" + NS.security.randomHex(2).toUpperCase(),
+        brand: "Instapay",
+        last4: "QR",
+        holder: ((me.firstName || "") + " " + (me.lastName || "")).trim(),
+        receipt: receipt,
+        authCode: "QR" + NS.security.randomHex(3).toUpperCase(),
         paidAt: new Date().toISOString()
       };
-      audit("payment", me.id, booking.ref + " cashless " + wallet + " ·••" + account.slice(-4));
+      audit("payment", me.id, booking.ref + " cashless Instapay QR");
     } else {
       if (!payload.confirmed) throw new Error("Confirm that you will pay in cash at pickup or the desk.");
       payment = {
@@ -957,6 +997,7 @@
       paymentDate: payment.paidAt,
       paymentStatus: "paid",
       brand: payment.brand,
+      receipt: payment.receipt || "",
       createdAt: payment.paidAt
     };
     var pays = payments();
@@ -988,7 +1029,7 @@
       "Payment received for " +
       booking.ref +
       " via " +
-      (method === "cashless" ? "cashless wallet" : "cash") +
+      (method === "cashless" ? "Instapay QR" : "cash") +
       ".";
     var payThread = threads().filter(function (t) {
       return t.bookingId === booking.id;
@@ -1775,7 +1816,7 @@
   }
 
   var PAYMENT_STATUSES = ["paid", "pending", "failed", "refunded"];
-  var PAYMENT_BRANDS = { cash: ["Cash"], cashless: ["GCash", "Maya", "GrabPay"], card: ["Visa", "Mastercard", "JCB", "AmEx"] };
+  var PAYMENT_BRANDS = { cash: ["Cash"], cashless: ["Instapay", "GCash", "Maya", "GrabPay"], card: ["Visa", "Mastercard", "JCB", "AmEx"] };
 
   function writeBooking(booking) {
     var list = bookings();
@@ -3041,8 +3082,134 @@
     return null;
   }
 
+  var RENTAL_TERMS = {
+    self: {
+      title: "Self-drive rental terms",
+      intro: "These terms apply when you drive an iDrive CDO vehicle yourself. Read them before you tick the box on the application.",
+      sections: [
+        {
+          heading: "Who can rent",
+          items: [
+            "You must be at least 21 years old and hold a valid driver’s license that covers the booked vehicle.",
+            "You must present that license at pickup. The desk can refuse the keys if the license is expired, restricted, or does not match the renter."
+          ]
+        },
+        {
+          heading: "Pickup and return",
+          items: [
+            "You may pick up the car at Montalvan Burgos, Cagayan de Oro, or ask us to deliver it to an address you enter.",
+            "Self-drive pickup is only at Montalvan Burgos. If we deliver, return the car at that delivery address unless the desk confirms a change.",
+            "A security deposit is collected when you receive the vehicle and released after it is returned in the same condition."
+          ]
+        },
+        {
+          heading: "Fuel, damage, and fines",
+          items: [
+            "Bring the vehicle back with the same fuel level. A refuel charge applies if it is returned lower.",
+            "You are liable for damage, loss, and traffic violations during the rental, including tolls and parking fines.",
+            "Report accidents or breakdowns to iDrive CDO as soon as you can. Do not authorize repairs without the desk."
+          ]
+        },
+        {
+          heading: "Use of the vehicle",
+          items: [
+            "Only licensed drivers named on the booking may drive.",
+            "Do not use the vehicle for racing, towing, off-road driving, or any illegal activity.",
+            "Smoking in the vehicle and carrying prohibited goods are not allowed."
+          ]
+        }
+      ]
+    },
+    chauffeur: {
+      title: "Chauffeur rental terms",
+      intro: "These terms apply when an iDrive CDO driver takes the trip. Read them before you tick the box on the application.",
+      sections: [
+        {
+          heading: "Who can book",
+          items: [
+            "You must be at least 18 years old and present a valid government ID that matches the booking.",
+            "You do not need a driver’s license. The assigned chauffeur drives the vehicle."
+          ]
+        },
+        {
+          heading: "Itinerary and route",
+          items: [
+            "Pickup and drop-off are the addresses and pins you enter on the application.",
+            "The trip stays on the agreed itinerary and route unless the desk approves a change.",
+            "Extra stops, a longer route, or a later return may add overtime or extra charges."
+          ]
+        },
+        {
+          heading: "Time, meals, and lodging",
+          items: [
+            "Overtime is charged when the trip runs past the booked return time.",
+            "You cover the driver’s meals and lodging when the trip needs them (long hours, overnight, or out-of-town).",
+            "Waiting time beyond a short courtesy wait may be billed as overtime."
+          ]
+        },
+        {
+          heading: "Conduct",
+          items: [
+            "Treat the chauffeur and the vehicle with care. Harassment or unsafe requests are grounds to end the trip.",
+            "The chauffeur may refuse unsafe roads, illegal requests, or a number of passengers above the vehicle limit.",
+            "Personal belongings left in the vehicle are your responsibility."
+          ]
+        }
+      ]
+    },
+    account: {
+      title: "iDrive CDO rental terms",
+      intro: "By creating an account you agree to these terms when you book a self-drive or chauffeur rental from iDrive CDO, Capistrano Montalvan Streets, Cagayan de Oro.",
+      sections: [
+        {
+          heading: "Bookings and payment",
+          items: [
+            "A booking is a request until the desk confirms it and payment is completed as required.",
+            "Rates shown are per day unless noted. Chauffeur trips include the professional driver fee.",
+            "Cancellations and date changes follow desk confirmation. Paid amounts may be held or refunded according to that confirmation."
+          ]
+        },
+        {
+          heading: "Self-drive",
+          items: [
+            "Renters must be 21 or older with a valid license. Pickup is only at Montalvan Burgos, or we can deliver to an address you enter. A security deposit is collected when you receive the car.",
+            "Return the vehicle in the same condition and with the same fuel level, or charges apply. You are liable for damage, loss, and traffic violations."
+          ]
+        },
+        {
+          heading: "With chauffeur",
+          items: [
+            "Passengers must be 18 or older with a valid government ID.",
+            "Overtime, extra stops, and the driver’s meals or lodging when needed are the customer’s responsibility. The trip stays on the agreed route unless the desk approves a change."
+          ]
+        },
+        {
+          heading: "Your information",
+          items: [
+            "We use the details and ID photos you submit to verify the booking and to contact you about the trip.",
+            "Questions: 0926 986 4450 · Capistrano Montalvan Streets, Cagayan de Oro, Philippines, 9000."
+          ]
+        }
+      ]
+    }
+  };
+
+  function rentalTerms(kind) {
+    return RENTAL_TERMS[kind] || RENTAL_TERMS.account;
+  }
+
+  function isSelfDeliver(booking) {
+    if (!booking || booking.driveMode === "chauffeur") return false;
+    if (booking.handover === "deliver") return true;
+    if (booking.handover === "pickup") return false;
+    return !!(booking.dropoff && booking.dropoff !== OFFICE_PICKUP);
+  }
+
   NS.domain = {
+    OFFICE_PICKUP: OFFICE_PICKUP,
     LOCATIONS: LOCATIONS,
+    rentalTerms: rentalTerms,
+    isSelfDeliver: isSelfDeliver,
     ADDONS: ADDONS,
     vehicles: vehicles,
     syncVehiclesFromApi: syncVehiclesFromApi,
