@@ -141,10 +141,6 @@
       birthdate: "birthdate",
       licenseClass: "dl_codes"
     },
-    "license-back": {
-      licenseClass: "dl_codes",
-      address: "address"
-    },
     "chauffeur-id": {
       fullName: "fullName",
       idNumber: "idNumber",
@@ -822,9 +818,7 @@
                   dl_codes: form.dl_codes.value,
                   license_no: form.license_no.value,
                   license_expiry: form.license_expiry.value,
-                  licensePhoto: form.licensePhoto.value,
-                  licenseBack: form.licenseBack.value,
-                  selfie: form.selfie.value
+                  licensePhoto: form.licensePhoto.value
                 });
             var handover = mode === "self" ? selfHandover(form) : "";
             var booking = NS.domain.createBooking({

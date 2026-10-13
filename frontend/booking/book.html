@@ -20,7 +20,7 @@
         <div class="rental-type-grid">
           <button class="rental-type-card" type="button" data-rental="self">
             <strong>Self-Drive</strong>
-            <span>You drive. The application asks for your driver’s license and a live photo.</span>
+            <span>You drive. The application asks for your driver’s license.</span>
           </button>
           <button class="rental-type-card" type="button" data-rental="chauffeur">
             <strong>With Chauffeur</strong>
@@ -116,28 +116,14 @@
         </div>
 
         <div class="id-upload-field" data-upload="license-front" data-kind="document">
-          <p class="eyebrow">Driver’s license, front</p>
-          <p class="fineprint">Upload a clear photo. We read the name, license number, dates, class, and address, then you can correct them.</p>
+          <p class="eyebrow">Driver’s license</p>
+          <p class="fineprint">Upload a clear photo of the front. We read the name, license number, dates, class, and address, then you can correct them.</p>
           <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
           <input type="hidden" name="licensePhoto" value="">
           <div class="license-photo-row">
             <div class="license-photo-preview is-empty" data-preview>No photo yet</div>
             <div class="license-photo-actions">
-              <button class="btn btn-ghost btn-sm" type="button" data-pick>Upload front</button>
-              <button class="btn btn-ghost btn-sm" type="button" data-clear hidden>Remove</button>
-              <p class="fineprint" data-status></p>
-            </div>
-          </div>
-        </div>
-        <div class="id-upload-field" data-upload="license-back" data-kind="document">
-          <p class="eyebrow">Driver’s license, back</p>
-          <p class="fineprint">The back often shows the license class and restriction codes.</p>
-          <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
-          <input type="hidden" name="licenseBack" value="">
-          <div class="license-photo-row">
-            <div class="license-photo-preview is-empty" data-preview>No photo yet</div>
-            <div class="license-photo-actions">
-              <button class="btn btn-ghost btn-sm" type="button" data-pick>Upload back</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-pick>Upload photo</button>
               <button class="btn btn-ghost btn-sm" type="button" data-clear hidden>Remove</button>
               <p class="fineprint" data-status></p>
             </div>
@@ -158,21 +144,6 @@
             <input class="form-control" name="license_expiry" type="date" required>
             <span class="ocr-confidence" hidden></span>
           </label>
-        </div>
-
-        <div class="id-upload-field" data-upload="selfie" data-kind="selfie">
-          <p class="eyebrow">Live photo</p>
-          <p class="fineprint">Take a photo of your face so the desk can match you to the ID. It stays on this booking.</p>
-          <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="user" hidden>
-          <input type="hidden" name="selfie" value="">
-          <div class="license-photo-row">
-            <div class="license-photo-preview is-empty" data-preview>No photo yet</div>
-            <div class="license-photo-actions">
-              <button class="btn btn-ghost btn-sm" type="button" data-pick>Take or upload photo</button>
-              <button class="btn btn-ghost btn-sm" type="button" data-clear hidden>Remove</button>
-              <p class="fineprint" data-status></p>
-            </div>
-          </div>
         </div>
 
         <div class="ocr-flags" hidden></div>
@@ -355,13 +326,13 @@
   <script src="../shared/js/api.js?v=20261009g"></script>
   <script src="../shared/js/validation.js?v=20261011a"></script>
   <script src="../shared/js/routes.js?v=20261010m"></script>
-  <script src="../shared/js/domain.js?v=20261013c"></script>
+  <script src="../shared/js/domain.js?v=20261013d"></script>
   <script src="../auth/auth.js?v=20261011e"></script>
   <script src="../shared/js/ui.js?v=20261013d"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="../shared/js/ocr.js?v=20261013c"></script>
   <script src="../shared/js/pickup-map.js?v=20261013c"></script>
-  <script src="./booking.js?v=20261013c"></script>
+  <script src="./booking.js?v=20261013d"></script>
   <script src="../shared/js/app.js?v=20261013c"></script>
 </body>
 </html>

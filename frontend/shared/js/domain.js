@@ -926,9 +926,7 @@
     renter.licenseName = renter.fullName;
     renter.licenseAddress = address;
     renter.emergencyPhone = renter.phone;
-    renter.licensePhoto = assertPhoto(info.licensePhoto, "the front of your driver's license", 750000);
-    renter.licenseBack = assertPhoto(info.licenseBack, "the back of your driver's license", 320000);
-    renter.selfie = assertPhoto(info.selfie, "a live photo of yourself", 320000);
+    renter.licensePhoto = assertPhoto(info.licensePhoto, "a photo of your driver's license", 750000);
     renter.agreed = true;
     return renter;
   }
