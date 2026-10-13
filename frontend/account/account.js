@@ -30,8 +30,6 @@
     stats.innerHTML = '<div class="stat"><span>' + list.length + "</span>trips</div>";
     recent.innerHTML = list.length
       ? list
-          .slice()
-          .reverse()
           .slice(0, 5)
           .map(function (b) {
             var v = NS.domain.getVehicle(b.vehicleId);
@@ -41,6 +39,8 @@
               '"><strong>' +
               NS.security.escapeHtml(b.ref) +
               "</strong><span>" +
+              NS.security.escapeHtml(NS.domain.bookingQueueText(b)) +
+              " · " +
               NS.security.escapeHtml(v ? v.name : "Vehicle") +
               "</span>" +
               NS.ui.statusBadge(b.status) +

@@ -906,7 +906,7 @@
     if (!host) return;
     var me = NS.auth.current();
     function render() {
-      var list = NS.domain.myBookings().slice().reverse();
+      var list = NS.domain.myBookings();
       host.innerHTML = list.length
         ? list
             .map(function (b) {
@@ -944,7 +944,9 @@
                 NS.security.escapeHtml(b.ref) +
                 "</p><h3>" +
                 NS.security.escapeHtml(v ? v.name : "Vehicle") +
-                "</h3><p>" +
+                "</h3><p class='fineprint'>" +
+                NS.security.escapeHtml(NS.domain.bookingQueueText(b)) +
+                "</p><p>" +
                 NS.ui.fmtDate(b.startDate) +
                 " → " +
                 NS.ui.fmtDate(b.endDate) +
@@ -1167,6 +1169,9 @@
       "<h1>" +
       NS.security.escapeHtml(v ? v.name : "Vehicle") +
       "</h1>" +
+      "<p class='fineprint'>" +
+      NS.security.escapeHtml(NS.domain.bookingQueueText(booking)) +
+      "</p>" +
       NS.ui.statusBadge(booking.status) +
       " " +
       NS.ui.statusBadge(booking.paymentStatus) +

@@ -12,6 +12,12 @@
     return NS.ui.bookingDetailListHtml(NS.ui.bookingDetailRowsFromRecord(b));
   }
 
+  function checkFirstBadge(b) {
+    var first = NS.domain.firstBookingToCheck && NS.domain.firstBookingToCheck();
+    if (!first || !b || first.id !== b.id) return "";
+    return NS.ui.statusBadge("check_first");
+  }
+
   function openPaymentReceipt(src, ref) {
     var old = document.getElementById("pay-receipt-modal");
     if (old) old.remove();
@@ -188,11 +194,9 @@
         "</div></div>";
     }
     var recentHost = document.getElementById("admin-recent");
-    var recentSorted = incoming.slice().sort(function (a, b) {
-      return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
-    });
+    var recentSorted = incoming.slice();
     recentHost.innerHTML =
-      '<p class="section-summary">' + recentSorted.length + " incoming · newest first</p>" +
+      '<p class="section-summary">' + recentSorted.length + " incoming · first in, first out</p>" +
       (recentSorted.length
       ? recentSorted
           .slice(0, 8)
@@ -205,7 +209,7 @@
               "</strong><span>" +
               NS.security.escapeHtml(u ? u.firstName + " " + u.lastName : "Customer") +
               " · " +
-              NS.security.escapeHtml(u ? u.phone || u.email : "") +
+              NS.security.escapeHtml(NS.domain.bookingQueueText(b)) +
               " · " +
               NS.security.escapeHtml(v ? v.name : "") +
               "</span>" +
@@ -675,6 +679,7 @@
             "</h3>" +
             bookingDetailList(b) +
             '</div><div class="card-badges">' +
+            checkFirstBadge(b) +
             NS.ui.statusBadge(b.status) +
             NS.ui.statusBadge(b.paymentStatus) +
             '</div><div class="card-actions">' +
@@ -1517,13 +1522,11 @@
       var filterEl = document.getElementById("incoming-filter");
       var summary = document.getElementById("incoming-summary");
       var filter = filterEl ? filterEl.value : "all";
-      var incoming = NS.domain.incomingBookings().slice().sort(function (a, b) {
-        return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
-      });
+      var incoming = NS.domain.incomingBookings().slice();
       var counts = { pending: 0, active: 0, completed: 0 };
       incoming.forEach(function (b) { counts[bookingBucket(b.status)] += 1; });
       if (summary) {
-        summary.textContent = incoming.length + " total · " + counts.pending + " pending · " + counts.active + " active · " + counts.completed + " done · newest first";
+        summary.textContent = incoming.length + " total · " + counts.pending + " pending · " + counts.active + " active · " + counts.completed + " done · first in, first out";
       }
       if (filter !== "all") {
         incoming = incoming.filter(function (b) { return bookingBucket(b.status) === filter; });
@@ -1541,6 +1544,7 @@
                 "</h3>" +
                 bookingDetailList(b) +
                 '</div><div class="card-badges">' +
+                checkFirstBadge(b) +
                 NS.ui.statusBadge(b.status) +
                 NS.ui.statusBadge(b.paymentStatus) +
                 '</div><div class="card-actions"><a class="btn btn-ghost btn-sm" href="bookings.html">Open desk</a>' +

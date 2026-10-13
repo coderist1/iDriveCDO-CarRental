@@ -421,7 +421,8 @@
     var labels = {
       return_requested: "return requested",
       on_call: "on call",
-      regular: "regular"
+      regular: "regular",
+      check_first: "check first"
     };
     var label = labels[status] || status;
     return (
@@ -836,6 +837,7 @@
           : "Paid"
         : "Unpaid";
     var rows = [
+      ["Queue", esc(NS.domain.bookingQueueText ? NS.domain.bookingQueueText(b) : "—")],
       ["Booking ID", esc(b.ref || b.id)],
       [
         "Customer",

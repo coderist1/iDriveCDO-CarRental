@@ -1561,6 +1561,7 @@ textarea { min-height: 120px; resize: vertical; }
   -webkit-backdrop-filter: blur(8px);
 }
 .badge-pending { background: rgba(254, 243, 199, 0.75); color: #92400e; border-color: rgba(253, 230, 138, 0.8); }
+.badge-check_first { background: #c4504b; color: #fff; border-color: #c4504b; }
 .badge-confirmed, .badge-paid, .badge-active, .badge-available, .badge-completed {
   background: rgba(220, 252, 231, 0.75); color: #166534; border-color: rgba(187, 247, 208, 0.8);
 }

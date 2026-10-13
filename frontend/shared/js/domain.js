@@ -42,6 +42,80 @@
     NS.store.set("bookings", list);
   }
 
+  /* First in, first out: lowest queue number (then earliest created time) is checked first. */
+  function fifoCompare(a, b) {
+    var aq = Number(a.queueNo) || 0;
+    var bq = Number(b.queueNo) || 0;
+    if (aq && bq && aq !== bq) return aq - bq;
+    var at = String(a.createdAt || a.dateReserve || "");
+    var bt = String(b.createdAt || b.dateReserve || "");
+    if (at !== bt) return at < bt ? -1 : 1;
+    return String(a.id || "").localeCompare(String(b.id || ""));
+  }
+
+  function fifoOrder(list) {
+    return (list || bookings()).slice().sort(fifoCompare);
+  }
+
+  function nextQueueNo(list) {
+    var max = 0;
+    (list || bookings()).forEach(function (b) {
+      var n = Number(b.queueNo) || 0;
+      if (n > max) max = n;
+    });
+    return max + 1;
+  }
+
+  function ensureQueueNumbers(list) {
+    var missing = false;
+    for (var i = 0; i < list.length; i++) {
+      if (!Number(list[i].queueNo)) missing = true;
+    }
+    if (!missing) return list;
+    var n = 0;
+    list.forEach(function (b) {
+      var q = Number(b.queueNo) || 0;
+      if (q > n) n = q;
+    });
+    fifoOrder(list).forEach(function (b) {
+      if (!Number(b.queueNo)) {
+        n += 1;
+        b.queueNo = n;
+      }
+    });
+    return list;
+  }
+
+  function queuePosition(booking) {
+    if (!booking) return 0;
+    if (Number(booking.queueNo)) return Number(booking.queueNo);
+    var ordered = fifoOrder();
+    for (var i = 0; i < ordered.length; i++) {
+      if (ordered[i].id === booking.id) return i + 1;
+    }
+    return 0;
+  }
+
+  /* Earliest booking still waiting for the desk. That is the one to check. */
+  function firstBookingToCheck() {
+    var ordered = fifoOrder();
+    for (var i = 0; i < ordered.length; i++) {
+      if (ordered[i].status === "pending") return ordered[i];
+    }
+    return null;
+  }
+
+  function bookingQueueText(booking) {
+    if (!booking) return "";
+    var total = bookings().length;
+    var n = queuePosition(booking);
+    var line = "Queue " + n + " of " + total;
+    var first = firstBookingToCheck();
+    if (first && first.id === booking.id) return line + " · Check this booking first";
+    if (booking.status === "pending" && first) return line + " · Check after queue " + queuePosition(first);
+    return line;
+  }
+
   function drivers() {
     return NS.store.get("drivers", []);
   }
@@ -393,6 +467,7 @@
       throw new Error("Passengers exceed this vehicle's capacity (" + q.vehicle.seats + ").");
     }
     var all = bookings();
+    booking.queueNo = nextQueueNo(all);
     all.push(booking);
     saveBookings(all);
     audit("booking-create", me.id, booking.ref + " · " + driveMode);
@@ -596,14 +671,9 @@
 
   function incomingBookings() {
     if (!NS.auth.hasRole("staff")) throw new Error("Staff access required.");
-    return bookings()
-      .filter(function (b) {
-        return b.status === "pending";
-      })
-      .slice()
-      .sort(function (a, b) {
-        return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
-      });
+    return fifoOrder().filter(function (b) {
+      return b.status === "pending";
+    });
   }
 
   function ensureBookingThread(bookingId) {
@@ -1367,16 +1437,14 @@
   function myBookings() {
     var me = NS.auth.current();
     if (!me) return [];
-    return bookings().filter(function (b) {
+    return fifoOrder().filter(function (b) {
       return b.userId === me.id;
     });
   }
 
   function allBookings() {
     requireStaff();
-    return bookings().slice().sort(function (a, b) {
-      return a.createdAt < b.createdAt ? 1 : -1;
-    });
+    return fifoOrder();
   }
 
   function saveVehicle(payload, csrf) {
@@ -2362,35 +2430,7 @@
   }
 
   function seedBookings() {
-    return [
-      {
-        id: "bkg_demo1",
-        ref: "IDR-20260901-A1B",
-        userId: "usr_customer",
-        vehicleId: "veh_vios",
-        startDate: "2026-09-12",
-        endDate: "2026-09-15",
-        days: 3,
-        pickup: "Laguindingan Airport (CGY)",
-        dropoff: "Centrio Mall",
-        addons: [],
-        subtotal: 5400,
-        extras: 0,
-        total: 5400,
-        status: "confirmed",
-        paymentStatus: "paid",
-        payment: {
-          brand: "Visa",
-          last4: "4242",
-          holder: "Paolo Reyes",
-          authCode: "AUTH9C2",
-          paidAt: "2026-09-01T10:12:00.000Z"
-        },
-        notes: "Flight 3P 221, arriving 1:10 PM.",
-        createdAt: "2026-09-01T10:00:00.000Z",
-        updatedAt: "2026-09-01T10:12:00.000Z"
-      }
-    ];
+    return [];
   }
 
   function seedDrivers() {
@@ -2553,51 +2593,19 @@
       }
     }
     if (dsChanged) saveDrivers(ds);
+  }
 
-    // Ensure at least one chauffeur trip is assigned so the driver has work to see.
-    var hasAssigned = bookings().some(function (b) {
-      return !!b.driverDetailsId;
-    });
-    if (!hasAssigned && getVehicle("veh_fortuner")) {
-      var bl = bookings();
-      bl.unshift({
-        id: "bkg_driver1",
-        ref: "IDR-20260918-C7D",
-        userId: "usr_customer",
-        vehicleId: "veh_fortuner",
-        startDate: "2026-09-18",
-        endDate: "2026-09-20",
-        days: 2,
-        pickup: "Laguindingan Airport (CGY)",
-        dropoff: "Uptown Cagayan de Oro",
-        pickupTime: "13:00",
-        returnTime: "10:00",
-        driveMode: "chauffeur",
-        driverOption: "Chauffeur",
-        driverDetailsId: "drv_001",
-        numberOfPassengers: 4,
-        fuelBeforeRent: "Full",
-        fuelUponReturn: "",
-        addons: ["driver"],
-        subtotal: 9000,
-        extras: 3000,
-        total: 12000,
-        status: "confirmed",
-        paymentStatus: "paid",
-        payment: {
-          brand: "Visa",
-          last4: "4242",
-          holder: "Paolo Reyes",
-          authCode: "AUTHC7D",
-          method: "card",
-          paidAt: "2026-09-10T09:00:00.000Z"
-        },
-        notes: "VIP airport pickup, 4 passengers.",
-        createdAt: "2026-09-10T08:30:00.000Z",
-        updatedAt: "2026-09-10T09:00:00.000Z"
-      });
-      saveBookings(bl);
-    }
+  /* One-time wipe so the FIFO queue starts empty. Later bookings keep their queue numbers. */
+  function clearStoredBookingsOnce() {
+    var key = "bookingReset";
+    if (NS.store.get(key) === "fifo-20261013") return;
+    saveBookings([]);
+    savePayments([]);
+    saveRatings([]);
+    saveThreads(threads().filter(function (t) {
+      return !t.bookingId;
+    }));
+    NS.store.set(key, "fifo-20261013");
   }
 
   function seedIfNeeded() {
@@ -2624,6 +2632,7 @@
     }
     migrateLegacyInbox();
     ensureErdSeed();
+    clearStoredBookingsOnce();
   }
 
   function migrateLegacyInbox() {
@@ -2921,8 +2930,7 @@
       });
       savePayments(pays);
     }
-    saveBookings(
-      mergeFromApi(adopted.list, rows, "booking_id", "bkg_api_", function (r, prev) {
+    var mergedBookings = mergeFromApi(adopted.list, rows, "booking_id", "bkg_api_", function (r, prev) {
         var start = apiDay(r.start_date);
         var end = apiDay(r.end_date) || start;
         var days = Number(r.days) || Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) || 1);
@@ -2969,8 +2977,9 @@
         );
       }, function (b) {
         return !!getVehicle(b.vehicleId);
-      })
-    );
+      });
+    ensureQueueNumbers(mergedBookings);
+    saveBookings(mergedBookings);
   }
 
   function syncPaymentsFromApi(rows) {
@@ -3313,6 +3322,9 @@
     ensureCustomerOnApi: ensureCustomerOnApi,
     saveVehicleExtras: saveVehicleExtras,
     bookings: bookings,
+    fifoOrder: fifoOrder,
+    bookingQueueText: bookingQueueText,
+    firstBookingToCheck: firstBookingToCheck,
     audit: audit,
     auditLog: auditLog,
     getVehicle: getVehicle,
