@@ -907,43 +907,26 @@
     return photo;
   }
 
-  function assertIdentity(info, minAge) {
+  function assertIdentity(info) {
     var fullName = NS.security.sanitizeText(info.fullName, 80);
     var phone = NS.validation.normalizePhone(info.phone || "");
     var email = NS.security.sanitizeEmail(info.email || "");
-    var birthdate = NS.security.sanitizeText(info.birthdate, 10);
     if (!fullName || fullName.length < 3) throw new Error("Enter your full name.");
     if (!NS.validation.phMobile(phone)) throw new Error("Enter a Philippine mobile number (09XXXXXXXXX).");
     if (!NS.validation.email(email)) throw new Error("Enter a valid email address.");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) throw new Error("Enter your date of birth.");
-    var age = NS.validation.ageOn(birthdate);
-    if (age < 0 || age > 120) throw new Error("Enter a real date of birth.");
-    if (age < minAge) {
-      throw new Error(
-        minAge >= 21
-          ? "Self-drive renters must be at least 21."
-          : "You must be at least 18 to book."
-      );
-    }
     var ocrNames = Array.isArray(info.ocrNames) ? info.ocrNames : [];
-    var ocrBirthdates = Array.isArray(info.ocrBirthdates) ? info.ocrBirthdates : [];
     var nameMismatch = ocrNames.some(function (ocrName) {
       return ocrName && !NS.validation.namesMatch(fullName, ocrName);
     });
-    var birthMismatch = ocrBirthdates.some(function (ocrDate) {
-      return ocrDate && !NS.validation.datesMatch(birthdate, ocrDate);
-    });
-    if ((nameMismatch || birthMismatch) && !info.mismatchAck) {
-      throw new Error("The ID does not match the name or birthdate you typed. Correct the form, or confirm that you reviewed the mismatch.");
+    if (nameMismatch && !info.mismatchAck) {
+      throw new Error("The ID does not match the name you typed. Correct the form, or confirm that you reviewed the mismatch.");
     }
     return {
       fullName: fullName,
       phone: phone,
       email: email,
-      birthdate: birthdate,
       extracted: {
-        names: ocrNames.filter(Boolean).slice(0, 4),
-        birthdates: ocrBirthdates.filter(Boolean).slice(0, 4)
+        names: ocrNames.filter(Boolean).slice(0, 4)
       }
     };
   }
@@ -973,7 +956,7 @@
     if (!info.agreed) throw new Error("Agree to the rental terms to continue.");
 
     if (driveMode === "chauffeur") {
-      var who = assertIdentity(info, 18);
+      var who = assertIdentity(info);
       var gov = assertGovernmentId(info, context.endDate);
       who.idType = gov.idType;
       who.idNumber = gov.idNumber;
@@ -986,7 +969,7 @@
       return who;
     }
 
-    var renter = assertIdentity(info, 21);
+    var renter = assertIdentity(info);
     var address = NS.security.sanitizeText(info.address, 120);
     if (!address) throw new Error("Enter your address.");
     var codes = NS.security.sanitizeText(info.dl_codes || info.licenseClass || "", 40);

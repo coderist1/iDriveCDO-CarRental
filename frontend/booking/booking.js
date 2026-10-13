@@ -138,7 +138,6 @@
       idNumber: "license_no",
       expiry: "license_expiry",
       address: "address",
-      birthdate: "birthdate",
       licenseClass: "dl_codes"
     },
     "chauffeur-id": {
@@ -146,7 +145,6 @@
       idNumber: "idNumber",
       expiry: "idExpiry",
       issueDate: "idIssue",
-      birthdate: "birthdate",
       idType: "idType"
     }
   };
@@ -156,7 +154,6 @@
     license_no: "license number",
     license_expiry: "expiration date",
     address: "address",
-    birthdate: "birthdate",
     dl_codes: "DL codes",
     idNumber: "ID number",
     idExpiry: "ID expiry",
@@ -663,10 +660,6 @@
           mismatch = true;
           messages.push({ level: "warn", text: "Name on the " + slotLabel(slot) + " reads as “" + data.fullName + "”, which does not match what you typed." });
         }
-        if (data.birthdate && form.birthdate && form.birthdate.value && !NS.validation.datesMatch(form.birthdate.value, data.birthdate)) {
-          mismatch = true;
-          messages.push({ level: "warn", text: "Birthdate on the " + slotLabel(slot) + " reads as " + data.birthdate + ", which does not match what you typed." });
-        }
       });
 
       function expired(value, label) {
@@ -689,10 +682,6 @@
         if (!form.license_expiry || !form.license_expiry.value) {
           messages.push({ level: "bad", text: "Enter the expiration date." });
         }
-        if (form.birthdate.value) {
-          var driveAge = NS.validation.ageOn(form.birthdate.value);
-          if (driveAge >= 0 && driveAge < 21) messages.push({ level: "bad", text: "Self-drive renters must be at least 21." });
-        }
         if (form.license_no && form.license_no.value && !NS.validation.idNumberForType("Driver's License", form.license_no.value)) {
           messages.push({ level: "bad", text: "License number should look like N04-12-345678." });
         }
@@ -711,10 +700,6 @@
           messages.push({ level: "bad", text: "Enter a drop-off location." });
         }
         expired(form.idExpiry.value, "The government ID");
-        if (form.birthdate.value) {
-          var age = NS.validation.ageOn(form.birthdate.value);
-          if (age >= 0 && age < 18) messages.push({ level: "bad", text: "You must be at least 18 to book." });
-        }
         if (!form.idType.value && form.idNumber.value) {
           messages.push({ level: "bad", text: "Choose which ID you have." });
         } else if (form.idNumber.value && !NS.validation.idNumberForType(form.idType.value, form.idNumber.value)) {
@@ -798,11 +783,9 @@
               fullName: form.fullName.value,
               phone: form.phone.value,
               email: form.email.value,
-              birthdate: form.birthdate.value,
               agreed: form.agreeTerms.checked,
               mismatchAck: !!(form.mismatchAck && form.mismatchAck.checked),
-              ocrNames: ocrValues(form, "fullName"),
-              ocrBirthdates: ocrValues(form, "birthdate")
+              ocrNames: ocrValues(form, "fullName")
             };
             var driverInfo = mode === "chauffeur"
               ? Object.assign(shared, {

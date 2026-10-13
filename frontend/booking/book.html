@@ -93,7 +93,7 @@
         </div>
 
         <p class="eyebrow" style="margin-top:1rem">Your details</p>
-        <p class="fineprint">Self-drive renters must be at least 21. Fields marked low confidence came from the ID scan and need a careful look.</p>
+        <p class="fineprint">Fields marked low confidence came from the ID scan and need a careful look.</p>
         <div class="form-grid">
           <label class="field field-span-2">Full name
             <input class="form-control" name="fullName" maxlength="80" autocomplete="name">
@@ -107,10 +107,6 @@
           </label>
           <label class="field field-span-2">Address
             <input class="form-control" name="address" maxlength="120" autocomplete="street-address">
-            <span class="ocr-confidence" hidden></span>
-          </label>
-          <label class="field">Date of birth
-            <input class="form-control" name="birthdate" type="date">
             <span class="ocr-confidence" hidden></span>
           </label>
         </div>
@@ -149,7 +145,7 @@
         <div class="ocr-flags" hidden></div>
         <label class="check-min mismatch-ack" hidden>
           <input type="checkbox" name="mismatchAck">
-          <span>I reviewed the mismatch. The name and birthdate I typed are the correct ones.</span>
+          <span>I reviewed the mismatch. The name I typed is the correct one.</span>
         </label>
         <div class="terms-row">
           <label class="check-min terms-check">
@@ -230,10 +226,6 @@
           <label class="field">Email
             <input class="form-control" name="email" maxlength="120" autocomplete="email">
           </label>
-          <label class="field">Date of birth
-            <input class="form-control" name="birthdate" type="date">
-            <span class="ocr-confidence" hidden></span>
-          </label>
         </div>
 
         <p class="eyebrow" style="margin-top:1rem">Which ID do you have?</p>
@@ -297,7 +289,7 @@
         <div class="ocr-flags" hidden></div>
         <label class="check-min mismatch-ack" hidden>
           <input type="checkbox" name="mismatchAck">
-          <span>I reviewed the mismatch. The name and birthdate I typed are the correct ones.</span>
+          <span>I reviewed the mismatch. The name I typed is the correct one.</span>
         </label>
         <div class="terms-row">
           <label class="check-min terms-check">
@@ -326,13 +318,13 @@
   <script src="../shared/js/api.js?v=20261009g"></script>
   <script src="../shared/js/validation.js?v=20261011a"></script>
   <script src="../shared/js/routes.js?v=20261010m"></script>
-  <script src="../shared/js/domain.js?v=20261013f"></script>
+  <script src="../shared/js/domain.js?v=20261013g"></script>
   <script src="../auth/auth.js?v=20261011e"></script>
   <script src="../shared/js/ui.js?v=20261013f"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="../shared/js/ocr.js?v=20261013c"></script>
   <script src="../shared/js/pickup-map.js?v=20261013c"></script>
-  <script src="./booking.js?v=20261013f"></script>
+  <script src="./booking.js?v=20261013g"></script>
   <script src="../shared/js/app.js?v=20261013c"></script>
 </body>
 </html>

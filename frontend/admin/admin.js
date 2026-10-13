@@ -551,7 +551,6 @@
     add("ID type", info.idType);
     add("ID number", info.idNumber);
     if (info.idType) add("Expiry date", info.idExpiry || "Not on file");
-    add("Date of birth", info.birthdate);
     var shots = idPhotos(info);
     modal.innerHTML =
       '<article class="password-dialog id-check-dialog" role="dialog" aria-modal="true" aria-labelledby="id-check-title">' +
