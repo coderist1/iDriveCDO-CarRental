@@ -233,6 +233,8 @@ CREATE TABLE bookings (
   payment_method       varchar,
   notes                varchar,
   return_notes         varchar,
+  cancel_reason        varchar,
+  cancelled_at         timestamptz,
   date_reserve         timestamptz NOT NULL DEFAULT now(),
   started_at           timestamptz,
   started_by           bigint,
