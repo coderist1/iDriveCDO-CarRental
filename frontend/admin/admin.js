@@ -522,7 +522,7 @@
     add("License number", info.licenseNo);
     add("License expiry", info.licenseExpiry);
     add("Address on ID", info.licenseAddress || info.address);
-    add("License class", info.licenseClass);
+    add("DL codes", info.dl_codes || info.licenseClass);
     add("Restrictions", info.restrictions);
     add("ID type", info.idType);
     add("ID number", info.idNumber);

@@ -764,132 +764,46 @@
     reader.readAsDataURL(file);
   }
 
-  function downloadReceipt(booking) {
-    if (!booking) throw new Error("Booking not found.");
-    var vehicle = NS.domain.getVehicle(booking.vehicleId);
-    var me = NS.auth.current();
-    var info = booking.driverInfo || {};
-    var payment = booking.payment || null;
-    var driveMode = booking.driveMode === "chauffeur" ? "Chauffeur" : "Self-drive";
-    var paymentLine = "Unpaid";
-    if (payment) {
-      if (payment.method === "cashless") {
-        paymentLine =
-          "Cashless · " +
-          (payment.brand || "Instapay") +
-          (payment.authCode ? " · " + payment.authCode : "");
-      } else if (payment.method === "cash") {
-        paymentLine = "Cash · " + payment.authCode;
-      } else {
-        paymentLine = (payment.brand || "Paid") + " · " + (payment.authCode || "");
-      }
-    }
-    var driverBlock =
-      booking.driveMode === "chauffeur"
-        ? "<tr><th>Valid ID</th><td>" +
-          NS.security.escapeHtml((info.idType || "") + " · " + (info.idNumber || "")) +
-          "</td></tr>"
-        : "<tr><th>License</th><td>" +
-          NS.security.escapeHtml((info.licenseName || "") + " · " + (info.licenseNo || "")) +
-          "</td></tr>" +
-          "<tr><th>License expiry</th><td>" +
-          NS.security.escapeHtml(info.licenseExpiry || "") +
-          "</td></tr>" +
-          "<tr><th>License photo</th><td>" +
-          (info.licensePhoto ? "Attached" : "Missing") +
-          "</td></tr>" +
-          "<tr><th>Emergency</th><td>" +
-          NS.security.escapeHtml(info.emergencyPhone || "") +
-          "</td></tr>";
+  var EYE_OPEN =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var EYE_OFF =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6a3 3 0 004.2 4.2"/><path d="M9.9 5.1A10.8 10.8 0 0112 5c6.5 0 10 7 10 7a18.5 18.5 0 01-3.2 4.4"/><path d="M6.1 6.1C3.8 7.8 2 12 2 12s3.5 7 10 7a10.7 10.7 0 004.1-.8"/></svg>';
 
-    var html =
-      "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>" +
-      "<title>Receipt " +
-      NS.security.escapeHtml(booking.ref) +
-      "</title>" +
-      "<style>" +
-      "body{font-family:Segoe UI,Arial,sans-serif;max-width:720px;margin:32px auto;color:#111827;padding:0 16px}" +
-      "h1{margin:0 0 4px;font-size:28px}h2{margin:24px 0 8px;font-size:18px}" +
-      ".muted{color:#6b7280}.total{font-size:28px;font-weight:800;color:#a63f3b;margin:12px 0}" +
-      "table{width:100%;border-collapse:collapse;margin-top:12px}" +
-      "th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top}" +
-      "th{width:34%;color:#6b7280;font-weight:600}.brand{font-weight:800;color:#c4504b}" +
-      "@media print{body{margin:0}}" +
-      "</style></head><body>" +
-      "<p class='brand'>iDrive CDO</p>" +
-      "<h1>Payment receipt</h1>" +
-      "<p class='muted'>Generated " +
-      NS.security.escapeHtml(new Date().toLocaleString()) +
-      "</p>" +
-      "<p class='total'>" +
-      peso(booking.total) +
-      "</p>" +
-      "<table>" +
-      "<tr><th>Booking ref</th><td>" +
-      NS.security.escapeHtml(booking.ref) +
-      "</td></tr>" +
-      "<tr><th>Customer</th><td>" +
-      NS.security.escapeHtml(me ? me.firstName + " " + me.lastName + " · " + me.email : "") +
-      "</td></tr>" +
-      "<tr><th>Vehicle</th><td>" +
-      NS.security.escapeHtml(vehicle ? vehicle.name : "Vehicle") +
-      "</td></tr>" +
-      "<tr><th>Drive mode</th><td>" +
-      driveMode +
-      "</td></tr>" +
-      driverBlock +
-      "<tr><th>Pickup</th><td>" +
-      NS.security.escapeHtml(booking.pickup) +
-      "</td></tr>" +
-      "<tr><th>" +
-      (booking.driveMode === "chauffeur"
-        ? "Drop-off"
-        : NS.domain.isSelfDeliver && NS.domain.isSelfDeliver(booking)
-          ? "Deliver to"
-          : "Return") +
-      "</th><td>" +
-      NS.security.escapeHtml(booking.dropoff) +
-      "</td></tr>" +
-      "<tr><th>Dates</th><td>" +
-      fmtDate(booking.startDate) +
-      " – " +
-      fmtDate(booking.endDate) +
-      " (" +
-      booking.days +
-      " day(s))</td></tr>" +
-      "<tr><th>Payment</th><td>" +
-      NS.security.escapeHtml(paymentLine) +
-      "</td></tr>" +
-      (payment && payment.receipt
-        ? "<tr><th>Receipt</th><td><img src='" +
-          String(payment.receipt).replace(/'/g, "") +
-          "' alt='Payment receipt' style='width:min(100%,320px);border-radius:12px'></td></tr>"
-        : "") +
-      "<tr><th>Payment status</th><td>" +
-      NS.security.escapeHtml(booking.paymentStatus || "") +
-      "</td></tr>" +
-      "<tr><th>Booking status</th><td>" +
-      NS.security.escapeHtml(booking.status || "") +
-      "</td></tr>" +
-      (booking.notes
-        ? "<tr><th>Notes</th><td>" + NS.security.escapeHtml(booking.notes) + "</td></tr>"
-        : "") +
-      "</table>" +
-      "<p class='muted'>iDrive CDO · Limketkai Drive, Cagayan de Oro · Frontend demo receipt</p>" +
-      "</body></html>";
-
-    var blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = "iDrive-receipt-" + String(booking.ref || booking.id).replace(/[^\w-]+/g, "_") + ".html";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function () {
-      URL.revokeObjectURL(url);
-    }, 1000);
-    return true;
+  function bindPasswordToggles(root) {
+    var scope = root && root.querySelectorAll ? root : document;
+    var inputs = scope.querySelectorAll('input[type="password"]');
+    Array.prototype.forEach.call(inputs, function (input) {
+      if (input.getAttribute("data-password-bound") === "1") return;
+      input.setAttribute("data-password-bound", "1");
+      var wrap = document.createElement("span");
+      wrap.className = "password-field";
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "password-toggle";
+      btn.setAttribute("aria-label", "Show password");
+      btn.innerHTML = EYE_OPEN;
+      btn.addEventListener("click", function () {
+        var showing = input.type === "text";
+        var value = input.value;
+        var start = input.selectionStart;
+        var end = input.selectionEnd;
+        input.type = showing ? "password" : "text";
+        input.value = value;
+        btn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+        btn.innerHTML = showing ? EYE_OPEN : EYE_OFF;
+        input.focus();
+        if (typeof start === "number" && typeof input.setSelectionRange === "function") {
+          try {
+            input.setSelectionRange(start, end);
+          } catch (e) {
+            /* some browsers refuse a range on a password field */
+          }
+        }
+      });
+      wrap.appendChild(btn);
+    });
   }
 
   var BOOKING_NOTICE =
@@ -1075,6 +989,6 @@
     readImageAsAvatar: readImageAsAvatar,
     readLicensePhoto: readLicensePhoto,
     readIdPhoto: readIdPhoto,
-    downloadReceipt: downloadReceipt
+    bindPasswordToggles: bindPasswordToggles
   };
 })(window);

@@ -95,7 +95,15 @@
       var file = input.files && input.files[0];
       input.value = "";
       if (!file) return;
-      NS.ui.readLicensePhoto(file, function (err, dataUrl) {
+      var check = NS.ocr && NS.ocr.assessQuality
+        ? NS.ocr.assessQuality(file, { profile: "document" })
+        : Promise.resolve({ ok: true, issues: [] });
+      check.then(function (result) {
+        if (!result.ok) {
+          setStatus(result.issues.map(function (issue) { return issue.message; }).join(" "));
+          return;
+        }
+        NS.ui.readLicensePhoto(file, function (err, dataUrl) {
         if (err) {
           setStatus(err.message || "Could not read that image.");
           return;
@@ -146,6 +154,9 @@
           .catch(function (e) {
             setStatus(e.message || "Could not read the ID automatically. Please type your details.");
           });
+        });
+      }).catch(function () {
+        setStatus("Could not check that photo. You can type the details in, or try a brighter, sharper picture.");
       });
     });
   }

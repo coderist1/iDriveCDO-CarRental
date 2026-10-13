@@ -113,8 +113,47 @@
       }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.putImageData(image, 0, 0);
-      return canvas;
+      return cropToContent(canvas);
     });
+  }
+
+  /* Drops a plain border around the card so the scanner spends its pixels on the ID. */
+  function cropToContent(canvas) {
+    var w = canvas.width;
+    var h = canvas.height;
+    var ctx = canvas.getContext("2d", { willReadFrequently: true });
+    var px = ctx.getImageData(0, 0, w, h).data;
+    var minX = w;
+    var minY = h;
+    var maxX = 0;
+    var maxY = 0;
+    var step = 3;
+    for (var y = 0; y < h; y += step) {
+      for (var x = 0; x < w; x += step) {
+        var i = (y * w + x) * 4;
+        if (px[i] < 210) {
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX <= minX || maxY <= minY) return canvas;
+    var pad = Math.round(Math.min(w, h) * 0.03);
+    minX = Math.max(0, minX - pad);
+    minY = Math.max(0, minY - pad);
+    maxX = Math.min(w - 1, maxX + pad);
+    maxY = Math.min(h - 1, maxY + pad);
+    var cw = maxX - minX;
+    var ch = maxY - minY;
+    if (cw > w * 0.92 && ch > h * 0.92) return canvas;
+    if (cw < w * 0.35 || ch < h * 0.35) return canvas;
+    var out = document.createElement("canvas");
+    out.width = cw;
+    out.height = ch;
+    out.getContext("2d").drawImage(canvas, minX, minY, cw, ch, 0, 0, cw, ch);
+    return out;
   }
 
   function linesFrom(data) {
@@ -213,6 +252,15 @@
         var spread = Math.max(pixels[p], pixels[p + 1], pixels[p + 2]) - Math.min(pixels[p], pixels[p + 1], pixels[p + 2]);
         if (gray[i] >= 250 && spread < 8) glare++;
       }
+      var lumSum = 0;
+      for (var d = 0; d < gray.length; d++) lumSum += gray[d];
+      if (!selfie && lumSum / gray.length < 42) {
+        issues.push({
+          code: "dark",
+          message: "This photo is too dark. Turn on a light or move to a brighter spot and take it again."
+        });
+      }
+
       if (!selfie && glare / gray.length > 0.07) {
         issues.push({
           code: "glare",
@@ -1161,7 +1209,13 @@
         return attempt(idx + 1);
       });
     }
-    return attempt(0);
+    return attempt(0).then(function (fields) {
+      var useful = fields && (fields.idNumber || fields.fullName || fields.expiry || fields.licenseClass || fields.birthdate);
+      if (!useful) {
+        throw new Error("Could not read the text on this photo. If it is blurry or too dark, take another picture in better light. You can still type the details below.");
+      }
+      return fields;
+    });
   }
 
   var MIN_CONFIDENCE = 0.45;

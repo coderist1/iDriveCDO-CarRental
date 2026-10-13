@@ -135,17 +135,14 @@
   var OCR_FILL = {
     "license-front": {
       fullName: "fullName",
-      idNumber: "licenseNo",
-      expiry: "licenseExpiry",
-      issueDate: "licenseIssue",
+      idNumber: "license_no",
+      expiry: "license_expiry",
       address: "address",
       birthdate: "birthdate",
-      licenseClass: "licenseClass",
-      restrictions: "restrictions"
+      licenseClass: "dl_codes"
     },
     "license-back": {
-      licenseClass: "licenseClass",
-      restrictions: "restrictions",
+      licenseClass: "dl_codes",
       address: "address"
     },
     "chauffeur-id": {
@@ -160,13 +157,11 @@
 
   var FIELD_LABEL = {
     fullName: "name",
-    licenseNo: "license number",
-    licenseExpiry: "license expiry",
-    licenseIssue: "license issue date",
+    license_no: "license number",
+    license_expiry: "expiration date",
     address: "address",
     birthdate: "birthdate",
-    licenseClass: "license class",
-    restrictions: "restrictions",
+    dl_codes: "DL codes",
     idNumber: "ID number",
     idExpiry: "ID expiry",
     idIssue: "ID issue date",
@@ -688,19 +683,28 @@
         if (selfHandover(form) === "deliver" && form.dropoff && form.dropoff.value.trim().length < 5) {
           messages.push({ level: "bad", text: "Enter where to deliver the car." });
         }
-        expired(form.licenseExpiry.value, "The driver's license");
+        expired(form.license_expiry && form.license_expiry.value, "The driver's license");
+        if (!form.dl_codes || !form.dl_codes.value.trim()) {
+          messages.push({ level: "bad", text: "Enter the DL codes." });
+        }
+        if (!form.license_no || !form.license_no.value.trim()) {
+          messages.push({ level: "bad", text: "Enter the license number." });
+        }
+        if (!form.license_expiry || !form.license_expiry.value) {
+          messages.push({ level: "bad", text: "Enter the expiration date." });
+        }
         if (form.birthdate.value) {
           var driveAge = NS.validation.ageOn(form.birthdate.value);
           if (driveAge >= 0 && driveAge < 21) messages.push({ level: "bad", text: "Self-drive renters must be at least 21." });
         }
-        if (form.licenseNo.value && !NS.validation.idNumberForType("Driver's License", form.licenseNo.value)) {
+        if (form.license_no && form.license_no.value && !NS.validation.idNumberForType("Driver's License", form.license_no.value)) {
           messages.push({ level: "bad", text: "License number should look like N04-12-345678." });
         }
-        if (form.licenseClass.value) {
-          var fit = NS.validation.licenseFitsVehicle(form.licenseClass.value, form.restrictions.value, selectedVehicle(form));
+        if (form.dl_codes && form.dl_codes.value) {
+          var fit = NS.validation.licenseFitsVehicle(form.dl_codes.value, form.dl_codes.value, selectedVehicle(form));
           if (!fit.ok) messages.push({ level: "bad", text: fit.message });
         }
-        if (NS.validation.daylightBlocked(form.restrictions.value, form.pickupTime.value, form.returnTime.value)) {
+        if (form.dl_codes && NS.validation.daylightBlocked(form.dl_codes.value, form.pickupTime.value, form.returnTime.value)) {
           messages.push({ level: "bad", text: "This license is limited to daylight driving (05:00–18:00)." });
         }
       } else {
@@ -815,11 +819,9 @@
                 })
               : Object.assign(shared, {
                   address: form.address.value,
-                  licenseNo: form.licenseNo.value,
-                  licenseExpiry: form.licenseExpiry.value,
-                  licenseIssue: form.licenseIssue.value,
-                  licenseClass: form.licenseClass.value,
-                  restrictions: form.restrictions.value,
+                  dl_codes: form.dl_codes.value,
+                  license_no: form.license_no.value,
+                  license_expiry: form.license_expiry.value,
                   licensePhoto: form.licensePhoto.value,
                   licenseBack: form.licenseBack.value,
                   selfie: form.selfie.value
@@ -1150,11 +1152,14 @@
         ? "<div><dt>Valid ID</dt><dd>" +
           NS.security.escapeHtml((info.idType || "ID") + " · " + (info.idNumber || "—")) +
           "</dd></div>"
-        : "<div><dt>License</dt><dd>" +
-          NS.security.escapeHtml((info.licenseName || "—") + " · " + (info.licenseNo || "—")) +
+        : "<div><dt>DL codes</dt><dd>" +
+          NS.security.escapeHtml(info.dl_codes || info.licenseClass || "—") +
           "</dd></div>" +
-          "<div><dt>License expiry</dt><dd>" +
-          NS.security.escapeHtml(info.licenseExpiry || "—") +
+          "<div><dt>License No.</dt><dd>" +
+          NS.security.escapeHtml(info.license_no || info.licenseNo || "—") +
+          "</dd></div>" +
+          "<div><dt>Expiration Date</dt><dd>" +
+          NS.security.escapeHtml(info.license_expiry || info.licenseExpiry || "—") +
           "</dd></div>" +
           "<div><dt>Emergency</dt><dd>" +
           NS.security.escapeHtml(info.emergencyPhone || "—") +
@@ -1302,9 +1307,6 @@
       returnBtn +
       staffAccept +
       cancel +
-      (booking.paymentStatus === "paid"
-        ? '<button class="btn btn-gold" id="save-receipt-btn" type="button">Save receipt</button>'
-        : "") +
       '<button class="btn btn-dark" type="button" onclick="window.print()">Print receipt</button></div></div>';
 
     var ratingForm = document.getElementById("rating-form");
@@ -1336,21 +1338,6 @@
               NS.ui.toast(err.message, "err");
             }
           });
-      });
-    }
-
-    var saveBtn = document.getElementById("save-receipt-btn");
-    if (saveBtn) {
-      saveBtn.addEventListener("click", function () {
-        NS.ui.askYesNo("Save this receipt to your device?", { title: "Save edit" }).then(function (ok) {
-          if (!ok) return;
-          try {
-            NS.ui.downloadReceipt(booking);
-            NS.ui.toast("Receipt saved to your downloads.", "ok");
-          } catch (err) {
-            NS.ui.toast(err.message || "Could not save receipt.", "err");
-          }
-        });
       });
     }
 

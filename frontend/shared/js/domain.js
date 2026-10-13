@@ -708,18 +708,17 @@
       if (info.idPhoto) idBody.id_photo = info.idPhoto;
       return idBody;
     }
-    /* self-drive: all license fields are required together by the backend */
-    var hasAll = info.licenseName && info.licenseNo && info.licenseExpiry &&
-      info.licenseAddress && info.emergencyPhone && info.licensePhoto;
-    if (!hasAll) return null;
-    return {
-      license_name: info.licenseName,
-      license_no: info.licenseNo,
-      license_expiry: info.licenseExpiry,
-      license_address: info.licenseAddress,
-      emergency_phone: NS.validation.normalizePhone(info.emergencyPhone),
-      license_photo: info.licensePhoto
+    var codes = info.dl_codes || info.licenseClass || "";
+    var licenseNo = info.license_no || info.licenseNo || "";
+    var licenseExpiry = info.license_expiry || info.licenseExpiry || "";
+    if (!codes || !licenseNo || !licenseExpiry) return null;
+    var licenseBody = {
+      dl_codes: codes,
+      license_no: licenseNo,
+      license_expiry: licenseExpiry
     };
+    if (info.licensePhoto) licenseBody.license_photo = info.licensePhoto;
+    return licenseBody;
   }
 
   /* Saves a local booking to Laravel; the local copy is discarded if the server rejects it. */
@@ -896,31 +895,37 @@
     var renter = assertIdentity(info, 21);
     var address = NS.security.sanitizeText(info.address, 120);
     if (!address) throw new Error("Enter your address.");
-    var licenseNo = NS.validation.normalizeLicense(info.licenseNo);
-    var licenseExpiry = NS.security.sanitizeText(info.licenseExpiry, 10);
-    var licenseClass = NS.security.sanitizeText(info.licenseClass, 40);
-    var restrictions = NS.security.sanitizeText(info.restrictions, 40);
+    var codes = NS.security.sanitizeText(info.dl_codes || info.licenseClass || "", 40);
+    var licenseNo = NS.validation.normalizeLicense(info.license_no || info.licenseNo || "");
+    var licenseExpiry = NS.security.sanitizeText(info.license_expiry || info.licenseExpiry || "", 10);
+    if (!codes) throw new Error("Enter the DL codes.");
+    if (!licenseNo) throw new Error("Enter the license number.");
+    if (!licenseExpiry) throw new Error("Enter the expiration date.");
     if (!NS.validation.idNumberForType("Driver's License", licenseNo)) {
       throw new Error("Enter a driver's license number (like N04-12-345678).");
     }
-    if (!NS.validation.futureDate(licenseExpiry) || (context.endDate && licenseExpiry < context.endDate)) {
-      throw new Error("Your driver's license is expired or expires before the return date.");
+    if (!NS.validation.futureDate(licenseExpiry)) {
+      throw new Error("The expiration date must be a valid date that has not already passed.");
     }
-    var fit = NS.validation.licenseFitsVehicle(licenseClass, restrictions, context.vehicle);
+    if (context.endDate && licenseExpiry < context.endDate) {
+      throw new Error("This license expires before the vehicle is returned.");
+    }
+    var fit = NS.validation.licenseFitsVehicle(codes, codes, context.vehicle);
     if (!fit.ok) throw new Error(fit.message);
-    if (NS.validation.daylightBlocked(restrictions, context.pickupTime, context.returnTime)) {
+    if (NS.validation.daylightBlocked(codes, context.pickupTime, context.returnTime)) {
       throw new Error("This license is limited to daylight driving. Choose pickup and return times between 05:00 and 18:00.");
     }
 
     renter.address = address;
-    renter.licenseName = renter.fullName;
+    renter.dl_codes = codes;
+    renter.license_no = licenseNo;
+    renter.license_expiry = licenseExpiry;
+    renter.licenseClass = codes;
     renter.licenseNo = licenseNo;
     renter.licenseExpiry = licenseExpiry;
+    renter.licenseName = renter.fullName;
     renter.licenseAddress = address;
     renter.emergencyPhone = renter.phone;
-    renter.licenseClass = licenseClass;
-    renter.restrictions = restrictions;
-    renter.licenseIssue = NS.security.sanitizeText(info.licenseIssue || "", 10);
     renter.licensePhoto = assertPhoto(info.licensePhoto, "the front of your driver's license", 750000);
     renter.licenseBack = assertPhoto(info.licenseBack, "the back of your driver's license", 320000);
     renter.selfie = assertPhoto(info.selfie, "a live photo of yourself", 320000);

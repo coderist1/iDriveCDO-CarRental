@@ -18,9 +18,8 @@
       "<p class='total'>" +
       NS.ui.peso(booking.total) +
       "</p>" +
-      "<p class='notice'>Your payment was recorded. Save a copy of this receipt for your records.</p>" +
+      "<p class='notice'>Your payment was recorded.</p>" +
       '<div class="btn-row">' +
-      '<button class="btn btn-gold" id="save-receipt-btn" type="button">Save receipt</button>' +
       '<a class="btn btn-ghost" href="' +
       NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(booking.id)) +
       '">View booking</a>' +
@@ -28,21 +27,6 @@
       NS.routes.href("myBookings") +
       '">My bookings</a>' +
       "</div>";
-
-    var saveBtn = document.getElementById("save-receipt-btn");
-    if (saveBtn) {
-      saveBtn.addEventListener("click", function () {
-        NS.ui.askYesNo("Save this receipt to your device?", { title: "Save edit" }).then(function (ok) {
-          if (!ok) return;
-          try {
-            NS.ui.downloadReceipt(booking);
-            NS.ui.toast("Receipt saved to your downloads.", "ok");
-          } catch (err) {
-            NS.ui.toast(err.message || "Could not save receipt.", "err");
-          }
-        });
-      });
-    }
   }
 
   NS.pages.payment = function payment() {
@@ -181,12 +165,7 @@
                 };
           var paid = NS.domain.payBooking(booking.id, payload, form.csrf ? form.csrf.value : "");
           showPaidReceipt(form, box, paid);
-          try {
-            NS.ui.downloadReceipt(paid);
-            NS.ui.toast("Receipt saved to your downloads.", "ok");
-          } catch (saveErr) {
-            NS.ui.toast("Payment recorded. Use Save receipt if the download was blocked.", "ok");
-          }
+          NS.ui.toast("Payment recorded.", "ok");
         } catch (err) {
           NS.ui.bindCsrf(form);
           NS.ui.toast(err.message, "err");

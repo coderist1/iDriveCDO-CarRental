@@ -106,6 +106,7 @@
       sync.then(startOnce);
     }
 
+    if (NS.ui && NS.ui.bindPasswordToggles) NS.ui.bindPasswordToggles(document);
     startWithSync();
   });
 })(window);
