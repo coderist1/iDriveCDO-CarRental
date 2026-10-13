@@ -315,6 +315,7 @@ CREATE TABLE payments (
   payment_status   varchar NOT NULL DEFAULT 'paid',
   payment_date     timestamptz NOT NULL DEFAULT now(),
   recorded_by      bigint,
+  receipt          text,
   created_at       timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT payments_pkey PRIMARY KEY (payment_id),
   CONSTRAINT payments_code_key UNIQUE (code),

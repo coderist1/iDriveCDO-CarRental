@@ -82,6 +82,29 @@
     return NS.store.get("maintenancePredictions", {});
   }
 
+  function isCashless(method, brand) {
+    return method === "cashless" || /gcash|instapay|maya|grabpay/i.test(String(brand || ""));
+  }
+
+  function cashlessReceipt(booking) {
+    if (!booking) return "";
+    var pay = booking.payment || {};
+    var method = pay.method || booking.paymentMethod || "";
+    var brand = pay.brand || "";
+    var receipt = pay.receipt || "";
+    if (!/^data:image\//i.test(receipt)) {
+      var row = payments().filter(function (p) {
+        return p.bookingId === booking.id && /^data:image\//i.test(p.receipt || "");
+      })[0];
+      if (row) {
+        receipt = row.receipt;
+        method = method || row.paymentMethod || "";
+        brand = brand || row.brand || "";
+      }
+    }
+    return isCashless(method, brand) && /^data:image\//i.test(receipt) ? receipt : "";
+  }
+
   function payments() {
     return NS.store.get("payments", []);
   }
@@ -764,6 +787,7 @@
         var routeLine = "Pickup: " + (booking.pickup || "") + " · Drop-off: " + (booking.dropoff || "");
         if (notes.indexOf("Pickup:") === -1) notes = notes ? routeLine + "\n" + notes : routeLine;
       }
+      if (notes.length > 1000) notes = notes.slice(0, 1000);
       var body = {
         vehicle_id: vehicle && vehicle.apiId,
         user_id: apiUserId,
@@ -1016,7 +1040,8 @@
         holder: payment.holder || null,
         reference_number: payment.authCode,
         payment_date: new Date().toISOString(),
-        payment_status: "paid"
+        payment_status: "paid",
+        receipt: method === "cashless" ? payment.receipt : null
       }, "payment_id");
       /* Mark the booking paid on the server too so staff can confirm it. */
       if (NS.api) {
@@ -2969,6 +2994,7 @@
           referenceNumber: p.reference_number || "",
           paymentDate: apiDay(p.payment_date),
           paymentStatus: String(p.payment_status || "").toLowerCase(),
+          receipt: p.receipt || (prev && prev.receipt) || "",
           createdAt: p.created_at
         };
       }, function (p) {
@@ -3339,6 +3365,7 @@
     saveFuelRecord: saveFuelRecord,
     fuelForVehicle: fuelForVehicle,
     payments: payments,
+    cashlessReceipt: cashlessReceipt,
     allPayments: allPayments,
     PAYMENT_STATUSES: PAYMENT_STATUSES,
     PAYMENT_BRANDS: PAYMENT_BRANDS,

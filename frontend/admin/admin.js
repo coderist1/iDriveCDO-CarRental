@@ -12,6 +12,26 @@
     return NS.ui.bookingDetailListHtml(NS.ui.bookingDetailRowsFromRecord(b));
   }
 
+  function openPaymentReceipt(src, ref) {
+    var old = document.getElementById("pay-receipt-modal");
+    if (old) old.remove();
+    var modal = document.createElement("div");
+    modal.id = "pay-receipt-modal";
+    modal.className = "password-modal";
+    modal.innerHTML =
+      '<article class="password-dialog" role="dialog" aria-modal="true" aria-labelledby="pay-receipt-title">' +
+      '<div class="password-dialog-head"><h2 id="pay-receipt-title">GCash / cashless receipt' +
+      (ref ? " · " + NS.security.escapeHtml(ref) : "") +
+      '</h2><button class="btn btn-ghost btn-sm" type="button" data-receipt-close>Close</button></div>' +
+      '<div class="license-photo-view"><img src="' +
+      String(src).replace(/"/g, "") +
+      '" alt="GCash or cashless receipt"></div></article>';
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal || e.target.closest("[data-receipt-close]")) modal.remove();
+    });
+    document.body.appendChild(modal);
+  }
+
   /* Booking threads whose booking record is gone: rebuild what we can from the desk notice text. */
   function missingBookingDetailList(thread) {
     var esc = NS.security.escapeHtml;
@@ -633,6 +653,12 @@
             actions +=
               '<button class="btn btn-gold btn-sm" data-accept-return="' + b.id + '">Accept return</button>';
           }
+          if (NS.domain.cashlessReceipt && NS.domain.cashlessReceipt(b)) {
+            actions +=
+              '<button class="btn btn-ghost btn-sm" data-pay-receipt="' +
+              b.id +
+              '">View receipt</button>';
+          }
           actions +=
             '<button class="btn btn-ghost btn-sm" data-id-photo="' +
             b.id +
@@ -660,6 +686,17 @@
     }
     document.getElementById("status-filter").addEventListener("change", render);
     host.addEventListener("click", function (e) {
+      var receiptId = e.target.getAttribute("data-pay-receipt");
+      if (receiptId) {
+        var paid = NS.domain.getBooking(receiptId);
+        var shot = paid && NS.domain.cashlessReceipt(paid);
+        if (!shot) {
+          NS.ui.toast("No cashless receipt is on file for this booking.", "err");
+          return;
+        }
+        openPaymentReceipt(shot, paid.ref);
+        return;
+      }
       var idPhoto = e.target.getAttribute("data-id-photo");
       if (idPhoto) {
         var booking = NS.domain.getBooking(idPhoto);
@@ -1332,7 +1369,7 @@
     function render() {
       var list = NS.domain.allPayments();
       host.innerHTML = list.length
-        ? '<table class="table"><thead><tr><th>Ref</th><th>Booking</th><th>Amount</th><th>Method</th><th>Payer</th><th>Date</th><th>Status</th></tr></thead><tbody>' +
+        ? '<table class="table"><thead><tr><th>Ref</th><th>Booking</th><th>Amount</th><th>Method</th><th>Receipt</th><th>Payer</th><th>Date</th><th>Status</th></tr></thead><tbody>' +
           list
             .map(function (p) {
               return (
@@ -1344,6 +1381,10 @@
                 NS.ui.peso(p.amount) +
                 "</td><td>" +
                 esc((p.paymentMethod || "") + (p.brand && p.brand !== "Cash" ? " · " + p.brand : "") + (p.last4 && /^\d{4}$/.test(p.last4) ? " ··" + p.last4 : "")) +
+                "</td><td>" +
+                (NS.domain.cashlessReceipt({ id: p.bookingId, payment: { method: p.paymentMethod, brand: p.brand, receipt: p.receipt } })
+                  ? '<button class="btn btn-ghost btn-sm" type="button" data-pay-receipt="' + esc(p.bookingId) + '">View receipt</button>'
+                  : "—") +
                 "</td><td>" +
                 esc(p.holder || "") +
                 "</td><td>" +
@@ -1405,6 +1446,18 @@
         });
       });
     }
+
+    host.addEventListener("click", function (e) {
+      var bookingId = e.target.getAttribute("data-pay-receipt");
+      if (!bookingId) return;
+      var paid = NS.domain.getBooking(bookingId);
+      var shot = paid && NS.domain.cashlessReceipt(paid);
+      if (!shot) {
+        NS.ui.toast("No cashless receipt is on file for this payment.", "err");
+        return;
+      }
+      openPaymentReceipt(shot, paid.ref);
+    });
 
     host.addEventListener("change", function (e) {
       var id = e.target.getAttribute("data-pay-status");

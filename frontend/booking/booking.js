@@ -1253,11 +1253,14 @@
               booking.payment.brand +
               (booking.payment.authCode ? " · " + booking.payment.authCode : "")
           ) +
-          (booking.payment.receipt
-            ? '<div class="license-photo-view"><p class="eyebrow">Payment receipt</p><img src="' +
-              String(booking.payment.receipt).replace(/"/g, "") +
-              '" alt="Payment receipt"></div>'
-            : "")
+          (function () {
+            var shot = NS.domain.cashlessReceipt ? NS.domain.cashlessReceipt(booking) : "";
+            return shot
+              ? '<div class="license-photo-view"><p class="eyebrow">GCash / cashless receipt</p><img src="' +
+                String(shot).replace(/"/g, "") +
+                '" alt="GCash or cashless receipt"></div>'
+              : "";
+          })()
         : "Unpaid") +
       "</dd></div>" +
       "</dl>" +
