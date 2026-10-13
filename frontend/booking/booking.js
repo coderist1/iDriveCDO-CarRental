@@ -989,6 +989,59 @@
     render();
   };
 
+  function askCancelReason() {
+    return new Promise(function (resolve) {
+      var old = document.getElementById("cancel-reason-modal");
+      if (old) old.remove();
+      var modal = document.createElement("div");
+      modal.id = "cancel-reason-modal";
+      modal.className = "password-modal";
+      modal.innerHTML =
+        '<article class="password-dialog" role="dialog" aria-modal="true" aria-labelledby="cancel-reason-title">' +
+        '<div class="password-dialog-head"><h2 id="cancel-reason-title">Cancel this booking</h2></div>' +
+        "<p>This booking is still pending. Choose why you are cancelling it.</p>" +
+        '<label class="field">Reason<select class="form-select" name="reason">' +
+        '<option value="">Choose a reason</option>' +
+        "<option>Change of plans</option>" +
+        "<option>Booked the wrong dates</option>" +
+        "<option>Found another car</option>" +
+        "<option>Other</option>" +
+        "</select></label>" +
+        '<label class="field" data-other hidden>Your reason<textarea class="form-control" name="note" maxlength="240"></textarea></label>' +
+        '<p class="field-error" data-error hidden></p>' +
+        '<div class="card-actions"><button class="btn btn-ghost" type="button" data-close>Keep booking</button>' +
+        '<button class="btn btn-gold" type="button" data-confirm>Cancel booking</button></div></article>';
+      document.body.appendChild(modal);
+      var reason = modal.querySelector('[name="reason"]');
+      var note = modal.querySelector('[name="note"]');
+      var other = modal.querySelector("[data-other]");
+      var error = modal.querySelector("[data-error]");
+      function close(value) {
+        modal.remove();
+        resolve(value);
+      }
+      reason.addEventListener("change", function () {
+        other.hidden = reason.value !== "Other";
+        error.hidden = true;
+      });
+      modal.querySelector("[data-close]").addEventListener("click", function () { close(null); });
+      modal.addEventListener("click", function (e) { if (e.target === modal) close(null); });
+      modal.querySelector("[data-confirm]").addEventListener("click", function () {
+        if (!reason.value) {
+          error.hidden = false;
+          error.textContent = "Choose a reason.";
+          return;
+        }
+        if (reason.value === "Other" && !note.value.trim()) {
+          error.hidden = false;
+          error.textContent = "Type your reason when you choose Other.";
+          return;
+        }
+        close({ reason: reason.value, note: note.value.trim() });
+      });
+    });
+  }
+
   NS.pages.detail = function bookingDetail() {
     var host = document.getElementById("booking-view");
     if (!host) return;
@@ -1012,7 +1065,10 @@
           '">Pay now</a>'
         : "";
     var cancel =
-      booking.status === "pending" || booking.status === "confirmed"
+      me &&
+      me.role === "customer" &&
+      booking.userId === me.id &&
+      booking.status === "pending"
         ? '<button class="btn btn-ghost" id="cancel-booking" type="button">Cancel trip</button>'
         : "";
     var canReturn =
@@ -1115,6 +1171,13 @@
       NS.ui.statusBadge(booking.status) +
       " " +
       NS.ui.statusBadge(booking.paymentStatus) +
+      (booking.status === "cancelled" && booking.cancelReason
+        ? "<p class='fineprint'>Cancelled" +
+          (booking.cancelledAt ? " " + NS.security.escapeHtml(String(booking.cancelledAt).replace("T", " ").slice(0, 16)) : "") +
+          ": " +
+          NS.security.escapeHtml(booking.cancelReason) +
+          "</p>"
+        : "") +
       returnPending +
       "<dl class='spec-grid'>" +
       "<div><dt>Drive mode</dt><dd>" +
@@ -1336,15 +1399,14 @@
     var cancelBtn = document.getElementById("cancel-booking");
     if (cancelBtn) {
       cancelBtn.addEventListener("click", function () {
-        NS.ui.askYesNo("Cancel this booking?", { title: "Save edit" }).then(function (ok) {
-          if (!ok) return;
-          try {
-            NS.domain.setBookingStatus(booking.id, "cancelled", NS.security.getCsrf());
+        askCancelReason().then(function (choice) {
+          if (!choice) return;
+          NS.domain.cancelBooking(booking.id, choice.reason, choice.note, NS.security.getCsrf()).then(function () {
             NS.ui.toast("Booking cancelled.", "ok");
-            location.reload();
-          } catch (err) {
+            NS.pages.detail();
+          }, function (err) {
             NS.ui.toast(err.message, "err");
-          }
+          });
         });
       });
     }

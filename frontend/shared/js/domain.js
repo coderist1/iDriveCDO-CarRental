@@ -1042,6 +1042,71 @@
     return booking;
   }
 
+  var CANCEL_REASONS = ["Change of plans", "Booked the wrong dates", "Found another car", "Other"];
+
+  function serverUserId(localId) {
+    var list = NS.store.get("users", []);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === localId && list[i].apiId != null) return list[i].apiId;
+    }
+    return null;
+  }
+
+  function assertCustomerCanCancel(booking, me) {
+    if (!me) throw new Error("Sign in to cancel this booking.");
+    if (me.role !== "customer" || booking.userId !== me.id) {
+      throw new Error("You can only cancel your own booking.");
+    }
+    if (booking.status === "cancelled") throw new Error("This booking is already cancelled.");
+    if (booking.status === "confirmed") {
+      throw new Error("This booking is already confirmed and can no longer be cancelled.");
+    }
+    if (booking.status !== "pending") throw new Error("This booking can no longer be cancelled.");
+  }
+
+  function cancelBooking(bookingId, reason, note, csrf) {
+    return new Promise(function (resolve, reject) {
+      try {
+        if (csrf) NS.security.assertCsrf(csrf);
+        else NS.security.issueCsrf();
+      } catch (csrfErr) {
+        NS.security.issueCsrf();
+      }
+      try {
+        var booking = getBooking(bookingId);
+        if (!booking) throw new Error("Booking not found.");
+        var me = assertBookingAccess(booking);
+        assertCustomerCanCancel(booking, me);
+        reason = NS.security.sanitizeText(reason, 40);
+        note = NS.security.sanitizeText(note || "", 240);
+        if (CANCEL_REASONS.indexOf(reason) === -1) throw new Error("Choose a reason from the list.");
+        if (reason === "Other" && !note) throw new Error("Type your reason when you choose Other.");
+        if (booking.apiId == null || !NS.api) throw new Error("This booking is not on the server yet, so it cannot be cancelled.");
+        var userId = serverUserId(me.id);
+        if (userId == null) throw new Error("Sign in again so this cancellation can be saved.");
+        NS.api.post("/bookings/" + encodeURIComponent(booking.apiId) + "/cancel", {
+          user_id: userId,
+          reason: reason,
+          reason_note: reason === "Other" ? note : null
+        }).then(function (saved) {
+          booking.status = "cancelled";
+          booking.cancelReason = (saved && saved.cancel_reason) || (reason === "Other" ? note : reason);
+          booking.cancelledAt = (saved && saved.cancelled_at) || new Date().toISOString();
+          booking.updatedAt = (saved && saved.updated_at) || booking.cancelledAt;
+          var list = bookings();
+          for (var i = 0; i < list.length; i++) if (list[i].id === booking.id) list[i] = booking;
+          saveBookings(list);
+          audit("booking-status", me.id, booking.ref + " cancelled · " + booking.cancelReason);
+          resolve(booking);
+        }, function (err) {
+          reject(new Error(apiErrorMessage(err)));
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   function setBookingStatus(bookingId, status, csrf) {
     try {
       if (csrf) NS.security.assertCsrf(csrf);
@@ -1050,8 +1115,8 @@
       NS.security.issueCsrf();
     }
     var allowed = {
-      pending: ["confirmed", "rejected", "cancelled"],
-      confirmed: ["ongoing", "cancelled", "return_requested"],
+      pending: ["confirmed", "rejected"],
+      confirmed: ["ongoing", "return_requested"],
       ongoing: ["completed", "return_requested"],
       return_requested: ["completed", "ongoing"],
       rejected: [],
@@ -1062,13 +1127,12 @@
     if (!booking) throw new Error("Booking not found.");
     var me = assertBookingAccess(booking);
     var next = NS.security.sanitizeText(status, 20);
+    if (next === "cancelled") {
+      assertCustomerCanCancel(booking, me);
+      throw new Error("Tell us why you are cancelling.");
+    }
     if ((allowed[booking.status] || []).indexOf(next) === -1) {
       throw new Error("That status change is not allowed.");
-    }
-    if (next === "cancelled" && me.role === "customer") {
-      if (booking.status === "ongoing" || booking.status === "completed" || booking.status === "return_requested") {
-        throw new Error("Active or finished trips cannot be cancelled online.");
-      }
     }
     if (next === "return_requested") {
       if (me.role !== "customer" && !NS.auth.hasRole("staff")) {
@@ -2852,6 +2916,8 @@
           status: fromApiStatus(r.status),
           dateReserve: r.date_reserve,
           paymentStatus: String(r.payment_status).toLowerCase() === "paid" ? "paid" : "unpaid",
+          cancelReason: r.cancel_reason || (prev && prev.cancelReason) || "",
+          cancelledAt: r.cancelled_at || (prev && prev.cancelledAt) || "",
           subtotal: Number(r.subtotal) || 0,
           extras: Number(r.extras) || 0,
           total: Number(r.total) || (Number(r.subtotal) || 0) + (Number(r.extras) || 0)
@@ -3233,6 +3299,7 @@
     apiErrorMessage: apiErrorMessage,
     payBooking: payBooking,
     setBookingStatus: setBookingStatus,
+    cancelBooking: cancelBooking,
     requestVehicleReturn: requestVehicleReturn,
     acceptVehicleReturn: acceptVehicleReturn,
     pendingReturns: pendingReturns,
