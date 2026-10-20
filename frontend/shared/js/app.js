@@ -25,14 +25,55 @@
       console.error("iDrive chrome failed", e);
     }
 
+    var page = document.body.getAttribute("data-page");
+
     try {
       var user = NS.auth && NS.auth.enforcePageAccess ? NS.auth.enforcePageAccess() : null;
-      if (document.body.getAttribute("data-auth") !== "public" && !user) return;
+      if (document.body.getAttribute("data-auth") !== "public" && !user) {
+        if (page === "book" && NS.ui && NS.ui.openAuthModal) {
+          var flow = document.getElementById("booking-flow");
+          if (flow) flow.hidden = true;
+          var bookAuth = {
+            stay: true,
+            onClose: function () {
+              var gate = document.getElementById("book-signin-gate");
+              if (!gate) {
+                gate = document.createElement("div");
+                gate.id = "book-signin-gate";
+                gate.className = "form-card";
+                gate.innerHTML =
+                  "<h1>Sign in to book</h1>" +
+                  "<p>Sign in or create an account to continue this booking.</p>" +
+                  '<button type="button" class="btn btn-gold" id="book-signin-again">Sign in</button>';
+                var layout = document.querySelector(".layout");
+                if (layout) layout.appendChild(gate);
+                gate.querySelector("#book-signin-again").addEventListener("click", function () {
+                  gate.hidden = true;
+                  NS.ui.openAuthModal(null, bookAuth);
+                });
+              }
+              gate.hidden = false;
+            },
+            onSuccess: function (signedIn) {
+              var gate = document.getElementById("book-signin-gate");
+              if (gate) gate.hidden = true;
+              if (!signedIn || signedIn.role === "customer") {
+                if (flow) flow.hidden = false;
+                if (NS.ui.mountChrome) NS.ui.mountChrome();
+                startWithSync();
+                return;
+              }
+              location.href = NS.routes.href(signedIn.role === "driver" ? "driverHome" : "adminHome");
+            }
+          };
+          NS.ui.openAuthModal(null, bookAuth);
+        }
+        return;
+      }
     } catch (e) {
       console.error("iDrive access check failed", e);
     }
 
-    var page = document.body.getAttribute("data-page");
     function runPage() {
       try {
         if (page && NS.pages && typeof NS.pages[page] === "function") NS.pages[page]();

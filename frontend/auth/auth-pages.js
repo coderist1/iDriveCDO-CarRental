@@ -276,11 +276,11 @@
           type: "standard",
           theme: "outline",
           size: "large",
-          text: host.clientWidth < 260 ? "signin_with" : "continue_with",
+          text: "signin_with",
           shape: "rectangular",
           logo_alignment: "left",
           locale: "en",
-          width: Math.min(400, host.clientWidth || 200)
+          width: 175
         });
       })
       .catch(function (err) {

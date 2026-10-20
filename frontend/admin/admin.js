@@ -130,7 +130,7 @@
     );
     var insights =
       link("reports.html", "Reports", "adminReports", icon('<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-6"/><path d="M12 16V8"/><path d="M16 16v-3"/>')) +
-      link("security-log.html", "Security log", "adminSecurityLog", icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'));
+      link("activity-log.html", "Activity log", "adminActivityLog", icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'));
     host.innerHTML =
       '<aside class="admin-side">' +
       '<div class="side-head">' +
@@ -930,7 +930,7 @@
       .join(" ") || "<span class='notice'>No bookings yet.</span>";
   }
 
-  function adminSecurityLog() {
+  function adminActivityLog() {
     mountAdminNav();
     var host = document.getElementById("audit-list");
     if (!host) return;
@@ -949,7 +949,7 @@
             );
           })
           .join("")
-      : "<li class='notice'>No security events recorded yet.</li>";
+      : "<li class='notice'>No activity recorded yet.</li>";
   }
 
   function vehicleOptionsHtml(selected) {
@@ -1804,7 +1804,7 @@
   NS.pages.adminBookings = adminBookings;
   NS.pages.adminCustomers = adminCustomers;
   NS.pages.adminReports = adminReports;
-  NS.pages.adminSecurityLog = adminSecurityLog;
+  NS.pages.adminActivityLog = adminActivityLog;
   NS.pages.adminDrivers = adminDrivers;
   NS.pages.adminFleetOps = adminFleetOps;
   NS.pages.adminPayments = adminPayments;

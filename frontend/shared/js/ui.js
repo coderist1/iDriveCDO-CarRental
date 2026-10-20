@@ -278,7 +278,7 @@
         '<div class="sf-row">' +
         '<div class="sf-contact">' +
         '<a class="sf-phone" href="tel:09269864450">0926 986 4450</a>' +
-        '<a class="btn sf-btn" href="' +
+        '<a class="btn sf-btn" data-book="1" href="' +
         NS.routes.href("fleet") +
         '">Book a car</a>' +
         "</div>" +
@@ -393,6 +393,7 @@
     else mountCustomerChrome(me);
     markRequired(document);
     bindTerms();
+    bindGuestBooking();
   }
 
   function markRequired(root) {
@@ -965,6 +966,422 @@
     });
   }
 
+  function isBookingLink(link) {
+    if (!link) return false;
+    if (link.getAttribute("data-book") === "1") return true;
+    var href = link.getAttribute("href") || "";
+    if (/booking\/book\.html/i.test(href)) return true;
+    return String(link.textContent || "").replace(/\s+/g, " ").trim().toLowerCase() === "book a car";
+  }
+
+  function bindGuestBooking() {
+    if (document.documentElement.getAttribute("data-guest-book") === "1") return;
+    document.documentElement.setAttribute("data-guest-book", "1");
+    document.addEventListener("click", function (e) {
+      var link = e.target.closest && e.target.closest("a");
+      if (!isBookingLink(link)) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      if (link.getAttribute("target") === "_blank") return;
+      var me = NS.auth && NS.auth.current ? NS.auth.current() : null;
+      if (me) return;
+      e.preventDefault();
+      openAuthModal(link.href);
+    });
+  }
+
+  function authAlert(box, message) {
+    if (!box) return;
+    box.hidden = !message;
+    box.textContent = message || "";
+  }
+
+  var GSI_SRC = "https://accounts.google.com/gsi/client?hl=en";
+  var gsiPromise = null;
+
+  function loadGsi() {
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      return Promise.resolve();
+    }
+    if (gsiPromise) return gsiPromise;
+    gsiPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = GSI_SRC;
+      s.async = true;
+      s.onload = function () { resolve(); };
+      s.onerror = function () {
+        gsiPromise = null;
+        reject(new Error("Could not load Google sign-in. Check your connection."));
+      };
+      document.head.appendChild(s);
+    });
+    return gsiPromise;
+  }
+
+  function openAuthModal(nextHref, options) {
+    options = options || {};
+    var opener = document.activeElement;
+    var existing = document.getElementById("auth-overlay");
+    if (existing) existing.remove();
+
+    var overlay = document.createElement("div");
+    overlay.id = "auth-overlay";
+    overlay.className = "auth-overlay";
+    overlay.innerHTML =
+      '<div class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">' +
+      '<div class="password-dialog-head">' +
+      '<h2 id="auth-modal-title">Sign in</h2>' +
+      '<button type="button" class="btn btn-ghost auth-close" data-auth-close aria-label="Close">×</button>' +
+      "</div>" +
+      '<div id="auth-modal-alert" class="notice" role="alert" hidden></div>' +
+      '<form id="auth-login-panel" novalidate>' +
+      '<label class="field">Email <input class="form-control" name="email" type="email" autocomplete="username" required></label>' +
+      '<label class="field">Password <input class="form-control" name="password" type="password" autocomplete="current-password" required></label>' +
+      '<div class="auth-actions">' +
+      '<div id="auth-modal-google-login" class="google-signin" aria-live="polite"></div>' +
+      '<button class="btn btn-gold" type="submit">Sign in</button>' +
+      "</div>" +
+      '<p class="form-foot">No account yet? <button type="button" class="auth-switch" data-auth-panel="signup">Sign up</button></p>' +
+      "</form>" +
+      '<form id="auth-signup-panel" hidden novalidate>' +
+      '<div class="form-grid">' +
+      '<label class="field">First name <input class="form-control" name="firstName" maxlength="40" autocomplete="given-name" required></label>' +
+      '<label class="field">Last name <input class="form-control" name="lastName" maxlength="40" autocomplete="family-name" required></label>' +
+      '<label class="field">Mobile <input class="form-control" name="phone" inputmode="tel" autocomplete="tel" placeholder="09XXXXXXXXX" maxlength="24" required></label>' +
+      '<label class="field">Email <input class="form-control" name="email" type="email" autocomplete="email" required></label>' +
+      '<label class="field">Password <input class="form-control" name="password" type="password" autocomplete="new-password" required></label>' +
+      '<label class="field">Confirm password <input class="form-control" name="confirmPassword" type="password" autocomplete="new-password" required></label>' +
+      "</div>" +
+      '<p class="fineprint">Password: 8+ characters with upper, lower, number, and a symbol.</p>' +
+      '<label class="check-min"><input type="checkbox" name="ageConfirm" value="1"> <span>I am 21 or older</span></label>' +
+      '<div class="terms-row"><label class="check-min"><input type="checkbox" name="terms" value="1"> <span>I accept the rental terms</span></label>' +
+      '<button type="button" class="terms-read" data-terms-open="account">Read the terms</button></div>' +
+      '<div class="auth-actions">' +
+      '<div id="auth-modal-google-signup" class="google-signin" aria-live="polite"></div>' +
+      '<button class="btn btn-gold" type="submit">Create account</button>' +
+      "</div>" +
+      '<p class="fineprint google-signin-note">With Google, we\'ll ask for your mobile number right after you sign in.</p>' +
+      '<p class="form-foot">Already registered? <button type="button" class="auth-switch" data-auth-panel="login">Sign in</button></p>' +
+      "</form>" +
+      '<form id="auth-google-phone-panel" hidden novalidate>' +
+      '<p class="fineprint">Google doesn\'t share a mobile number. Add yours so the desk can reach you.</p>' +
+      '<label class="field">Mobile <input class="form-control" name="phone" inputmode="tel" autocomplete="tel" placeholder="09XXXXXXXXX" maxlength="24" required></label>' +
+      '<button class="btn btn-gold auth-submit" type="submit">Save number</button>' +
+      "</form></div>";
+
+    var dialog = overlay.querySelector(".auth-dialog");
+    var alertBox = overlay.querySelector("#auth-modal-alert");
+    var loginPanel = overlay.querySelector("#auth-login-panel");
+    var signupPanel = overlay.querySelector("#auth-signup-panel");
+    var phonePanel = overlay.querySelector("#auth-google-phone-panel");
+    var title = overlay.querySelector("#auth-modal-title");
+    var previousOverflow = document.body.style.overflow;
+    var closed = false;
+    var googlePhoneUser = null;
+    var googleClientId = null;
+
+    function finish(user) {
+      closeModal("success");
+      var bookForm = nextHref && /booking\/book\.html/i.test(nextHref);
+      if (user && user.role === "driver") {
+        location.href = NS.routes.href("driverHome");
+        return;
+      }
+      if (user && bookForm && (user.role === "staff" || user.role === "admin")) {
+        location.href = NS.routes.href("adminHome");
+        return;
+      }
+      if (options.stay && options.onSuccess) {
+        options.onSuccess(user);
+        return;
+      }
+      if (nextHref) location.href = nextHref;
+    }
+
+    function closeModal(reason) {
+      if (closed) return;
+      closed = true;
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (opener && opener.focus) {
+        try { opener.focus(); } catch (err) { /* the opener may be gone */ }
+      }
+      if (reason !== "success" && options.onClose) options.onClose();
+    }
+
+    function focusable() {
+      return Array.prototype.filter.call(
+        dialog.querySelectorAll("a[href], button:not([disabled]), input:not([type='hidden']):not([disabled]), select:not([disabled]), textarea:not([disabled])"),
+        function (el) { return !el.closest("[hidden]"); }
+      );
+    }
+
+    function focusFirst() {
+      var panel = !phonePanel.hidden
+        ? phonePanel
+        : loginPanel.hidden
+        ? signupPanel
+        : loginPanel;
+      var input = panel.querySelector("input:not([type='hidden'])");
+      if (input) input.focus();
+    }
+
+    function showPanel(which) {
+      var signup = which === "signup";
+      phonePanel.hidden = true;
+      googlePhoneUser = null;
+      loginPanel.hidden = signup;
+      signupPanel.hidden = !signup;
+      title.textContent = signup ? "Create an account" : "Sign in";
+      authAlert(alertBox, "");
+      focusFirst();
+      renderVisibleGoogle();
+    }
+
+    function showGooglePhone(user) {
+      googlePhoneUser = user;
+      loginPanel.hidden = true;
+      signupPanel.hidden = true;
+      phonePanel.hidden = false;
+      title.textContent = "Add your mobile number";
+      authAlert(alertBox, "");
+      if (NS.ui.bindAccountPhone && phonePanel.phone) {
+        NS.ui.bindAccountPhone(phonePanel.phone, {
+          button: phonePanel.querySelector('button[type="submit"]'),
+          userId: user.id,
+          ownPhone: function () { return ""; }
+        });
+      }
+      focusFirst();
+    }
+
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeModal();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      var items = focusable();
+      if (!items.length) return;
+      var first = items[0];
+      var last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    function googleUnavailable(host, msg) {
+      if (!host) return;
+      host.innerHTML =
+        '<button type="button" class="btn google-fallback" aria-disabled="true" title="' +
+        NS.security.escapeHtml(msg) +
+        '"><span class="google-g" aria-hidden="true">G</span> Google</button>';
+      host.querySelector("button").addEventListener("click", function () {
+        authAlert(alertBox, msg);
+      });
+    }
+
+    function handleGoogleCredential(resp) {
+      authAlert(alertBox, "Checking your Google account…");
+      NS.api
+        .googleSignIn(resp.credential)
+        .then(function (data) {
+          var user = NS.auth.googleSignIn(data.user);
+          if (!NS.validation.canonicalPhone(user.phone)) {
+            showGooglePhone(user);
+            return;
+          }
+          finish(user);
+        })
+        .catch(function (err) {
+          authAlert(alertBox, (err && err.message) || "Google sign-in failed.");
+        });
+    }
+
+    function paintGoogleButton(host) {
+      if (!host || !googleClientId || !window.google || !window.google.accounts) return;
+      host.innerHTML = "";
+      window.google.accounts.id.renderButton(host, {
+        type: "standard",
+        theme: "outline",
+        size: "large",
+        text: "signin_with",
+        shape: "rectangular",
+        logo_alignment: "left",
+        locale: "en",
+        width: 175
+      });
+    }
+
+    function renderVisibleGoogle() {
+      if (loginPanel.hidden === false) paintGoogleButton(overlay.querySelector("#auth-modal-google-login"));
+      if (signupPanel.hidden === false) paintGoogleButton(overlay.querySelector("#auth-modal-google-signup"));
+    }
+
+    function mountModalGoogle() {
+      var loginHost = overlay.querySelector("#auth-modal-google-login");
+      var signupHost = overlay.querySelector("#auth-modal-google-signup");
+      if (!NS.api || !NS.api.googleConfig) {
+        googleUnavailable(loginHost, "Google sign-in is unavailable right now. Use email and password for now.");
+        googleUnavailable(signupHost, "Google sign-in is unavailable right now. Use email and password for now.");
+        return;
+      }
+      NS.api
+        .googleConfig()
+        .then(function (cfg) {
+          if (!cfg || !cfg.client_id) {
+            throw new Error("Google sign-in isn't set up yet. Use email and password for now.");
+          }
+          return loadGsi().then(function () {
+            return cfg.client_id;
+          });
+        })
+        .then(function (clientId) {
+          if (closed) return;
+          googleClientId = clientId;
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            ux_mode: "popup",
+            callback: handleGoogleCredential
+          });
+          renderVisibleGoogle();
+        })
+        .catch(function (err) {
+          if (closed) return;
+          var msg =
+            err && err.name !== "ApiError" && err.message
+              ? err.message
+              : "Google sign-in is unavailable right now. Use email and password for now.";
+          googleUnavailable(loginHost, msg);
+          googleUnavailable(signupHost, msg);
+        });
+    }
+
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) closeModal();
+      if (e.target.closest("[data-auth-close]")) closeModal();
+      var panel = e.target.closest("[data-auth-panel]");
+      if (panel) showPanel(panel.getAttribute("data-auth-panel"));
+    });
+
+    loginPanel.addEventListener("submit", function (e) {
+      e.preventDefault();
+      authAlert(alertBox, "");
+      var btn = loginPanel.querySelector('button[type="submit"]');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Signing in…";
+      }
+      try {
+        if (NS.ui.bindCsrf) NS.ui.bindCsrf(loginPanel);
+        var csrf = loginPanel.querySelector('[name="csrf"]');
+        var user = NS.auth.login(
+          loginPanel.email.value,
+          loginPanel.password.value,
+          csrf ? csrf.value : ""
+        );
+        finish(user);
+      } catch (err) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Sign in";
+        }
+        if (NS.ui.bindCsrf) NS.ui.bindCsrf(loginPanel);
+        authAlert(alertBox, (err && err.message) || "Sign in failed. Check the email and password.");
+      }
+    });
+
+    signupPanel.addEventListener("submit", function (e) {
+      e.preventDefault();
+      authAlert(alertBox, "");
+      var btn = signupPanel.querySelector('button[type="submit"]');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Creating…";
+      }
+      function fail(message) {
+        if (btn) {
+          btn.disabled = !!(signupPanel.phone && signupPanel.phone.getAttribute("data-phone-blocked") === "1");
+          btn.textContent = "Create account";
+        }
+        authAlert(alertBox, message || "Could not create the account.");
+      }
+      var ready = NS.auth.ensurePhoneFree ? NS.auth.ensurePhoneFree(signupPanel.phone.value, null) : Promise.resolve();
+      ready.then(function () {
+        try {
+          if (NS.ui.bindCsrf) NS.ui.bindCsrf(signupPanel);
+          var csrf = signupPanel.querySelector('[name="csrf"]');
+          var user = NS.auth.register({
+            firstName: signupPanel.firstName.value,
+            lastName: signupPanel.lastName.value,
+            email: signupPanel.email.value,
+            phone: signupPanel.phone.value,
+            password: signupPanel.password.value,
+            confirmPassword: signupPanel.confirmPassword.value,
+            ageConfirm: signupPanel.ageConfirm.checked,
+            terms: signupPanel.terms.checked
+          }, csrf ? csrf.value : "");
+          finish(user);
+        } catch (err) {
+          fail(err && err.message);
+        }
+      }).catch(function (err) {
+        fail(err && err.message);
+      });
+    });
+
+    phonePanel.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!googlePhoneUser) return;
+      var input = phonePanel.phone;
+      var btn = phonePanel.querySelector('button[type="submit"]');
+      if (input.getAttribute("data-phone-blocked") === "1") return;
+      authAlert(alertBox, "");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Saving…";
+      }
+      NS.auth
+        .ensurePhoneFree(input.value, googlePhoneUser.id)
+        .then(function () {
+          NS.auth.setPhone(input.value);
+          finish(NS.auth.current() || googlePhoneUser);
+        })
+        .catch(function (err) {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Save number";
+          }
+          var message = (err && err.message) || "Could not save that mobile number.";
+          authAlert(alertBox, message);
+          if (NS.ui.fieldError) NS.ui.fieldError(input, message);
+        });
+    });
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(overlay);
+    if (NS.ui.bindCsrf) {
+      NS.ui.bindCsrf(loginPanel);
+      NS.ui.bindCsrf(signupPanel);
+    }
+    if (NS.ui.bindPasswordToggles) NS.ui.bindPasswordToggles(overlay);
+    if (NS.ui.bindAccountPhone && signupPanel.phone) {
+      NS.ui.bindAccountPhone(signupPanel.phone, {
+        button: signupPanel.querySelector('button[type="submit"]'),
+        ownPhone: function () { return ""; }
+      });
+    }
+    if (NS.ui.markRequired) NS.ui.markRequired(overlay);
+    mountModalGoogle();
+    focusFirst();
+  }
+
   NS.ui = {
     peso: peso,
     fmtDate: fmtDate,
@@ -990,6 +1407,7 @@
     readImageAsAvatar: readImageAsAvatar,
     readLicensePhoto: readLicensePhoto,
     readIdPhoto: readIdPhoto,
-    bindPasswordToggles: bindPasswordToggles
+    bindPasswordToggles: bindPasswordToggles,
+    openAuthModal: openAuthModal
   };
 })(window);

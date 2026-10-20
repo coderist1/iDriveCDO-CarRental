@@ -27,7 +27,7 @@
     adminBookings: "admin/bookings.html",
     adminCustomers: "admin/customers.html",
     adminReports: "admin/reports.html",
-    adminSecurityLog: "admin/security-log.html",
+    adminActivityLog: "admin/activity-log.html",
     adminDrivers: "admin/drivers.html",
     adminFleetOps: "admin/fleet-ops.html",
     adminPredictiveMaintenance: "admin/predictive-maintenance.html",

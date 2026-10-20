@@ -674,6 +674,7 @@
     var me = current();
     if (need === "public") return me;
     if (!me) {
+      if ((document.body.getAttribute("data-page") || "") === "book") return null;
       var next = currentRouteKey();
       location.replace(NS.routes.href("login", "?next=" + encodeURIComponent(next)));
       return null;
