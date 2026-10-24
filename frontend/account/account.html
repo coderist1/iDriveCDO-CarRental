@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="../shared/css/styles.css?v=20261019e">
+  <link rel="stylesheet" href="../shared/css/styles.css?v=20261024a">
 </head>
 <body data-page="account" data-auth="user" data-base="../">
   <div id="app-nav"></div>
@@ -32,6 +32,16 @@
         <p class="notice">Select a conversation to read desk replies.</p>
       </div>
     </div>
+    <h2>Your data (RA 10173)</h2>
+    <div id="account-privacy" class="panel">
+      <p>You can request a copy of the personal data we hold, or ask us to delete it. Only Admin and Staff can view uploaded IDs. A delete request is reviewed by the desk before the account is disabled.</p>
+      <div class="btn-row">
+        <button class="btn btn-ghost" type="button" data-privacy-open>Read the Data Privacy notice</button>
+        <button class="btn btn-ghost" type="button" id="data-view-btn">Request to view my data</button>
+        <button class="btn btn-ghost" type="button" id="data-delete-btn">Request to delete my data</button>
+      </div>
+      <div id="data-request-result" class="notice" hidden></div>
+    </div>
     <h2>Recent bookings</h2>
     <div id="account-recent" class="panel"></div>
   </section>
@@ -43,10 +53,10 @@
   <script src="../shared/js/api.js?v=20261009g"></script>
   <script src="../shared/js/validation.js?v=20261011a"></script>
   <script src="../shared/js/routes.js?v=20261019a"></script>
-  <script src="../shared/js/domain.js?v=20261013g"></script>
-  <script src="../auth/auth.js?v=20261019a"></script>
-  <script src="../shared/js/ui.js?v=20261019d"></script>
-  <script src="./account.js?v=20261013f"></script>
+  <script src="../shared/js/domain.js?v=20261024a"></script>
+  <script src="../auth/auth.js?v=20261024a"></script>
+  <script src="../shared/js/ui.js?v=20261024b"></script>
+  <script src="./account.js?v=20261024a"></script>
   <script src="../shared/js/app.js?v=20261019a"></script>
 </body>
 </html>

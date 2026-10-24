@@ -138,12 +138,22 @@
       idNumber: "license_no",
       expiry: "license_expiry",
       address: "address",
+      birthdate: "birthdate",
       licenseClass: "dl_codes"
     },
     "chauffeur-id": {
       fullName: "fullName",
       idNumber: "idNumber",
       expiry: "idExpiry",
+      birthdate: "birthdate",
+      issueDate: "idIssue",
+      idType: "idType"
+    },
+    "self-id": {
+      fullName: "fullName",
+      idNumber: "idNumber",
+      expiry: "idExpiry",
+      birthdate: "birthdate",
       issueDate: "idIssue",
       idType: "idType"
     }
@@ -154,6 +164,7 @@
     license_no: "license number",
     license_expiry: "expiration date",
     address: "address",
+    birthdate: "birth date",
     dl_codes: "DL codes",
     idNumber: "ID number",
     idExpiry: "ID expiry",
@@ -162,7 +173,8 @@
   };
 
   function slotLabel(slot) {
-    if (slot === "chauffeur-id") return "ID";
+    if (slot === "parent-id") return "parent ID";
+    if (slot === "chauffeur-id" || slot === "self-id") return "ID";
     return "license";
   }
 
@@ -277,6 +289,30 @@
       if (form.phone && !form.phone.value) form.phone.value = me.phone || "";
       if (form.email && !form.email.value) form.email.value = me.email || "";
       if (form.address && !form.address.value) form.address.value = me.address || "";
+      if (form.birthdate && !form.birthdate.value) form.birthdate.value = me.birthdate || "";
+      syncParentConsent(form);
+    }
+
+    function ageYears(iso) {
+      if (!iso) return null;
+      var born = new Date(String(iso) + "T00:00:00");
+      if (isNaN(born.getTime())) return null;
+      var now = new Date();
+      var age = now.getFullYear() - born.getFullYear();
+      var md = now.getMonth() - born.getMonth();
+      if (md < 0 || (md === 0 && now.getDate() < born.getDate())) age -= 1;
+      return age;
+    }
+
+    function syncParentConsent(form) {
+      var block = form.querySelector("[data-parent-consent]");
+      if (!block) return;
+      var age = ageYears(form.birthdate && form.birthdate.value);
+      var minor = age != null && age <= 17;
+      block.hidden = !minor;
+      ["parentName", "parentPhone", "parentConsent"].forEach(function (name) {
+        if (form[name]) form[name].required = minor;
+      });
     }
 
     function clearScanState(form) {
@@ -339,6 +375,7 @@
             chip.hidden = true;
           }
         }
+        if (e.target && e.target.name === "birthdate") syncParentConsent(form);
         renderFlags(form);
         refresh();
       });
@@ -346,6 +383,8 @@
         if (form.startDate && form.endDate) form.endDate.min = form.startDate.value || localISO(today);
         if (form.id === "chauffeur-form") syncChauffeurIdChoice(form);
         if (form.id === "self-form" && e.target && e.target.name === "handover") syncSelfHandover(form);
+        if (e.target && e.target.name === "birthdate") syncParentConsent(form);
+        if (form.id === "self-form") syncChauffeurIdChoice(form);
         renderFlags(form);
         if (e.target && (e.target.name === "startDate" || e.target.name === "endDate")) refillFleet();
         else refresh();
@@ -441,6 +480,19 @@
         } catch (softErr) {
           body.innerHTML = "<h3>Trip estimate</h3><p class='notice'>" + NS.security.escapeHtml(err.message) + "</p>";
         }
+      }
+      var bookedHost = form.querySelector("[data-booked-dates]");
+      if (bookedHost && NS.domain.bookedRanges) {
+        var ranges = NS.domain.bookedRanges(form.vehicleId.value) || [];
+        bookedHost.textContent = ranges.length
+          ? "This car is already reserved: " +
+            ranges
+              .map(function (r) {
+                return NS.ui.fmtDate(r.start) + "–" + NS.ui.fmtDate(r.end) + " (" + r.status + ")";
+              })
+              .join("; ") +
+            ". Choose dates that do not overlap."
+          : "No overlapping reservations on this car for other dates.";
       }
     }
 
@@ -603,8 +655,12 @@
                 return;
               }
               setPhoto(dataUrl);
-              if (kind === "selfie") {
-                setStatus("Photo attached. It is kept with this booking and is not printed on the receipt.");
+              if (kind === "selfie" || slot === "parent-id") {
+                setStatus(
+                  slot === "parent-id"
+                    ? "Parent ID attached. Check that the name and photo are clear."
+                    : "Photo attached. It is kept with this booking and is not printed on the receipt."
+                );
                 return;
               }
               if (!NS.ocr || !NS.ocr.scan) {
@@ -626,6 +682,7 @@
                   ? " This looks like a " + data.idType + ", but you chose " + chosen + ". Please pick the right ID type."
                   : "";
                 renderFlags(form);
+                syncParentConsent(form);
                 refresh();
                 setStatus(
                   (filled.length
@@ -787,8 +844,16 @@
               mismatchAck: !!(form.mismatchAck && form.mismatchAck.checked),
               ocrNames: ocrValues(form, "fullName")
             };
+            var extras = {
+              birthdate: form.birthdate ? form.birthdate.value : "",
+              privacyConsent: !!(form.privacyConsent && form.privacyConsent.checked),
+              parentName: form.parentName ? form.parentName.value : "",
+              parentPhone: form.parentPhone ? form.parentPhone.value : "",
+              parentIdPhoto: form.parentIdPhoto ? form.parentIdPhoto.value : "",
+              parentConsent: !!(form.parentConsent && form.parentConsent.checked)
+            };
             var driverInfo = mode === "chauffeur"
-              ? Object.assign(shared, {
+              ? Object.assign(shared, extras, {
                   idType: form.idType.value,
                   idNumber: form.idNumber.value,
                   idExpiry: form.idExpiry.value,
@@ -796,12 +861,17 @@
                   idPhoto: form.idPhoto.value,
                   itinerary: form.itinerary.value
                 })
-              : Object.assign(shared, {
+              : Object.assign(shared, extras, {
                   address: form.address.value,
                   dl_codes: form.dl_codes.value,
                   license_no: form.license_no.value,
                   license_expiry: form.license_expiry.value,
-                  licensePhoto: form.licensePhoto.value
+                  licensePhoto: form.licensePhoto.value,
+                  idType: form.idType ? form.idType.value : "",
+                  idNumber: form.idNumber ? form.idNumber.value : "",
+                  idExpiry: form.idExpiry ? form.idExpiry.value : "",
+                  idIssue: form.idIssue ? form.idIssue.value : "",
+                  idPhoto: form.idPhoto ? form.idPhoto.value : ""
                 });
             var handover = mode === "self" ? selfHandover(form) : "";
             var booking = NS.domain.createBooking({
@@ -1125,6 +1195,7 @@
         '">Back</a></div></div>';
     }
     var info = booking.driverInfo || {};
+    var canSeeIds = !!(me && (me.role === "admin" || me.role === "staff"));
     var driveModeLabel = booking.driveMode === "chauffeur" ? "Chauffeur" : "Self-drive";
     var driverRows =
       booking.driveMode === "chauffeur"
@@ -1191,11 +1262,6 @@
       "<div><dt>Pickup</dt><dd>" +
       NS.security.escapeHtml(booking.pickup) +
       (booking.pickupTime ? " · " + NS.security.escapeHtml(booking.pickupTime) : "") +
-      (booking.driveMode === "chauffeur" && booking.pickupPin && booking.pickupPin.lat != null
-        ? "<div id=\"booking-pin-map\" class=\"pickup-map\"></div><p class=\"fineprint\">" +
-          NS.security.escapeHtml(booking.pickupPin.label || "Saved pin") +
-          "</p>"
-        : "") +
       "</dd></div>" +
       "<div><dt>" +
       (booking.driveMode === "chauffeur"
@@ -1206,15 +1272,8 @@
       "</dt><dd>" +
       NS.security.escapeHtml(booking.dropoff) +
       (booking.returnTime ? " · " + NS.security.escapeHtml(booking.returnTime) : "") +
-      ((booking.driveMode === "self" ? booking.pickupPin : booking.dropoffPin) &&
-      (booking.driveMode === "self" ? booking.pickupPin : booking.dropoffPin).lat != null
-        ? "<div id=\"" +
-          (booking.driveMode === "self" ? "booking-pin-map" : "booking-dropoff-map") +
-          "\" class=\"pickup-map\"></div><p class=\"fineprint\">" +
-          NS.security.escapeHtml(
-            (booking.driveMode === "self" ? booking.pickupPin.label : booking.dropoffPin.label) || "Saved pin"
-          ) +
-          "</p>"
+      ((booking.pickupPin && booking.pickupPin.lat != null) || (booking.dropoffPin && booking.dropoffPin.lat != null)
+        ? "<div id=\"booking-trip-map\" class=\"pickup-map\"></div><p class=\"fineprint\">Blue pin is pick-up. Red pin is drop-off.</p>"
         : "") +
       "</dd></div>" +
       "<div><dt>Fuel before</dt><dd>" +
@@ -1255,27 +1314,32 @@
       (info.licenseAddress
         ? "<p>License address: " + NS.security.escapeHtml(info.licenseAddress) + "</p>"
         : "") +
-      (info.licensePhoto
+      (canSeeIds && info.licensePhoto
         ? '<div class="license-photo-view"><p class="eyebrow">Driver’s license, front</p><img src="' +
           String(info.licensePhoto).replace(/"/g, "") +
           '" alt="Driver license front"></div>'
-        : booking.driveMode !== "chauffeur"
+        : canSeeIds && booking.driveMode !== "chauffeur"
           ? "<p class='notice'>No license photo on file for this booking.</p>"
           : "") +
-      (info.licenseBack
+      (canSeeIds && info.licenseBack
         ? '<div class="license-photo-view"><p class="eyebrow">Driver’s license, back</p><img src="' +
           String(info.licenseBack).replace(/"/g, "") +
           '" alt="Driver license back"></div>'
         : "") +
-      (info.govIdPhoto
+      (canSeeIds && info.govIdPhoto
         ? '<div class="license-photo-view"><p class="eyebrow">Government ID</p><img src="' +
           String(info.govIdPhoto).replace(/"/g, "") +
           '" alt="Government ID"></div>'
         : "") +
-      (info.idPhoto
+      (canSeeIds && info.idPhoto
         ? '<div class="license-photo-view"><p class="eyebrow">Government ID</p><img src="' +
           String(info.idPhoto).replace(/"/g, "") +
           '" alt="Government ID"></div>'
+        : "") +
+      (canSeeIds && info.parentIdPhoto
+        ? '<div class="license-photo-view"><p class="eyebrow">Parent or guardian ID</p><img src="' +
+          String(info.parentIdPhoto).replace(/"/g, "") +
+          '" alt="Parent ID"></div>'
         : "") +
       (info.selfie
         ? '<div class="license-photo-view"><p class="eyebrow">Live photo</p><img src="' +
@@ -1366,8 +1430,11 @@
       });
     }
 
-    if (booking.pickupPin && NS.pickupMap) NS.pickupMap.show("booking-pin-map", booking.pickupPin);
-    if (booking.dropoffPin && NS.pickupMap) NS.pickupMap.show("booking-dropoff-map", booking.dropoffPin);
+    if (NS.pickupMap && NS.pickupMap.showTrip) {
+      NS.pickupMap.showTrip("booking-trip-map", booking.pickupPin, booking.dropoffPin);
+    } else if (booking.pickupPin && NS.pickupMap) {
+      NS.pickupMap.show("booking-trip-map", booking.pickupPin);
+    }
     var cancelBtn = document.getElementById("cancel-booking");
     if (cancelBtn) {
       cancelBtn.addEventListener("click", function () {

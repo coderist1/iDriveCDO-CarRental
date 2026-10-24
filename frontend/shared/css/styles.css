@@ -3721,6 +3721,23 @@ body .auth-actions .btn.google-fallback {
 .pickup-map-tools { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
 .pickup-map-tools .form-control { flex: 1; }
 .pickup-map { height: 240px; border-radius: 14px; border: 1px solid #ededed; overflow: hidden; background: #f6f6f6; }
+.trip-pin { background: transparent; border: 0; }
+.trip-pin-dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+}
+.map-pin-legend { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; color: var(--muted); }
+.pin-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; display: inline-block; }
+.pin-blue { background: #2563eb; }
+.pin-red { background: #dc2626; }
+[data-place-pin].is-active { border-color: #141414; background: #f4f4f4; }
+.parent-consent { margin: 1rem 0; padding: 0.9rem 1rem; border: 1px solid #ececec; border-radius: 14px; background: #fffaf6; }
+.badge-bad_renter { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
 .password-field { position: relative; display: block; width: 100%; }
 .password-field .form-control { width: 100%; padding-right: 2.75rem; }
 .password-toggle {

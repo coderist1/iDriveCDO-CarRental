@@ -599,7 +599,12 @@
       openIdCheck(booking, info);
       return;
     }
-    var path = "/bookings/" + encodeURIComponent(booking.apiId) + "/id-document";
+    var me = NS.auth.current() || {};
+    var path =
+      "/bookings/" +
+      encodeURIComponent(booking.apiId) +
+      "/id-document?viewer_role=" +
+      encodeURIComponent(me.role || "");
     function load() {
       return NS.api.get(path, { timeoutMs: 30000 });
     }
@@ -636,7 +641,7 @@
           var v = NS.domain.getVehicle(b.vehicleId);
           var u = NS.auth.userById(b.userId);
           var actions = "";
-          if (b.status === "pending" && b.paymentStatus === "paid") {
+          if (b.status === "pending") {
             actions += '<button class="btn btn-gold btn-sm" data-act="confirmed" data-id="' + b.id + '">Confirm</button>';
             actions += '<button class="btn btn-ghost btn-sm" data-act="rejected" data-id="' + b.id + '">Reject</button>';
           }
@@ -833,11 +838,27 @@
                       '">' +
                       (u.status === "active" ? "Disable" : "Enable") +
                       "</button>";
+                if (u.role === "customer") {
+                  action +=
+                    ' <button class="btn btn-ghost btn-sm" data-flag="' +
+                    u.id +
+                    '">Bad renter</button>';
+                }
+                var badge = u.isBadRenter ? " " + NS.ui.statusBadge("bad_renter") : "";
+                var why = u.isBadRenter && u.badRenterReason
+                  ? '<p class="fineprint">Labeled ' +
+                    NS.security.escapeHtml(u.badRenterLabeledAt ? String(u.badRenterLabeledAt).slice(0, 10) : "") +
+                    ": " +
+                    NS.security.escapeHtml(u.badRenterReason) +
+                    "</p>"
+                  : "";
                 return (
                   '<tr><td class="customer-cell">' +
                   NS.ui.avatarHtml(u, "sm") +
                   "<span>" +
                   NS.security.escapeHtml(u.firstName + " " + u.lastName) +
+                  badge +
+                  why +
                   "</span></td><td>" +
                   NS.security.escapeHtml(u.email) +
                   "</td><td>" +
@@ -853,7 +874,8 @@
               })
               .join("")
           : '<tr><td colspan="6">No users in this role.</td></tr>') +
-        "</tbody></table>";
+        "</tbody></table>" +
+        (activeRole === "customer" ? '<div id="data-request-panel" class="panel" style="margin-top:1rem"></div>' : "");
     }
     if (tabs) {
       tabs.addEventListener("click", function (e) {
@@ -865,6 +887,40 @@
     }
     if (search) search.addEventListener("input", render);
     host.addEventListener("click", function (e) {
+      var flagBtn = e.target.closest("[data-flag]");
+      if (flagBtn) {
+        var flagId = flagBtn.getAttribute("data-flag");
+        var reason = window.prompt("Why is this renter being labeled Bad Renter? This reason is sent to their Inbox.");
+        if (!reason) return;
+        var staff = NS.auth.current();
+        NS.domain.flagBadRenter(flagId, reason, staff).then(
+          function () {
+            render();
+            NS.ui.toast("Renter labeled. The reason was sent to their Inbox.", "ok");
+          },
+          function (err) {
+            NS.ui.toast((err && err.message) || "Could not label this renter.", "err");
+          }
+        );
+        return;
+      }
+      var fulfill = e.target.closest("[data-fulfill]");
+      if (fulfill && NS.api) {
+        var reqId = fulfill.getAttribute("data-fulfill");
+        var staffUser = NS.auth.current();
+        NS.api
+          .put("/data-requests/" + encodeURIComponent(reqId), {
+            status: "fulfilled",
+            handled_by: staffUser && staffUser.apiId
+          })
+          .then(function () {
+            NS.ui.toast("Data request fulfilled.", "ok");
+            render();
+          }, function (err) {
+            NS.ui.toast((err && err.data && err.data.message) || "Could not fulfill that request.", "err");
+          });
+        return;
+      }
       var btn = e.target.closest("[data-id]");
       if (!btn) return;
       var id = btn.getAttribute("data-id");
@@ -882,6 +938,43 @@
         }
       });
     });
+    function loadDataRequests() {
+      var panel = document.getElementById("data-request-panel");
+      if (!panel || !NS.api) return;
+      NS.api.get("/data-requests", { query: { status: "pending" } }).then(
+        function (res) {
+          var rows = (res && res.data) || res || [];
+          if (!Array.isArray(rows)) rows = [];
+          panel.innerHTML =
+            "<h3>Pending data requests</h3>" +
+            (rows.length
+              ? '<table class="table"><thead><tr><th>Renter</th><th>Type</th><th></th></tr></thead><tbody>' +
+                rows
+                  .map(function (r) {
+                    return (
+                      "<tr><td>" +
+                      NS.security.escapeHtml(String(r.user_id || "")) +
+                      "</td><td>" +
+                      NS.security.escapeHtml(r.type) +
+                      '</td><td><button class="btn btn-gold btn-sm" data-fulfill="' +
+                      r.request_id +
+                      '">Fulfill</button></td></tr>'
+                    );
+                  })
+                  .join("") +
+                "</tbody></table>"
+              : "<p class='notice'>No pending view or delete requests.</p>");
+        },
+        function () {
+          panel.innerHTML = "<p class='notice'>Could not load data requests.</p>";
+        }
+      );
+    }
+    var _render = render;
+    render = function () {
+      _render();
+      loadDataRequests();
+    };
     render();
   }
 

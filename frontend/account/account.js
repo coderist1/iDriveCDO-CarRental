@@ -150,6 +150,72 @@
       });
       renderThreadList();
     }
+
+    function showDataResult(html, kind) {
+      var box = document.getElementById("data-request-result");
+      if (!box) return;
+      box.hidden = !html;
+      box.className = "notice" + (kind === "err" ? " err" : "");
+      box.innerHTML = html || "";
+    }
+
+    function requestData(type) {
+      if (!NS.api) {
+        showDataResult("The server is unavailable. Try again in a moment.", "err");
+        return;
+      }
+      var ready = me.apiId != null
+        ? Promise.resolve(me.apiId)
+        : NS.domain.ensureCustomerOnApi(me.id);
+      ready.then(function (apiId) {
+        me.apiId = apiId;
+        return NS.api.post("/data-requests", { user_id: apiId, type: type });
+      }).then(
+        function (row) {
+          if (type === "view" && row && row.payload) {
+            var user = row.payload.user || {};
+            var trips = row.payload.bookings || [];
+            showDataResult(
+              "<strong>Your stored profile</strong><br>" +
+                NS.security.escapeHtml((user.first_name || "") + " " + (user.last_name || "")) +
+                " · " +
+                NS.security.escapeHtml(user.email || "") +
+                " · " +
+                NS.security.escapeHtml(user.phone || "") +
+                "<br>Birth date: " +
+                NS.security.escapeHtml(user.birthdate || "—") +
+                "<br>Bookings on file: " +
+                trips.length +
+                ". ID photos stay with Admin and Staff only."
+            );
+            return;
+          }
+          showDataResult("Your delete request was sent. The desk will review it and message your Inbox.");
+        },
+        function (err) {
+          showDataResult((err && err.data && err.data.message) || "Could not send that request.", "err");
+        }
+      );
+    }
+
+    var viewBtn = document.getElementById("data-view-btn");
+    var deleteBtn = document.getElementById("data-delete-btn");
+    if (viewBtn) {
+      viewBtn.addEventListener("click", function () {
+        requestData("view");
+      });
+    }
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", function () {
+        NS.ui.askYesNo("Ask the desk to delete your personal data? Your account will be reviewed and may be disabled.", {
+          title: "Delete my data",
+          yes: "Send request",
+          no: "Keep my data"
+        }).then(function (ok) {
+          if (ok) requestData("delete");
+        });
+      });
+    }
   };
 
   NS.pages.profile = function profile() {

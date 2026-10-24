@@ -46,7 +46,7 @@
   }
 
   /*
-   * Optional ID upload on the register form. Reads the photo with Tesseract OCR,
+   * Optional ID upload on the register form. Reads the photo with the server ID reader,
    * stores the extracted fields in hidden inputs, and pre-fills the name only when
    * those fields are still empty. Everything stays optional and editable.
    */
@@ -144,7 +144,11 @@
             if (data.idNumber) found.push("ID number");
             if (data.expiry) found.push("expiry");
             if (data.address) found.push("address");
-            if (data.birthdate) found.push("birthdate");
+            if (data.birthdate) {
+              found.push("birthdate");
+              var birthEl = field(form, "birthdate");
+              if (birthEl && !birthEl.value) birthEl.value = data.birthdate;
+            }
             setStatus(
               found.length
                 ? "Read " + found.join(", ") + ". Please review and edit anything that looks off."
@@ -623,7 +627,7 @@
       if (NS.ui && NS.ui.clearErrors) NS.ui.clearErrors(form);
       showAlert(form, "", "ok");
 
-      var ageConfirm = field(form, "ageConfirm");
+      var privacy = field(form, "privacy");
       var terms = field(form, "terms");
       var btn = form.querySelector('button[type="submit"]');
       if (btn) {
@@ -649,7 +653,8 @@
             phone: val(form, "phone"),
             password: val(form, "password"),
             confirmPassword: val(form, "confirmPassword"),
-            ageConfirm: !!(ageConfirm && ageConfirm.checked),
+            birthdate: val(form, "birthdate"),
+            privacy: !!(privacy && privacy.checked),
             terms: !!(terms && terms.checked),
             idImage: val(form, "idImage"),
             idNumber: val(form, "idNumber"),

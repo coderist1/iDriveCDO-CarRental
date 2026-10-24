@@ -6,7 +6,7 @@
   <title>Book - iDrive CDO</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="../shared/css/styles.css?v=20261019e">
+  <link rel="stylesheet" href="../shared/css/styles.css?v=20261024a">
 </head>
 <body data-page="book" data-auth="user" data-base="../">
   <div id="app-nav"></div>
@@ -52,6 +52,7 @@
           <label class="field">Return time
             <input class="form-control" name="returnTime" type="time" value="09:00" required>
           </label>
+          <p class="fineprint field-span-2" data-booked-dates></p>
           <div class="drive-mode field-span-2" role="radiogroup" aria-label="How will you get the car?">
             <label class="drive-option">
               <input type="radio" name="handover" value="pickup" checked>
@@ -109,6 +110,10 @@
             <input class="form-control" name="address" maxlength="120" autocomplete="street-address">
             <span class="ocr-confidence" hidden></span>
           </label>
+          <label class="field">Birth date
+            <input class="form-control" name="birthdate" type="date">
+            <span class="ocr-confidence" hidden></span>
+          </label>
         </div>
 
         <div class="id-upload-field" data-upload="license-front" data-kind="document">
@@ -142,6 +147,85 @@
           </label>
         </div>
 
+        <p class="eyebrow" style="margin-top:1rem">Second valid ID</p>
+        <p class="fineprint">Self-drive needs a driver’s license and one other valid ID.</p>
+        <div class="drive-mode id-choice" role="radiogroup" aria-label="Second ID type">
+          <label class="drive-option">
+            <input type="radio" name="idType" value="National ID">
+            <span><strong>National ID</strong><small>16-digit PhilSys number</small></span>
+          </label>
+          <label class="drive-option">
+            <input type="radio" name="idType" value="Passport">
+            <span><strong>Passport</strong><small>Passport number, like P1234567A</small></span>
+          </label>
+          <label class="drive-option">
+            <input type="radio" name="idType" value="UMID">
+            <span><strong>UMID</strong><small>12-digit CRN</small></span>
+          </label>
+          <label class="drive-option">
+            <input type="radio" name="idType" value="Postal ID">
+            <span><strong>Postal ID</strong><small>Number printed on the card</small></span>
+          </label>
+        </div>
+        <div class="id-upload-field" data-upload="self-id" data-kind="document">
+          <p class="eyebrow">Photo of that ID</p>
+          <p class="fineprint">Upload a clear photo. We read the name, number, birth date, address, and expiry. Correct anything that looks off.</p>
+          <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+          <input type="hidden" name="idPhoto" value="">
+          <div class="license-photo-row">
+            <div class="license-photo-preview is-empty" data-preview>No photo yet</div>
+            <div class="license-photo-actions">
+              <button class="btn btn-ghost btn-sm" type="button" data-pick>Upload ID</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-clear hidden>Remove</button>
+              <p class="fineprint" data-status></p>
+            </div>
+          </div>
+        </div>
+        <div class="form-grid">
+          <label class="field field-span-2">ID number
+            <input class="form-control" name="idNumber" maxlength="30" placeholder="Choose an ID above first">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+          <label class="field">ID expiry
+            <input class="form-control" name="idExpiry" type="date">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+          <label class="field">ID issue date
+            <input class="form-control" name="idIssue" type="date">
+            <span class="ocr-confidence" hidden></span>
+          </label>
+        </div>
+
+        <div class="parent-consent" data-parent-consent hidden>
+          <p class="eyebrow">Parent / guardian consent</p>
+          <p class="fineprint">This renter is 17 or below. A parent or guardian must consent before the booking can be submitted.</p>
+          <div class="form-grid">
+            <label class="field">Parent or guardian name
+              <input class="form-control" name="parentName" maxlength="80" autocomplete="name">
+            </label>
+            <label class="field">Parent mobile
+              <input class="form-control" name="parentPhone" maxlength="24" inputmode="tel" placeholder="09XXXXXXXXX">
+            </label>
+          </div>
+          <div class="id-upload-field" data-upload="parent-id" data-kind="document">
+            <p class="eyebrow">Parent or guardian valid ID</p>
+            <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+            <input type="hidden" name="parentIdPhoto" value="">
+            <div class="license-photo-row">
+              <div class="license-photo-preview is-empty" data-preview>No photo yet</div>
+              <div class="license-photo-actions">
+                <button class="btn btn-ghost btn-sm" type="button" data-pick>Upload parent ID</button>
+                <button class="btn btn-ghost btn-sm" type="button" data-clear hidden>Remove</button>
+                <p class="fineprint" data-status></p>
+              </div>
+            </div>
+          </div>
+          <label class="check-min">
+            <input type="checkbox" name="parentConsent">
+            <span>I am the parent or guardian and I consent to this rental.</span>
+          </label>
+        </div>
+
         <div class="ocr-flags" hidden></div>
         <label class="check-min mismatch-ack" hidden>
           <input type="checkbox" name="mismatchAck">
@@ -153,6 +237,13 @@
             <span>I agree to the rental terms</span>
           </label>
           <button type="button" class="terms-read" data-terms-open="self">Read the terms</button>
+        </div>
+        <div class="terms-row">
+          <label class="check-min terms-check">
+            <input type="checkbox" name="privacyConsent">
+            <span>I have read the Data Privacy notice and I consent to the collection of my ID and personal information (RA 10173).</span>
+          </label>
+          <button type="button" class="terms-read" data-privacy-open>Read the notice</button>
         </div>
         <button class="btn btn-gold" type="submit">Continue to payment</button>
       </form>
@@ -181,30 +272,26 @@
           <label class="field">Return time
             <input class="form-control" name="returnTime" type="time" value="09:00" required>
           </label>
+          <p class="fineprint field-span-2" data-booked-dates></p>
           <label class="field field-span-2">Pickup location
             <input class="form-control" name="pickup" maxlength="120" placeholder="Street, barangay, or landmark" autocomplete="street-address" required data-map-sync>
           </label>
-          <div class="pickup-map-block field-span-2" data-map-for="pickup">
-            <p class="fineprint">Type a pickup address. The map follows it — click or drag the pin to set the exact spot.</p>
-            <div class="pickup-map-tools">
-              <button class="btn btn-ghost btn-sm" type="button" data-map-locate>Use my location</button>
-            </div>
-            <div class="pickup-map" data-map></div>
-            <p class="fineprint" data-map-status>Type a pickup address to move the pin.</p>
-            <input type="hidden" name="pickupLat" value="">
-            <input type="hidden" name="pickupLng" value="">
-            <input type="hidden" name="pickupLabel" value="">
-          </div>
           <label class="field field-span-2">Drop-off location
             <input class="form-control" name="dropoff" maxlength="120" placeholder="Street, barangay, or landmark" autocomplete="street-address" required data-map-sync>
           </label>
-          <div class="pickup-map-block field-span-2" data-map-for="dropoff">
-            <p class="fineprint">Type a drop-off address. The map follows it — click or drag the pin to set the exact spot.</p>
+          <div class="pickup-map-block field-span-2" data-trip-map>
+            <p class="fineprint">One map for both pins. The blue pin is pick-up. The red pin is drop-off. Search an address, click the map, or drag a pin.</p>
             <div class="pickup-map-tools">
-              <button class="btn btn-ghost btn-sm" type="button" data-map-locate>Use my location</button>
+              <button class="btn btn-ghost btn-sm is-active" type="button" data-place-pin="pickup">Place pick-up (blue)</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-place-pin="dropoff">Place drop-off (red)</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-map-locate>Use my location for pick-up</button>
+              <span class="map-pin-legend"><span class="pin-dot pin-blue"></span> Pick-up <span class="pin-dot pin-red"></span> Drop-off</span>
             </div>
             <div class="pickup-map" data-map></div>
-            <p class="fineprint" data-map-status>Type a drop-off address to move the pin.</p>
+            <p class="fineprint" data-map-status>Type a pick-up or drop-off address, or click the map.</p>
+            <input type="hidden" name="pickupLat" value="">
+            <input type="hidden" name="pickupLng" value="">
+            <input type="hidden" name="pickupLabel" value="">
             <input type="hidden" name="dropoffLat" value="">
             <input type="hidden" name="dropoffLng" value="">
             <input type="hidden" name="dropoffLabel" value="">
@@ -225,6 +312,10 @@
           </label>
           <label class="field">Email
             <input class="form-control" name="email" maxlength="120" autocomplete="email">
+          </label>
+          <label class="field">Birth date
+            <input class="form-control" name="birthdate" type="date">
+            <span class="ocr-confidence" hidden></span>
           </label>
         </div>
 
@@ -276,6 +367,36 @@
           </label>
         </div>
 
+        <div class="parent-consent" data-parent-consent hidden>
+          <p class="eyebrow">Parent / guardian consent</p>
+          <p class="fineprint">This renter is 17 or below. A parent or guardian must consent before the booking can be submitted.</p>
+          <div class="form-grid">
+            <label class="field">Parent or guardian name
+              <input class="form-control" name="parentName" maxlength="80" autocomplete="name">
+            </label>
+            <label class="field">Parent mobile
+              <input class="form-control" name="parentPhone" maxlength="24" inputmode="tel" placeholder="09XXXXXXXXX">
+            </label>
+          </div>
+          <div class="id-upload-field" data-upload="parent-id" data-kind="document">
+            <p class="eyebrow">Parent or guardian valid ID</p>
+            <input class="upload-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+            <input type="hidden" name="parentIdPhoto" value="">
+            <div class="license-photo-row">
+              <div class="license-photo-preview is-empty" data-preview>No photo yet</div>
+              <div class="license-photo-actions">
+                <button class="btn btn-ghost btn-sm" type="button" data-pick>Upload parent ID</button>
+                <button class="btn btn-ghost btn-sm" type="button" data-clear hidden>Remove</button>
+                <p class="fineprint" data-status></p>
+              </div>
+            </div>
+          </div>
+          <label class="check-min">
+            <input type="checkbox" name="parentConsent">
+            <span>I am the parent or guardian and I consent to this rental.</span>
+          </label>
+        </div>
+
         <p class="eyebrow" style="margin-top:1rem">The trip</p>
         <div class="form-grid">
           <label class="field field-span-2">Itinerary or destination
@@ -298,6 +419,13 @@
           </label>
           <button type="button" class="terms-read" data-terms-open="chauffeur">Read the terms</button>
         </div>
+        <div class="terms-row">
+          <label class="check-min terms-check">
+            <input type="checkbox" name="privacyConsent">
+            <span>I have read the Data Privacy notice and I consent to the collection of my ID and personal information (RA 10173).</span>
+          </label>
+          <button type="button" class="terms-read" data-privacy-open>Read the notice</button>
+        </div>
         <button class="btn btn-gold" type="submit">Continue to payment</button>
       </form>
     </div>
@@ -318,13 +446,13 @@
   <script src="../shared/js/api.js?v=20261009g"></script>
   <script src="../shared/js/validation.js?v=20261011a"></script>
   <script src="../shared/js/routes.js?v=20261019a"></script>
-  <script src="../shared/js/domain.js?v=20261013g"></script>
-  <script src="../auth/auth.js?v=20261019a"></script>
-  <script src="../shared/js/ui.js?v=20261019d"></script>
+  <script src="../shared/js/domain.js?v=20261024a"></script>
+  <script src="../auth/auth.js?v=20261024a"></script>
+  <script src="../shared/js/ui.js?v=20261024b"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="../shared/js/ocr.js?v=20261013c"></script>
-  <script src="../shared/js/pickup-map.js?v=20261013c"></script>
-  <script src="./booking.js?v=20261013g"></script>
+  <script src="../shared/js/ocr.js?v=20261024a"></script>
+  <script src="../shared/js/pickup-map.js?v=20261024a"></script>
+  <script src="./booking.js?v=20261024a"></script>
   <script src="../shared/js/app.js?v=20261019a"></script>
 </body>
 </html>

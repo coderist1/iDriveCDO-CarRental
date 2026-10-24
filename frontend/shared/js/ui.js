@@ -420,10 +420,17 @@
 
   function statusBadge(status) {
     var labels = {
-      return_requested: "return requested",
+      pending: "Pending",
+      confirmed: "Confirmed",
+      ongoing: "Ongoing",
+      completed: "Completed",
+      cancelled: "Cancelled",
+      rejected: "Rejected",
+      return_requested: "Return requested",
       on_call: "on call",
       regular: "regular",
-      check_first: "check first"
+      check_first: "check first",
+      bad_renter: "Bad renter"
     };
     var label = labels[status] || status;
     return (
@@ -944,7 +951,51 @@
       '<div class="terms-body">' +
       termsBodyHtml(kind) +
       "</div>" +
-      '<button type="button" class="btn btn-gold" data-terms-close>Close</button>' +
+      "</article>";
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay || e.target.closest("[data-terms-close]")) closeTermsModal();
+    });
+    document.addEventListener("keydown", onTermsKey);
+    document.body.appendChild(overlay);
+    var closeBtn = overlay.querySelector("[data-terms-close]");
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function privacyBodyHtml() {
+    return (
+      "<p>iDrive CDO collects personal data under the Data Privacy Act of 2016 (Republic Act No. 10173).</p>" +
+      "<h3>What we collect</h3>" +
+      "<ul><li>Name, mobile number, email, address, and birth date</li>" +
+      "<li>Photos and numbers of your government ID and, for self-drive, your driver’s license</li>" +
+      "<li>If you are 17 or below, parent or guardian name, mobile number, ID, and consent</li>" +
+      "<li>Booking dates, locations, payments, and messages with the desk</li></ul>" +
+      "<h3>Why we collect it</h3>" +
+      "<ul><li>To confirm who is renting the car and that they are allowed to drive or travel</li>" +
+      "<li>To prevent overlapping reservations and to contact you about the trip</li>" +
+      "<li>To meet our legal and safety duties</li></ul>" +
+      "<h3>How long we keep it</h3>" +
+      "<p>We keep booking and ID records for as long as the rental account is active, and for up to five years after your last trip unless a shorter period is required or you ask us to delete your data.</p>" +
+      "<h3>Who can see it</h3>" +
+      "<p>Only Admin and Staff can view uploaded IDs. Drivers see trip details they need for an assigned chauffeur booking, not your ID photos. We do not sell your data.</p>" +
+      "<h3>Your rights</h3>" +
+      "<p>You may request to view or delete your personal data from your Account page. Staff will review a delete request before the account is disabled and identifying fields are cleared.</p>"
+    );
+  }
+
+  function openPrivacy() {
+    closeTermsModal();
+    var overlay = document.createElement("div");
+    overlay.id = "terms-modal";
+    overlay.className = "password-modal terms-modal";
+    overlay.innerHTML =
+      '<article class="password-dialog terms-dialog" role="dialog" aria-modal="true" aria-labelledby="terms-title">' +
+      '<div class="password-dialog-head">' +
+      '<h2 id="terms-title">Data Privacy notice</h2>' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-terms-close>Close</button>' +
+      "</div>" +
+      '<div class="terms-body">' +
+      privacyBodyHtml() +
+      "</div>" +
       "</article>";
     overlay.addEventListener("click", function (e) {
       if (e.target === overlay || e.target.closest("[data-terms-close]")) closeTermsModal();
@@ -959,6 +1010,12 @@
     if (document.documentElement.getAttribute("data-terms-bound") === "1") return;
     document.documentElement.setAttribute("data-terms-bound", "1");
     document.addEventListener("click", function (e) {
+      var privacy = e.target.closest("[data-privacy-open]");
+      if (privacy) {
+        e.preventDefault();
+        openPrivacy();
+        return;
+      }
       var btn = e.target.closest("[data-terms-open]");
       if (!btn) return;
       e.preventDefault();
@@ -1050,9 +1107,11 @@
       '<label class="field">Email <input class="form-control" name="email" type="email" autocomplete="email" required></label>' +
       '<label class="field">Password <input class="form-control" name="password" type="password" autocomplete="new-password" required></label>' +
       '<label class="field">Confirm password <input class="form-control" name="confirmPassword" type="password" autocomplete="new-password" required></label>' +
+      '<label class="field">Birth date <input class="form-control" name="birthdate" type="date" required></label>' +
       "</div>" +
       '<p class="fineprint">Password: 8+ characters with upper, lower, number, and a symbol.</p>' +
-      '<label class="check-min"><input type="checkbox" name="ageConfirm" value="1"> <span>I am 21 or older</span></label>' +
+      '<div class="terms-row"><label class="check-min"><input type="checkbox" name="privacy" value="1"> <span>I have read the Data Privacy notice and I consent (RA 10173)</span></label>' +
+      '<button type="button" class="terms-read" data-privacy-open>Read the notice</button></div>' +
       '<div class="terms-row"><label class="check-min"><input type="checkbox" name="terms" value="1"> <span>I accept the rental terms</span></label>' +
       '<button type="button" class="terms-read" data-terms-open="account">Read the terms</button></div>' +
       '<div class="auth-actions">' +
@@ -1323,7 +1382,8 @@
             phone: signupPanel.phone.value,
             password: signupPanel.password.value,
             confirmPassword: signupPanel.confirmPassword.value,
-            ageConfirm: signupPanel.ageConfirm.checked,
+            birthdate: signupPanel.birthdate.value,
+            privacy: signupPanel.privacy.checked,
             terms: signupPanel.terms.checked
           }, csrf ? csrf.value : "");
           finish(user);
@@ -1389,6 +1449,7 @@
     toast: toast,
     askYesNo: askYesNo,
     openTerms: openTerms,
+    openPrivacy: openPrivacy,
     bookingDetailListHtml: bookingDetailListHtml,
     bookingDetailRowsFromRecord: bookingDetailRowsFromRecord,
     chatMessageBodyHtml: chatMessageBodyHtml,

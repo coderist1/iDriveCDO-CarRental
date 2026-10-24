@@ -102,6 +102,11 @@
       licenseNo: user.licenseNo,
       licenseExpiry: user.licenseExpiry,
       birthdate: user.birthdate || "",
+      privacyAcceptedAt: user.privacyAcceptedAt || "",
+      isBadRenter: !!user.isBadRenter,
+      badRenterReason: user.badRenterReason || "",
+      badRenterLabeledBy: user.badRenterLabeledBy || "",
+      badRenterLabeledAt: user.badRenterLabeledAt || "",
       idImage: user.idImage || "",
       avatar: user.avatar || "",
       status: user.status,
@@ -251,7 +256,9 @@
     if (!NS.validation.email(email)) throw new Error("Enter a valid email address.");
     if (!phone) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
     if (phoneOwner(phone, null)) throw new Error(PHONE_TAKEN);
-    if (!payload.ageConfirm) throw new Error("You must confirm you are 21 or older.");
+    var birthdate = NS.security.sanitizeText(payload.birthdate || payload.idBirthdate || "", 10);
+    if (!birthdate) throw new Error("Enter your birth date.");
+    if (!payload.privacy) throw new Error("You must accept the Data Privacy notice.");
     if (!payload.terms) throw new Error("You must accept the rental terms.");
     var issues = NS.security.passwordIssues(password, email);
     if (issues.length) throw new Error("Password needs: " + issues.join(" "));
@@ -287,7 +294,9 @@
       licenseNo: idNumber || "",
       licenseExpiry: idExpiry || "",
       address: idAddress || "",
-      birthdate: idBirthdate || "",
+      birthdate: birthdate || idBirthdate || "",
+      privacyAcceptedAt: new Date().toISOString(),
+      isBadRenter: false,
       idImage: idImage || "",
       avatar: "",
       passwordSet: true,

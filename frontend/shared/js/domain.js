@@ -400,6 +400,11 @@
       pickupTime: pickupTime,
       returnTime: returnTime
     });
+    assertBothPartiesHaveId({
+      vehicleId: q.vehicle.id,
+      driverInfo: driverInfo,
+      id: null
+    });
 
     try {
       if (csrf) NS.security.assertCsrf(csrf);
@@ -732,6 +737,8 @@
     if (user.address) body.address = user.address;
     if (user.licenseNo) body.license_no = user.licenseNo;
     if (user.licenseExpiry) body.license_expiry = user.licenseExpiry;
+    if (user.birthdate) body.birthdate = user.birthdate;
+    if (user.privacyAcceptedAt) body.privacy_accepted_at = user.privacyAcceptedAt;
     return NS.api.post("/users/sync", body).then(function (saved) {
       var list = NS.store.get("users", []);
       for (var i = 0; i < list.length; i++) if (list[i].id === userId) list[i].apiId = saved.user_id;
@@ -794,24 +801,26 @@
   /* Builds the backend renter_document object from a local booking's driverInfo. */
   function renterDocumentBody(booking) {
     var info = booking.driverInfo || {};
-    if (booking.driveMode === "chauffeur") {
-      if (!info.idType || !info.idNumber) return null;
-      var idBody = { id_type: info.idType, id_number: info.idNumber };
-      if (info.idExpiry) idBody.id_expiry = info.idExpiry;
-      if (info.idPhoto) idBody.id_photo = info.idPhoto;
-      return idBody;
-    }
+    var body = {};
+    if (info.idType) body.id_type = info.idType;
+    if (info.idNumber) body.id_number = info.idNumber;
+    if (info.idExpiry) body.id_expiry = info.idExpiry;
+    if (info.idPhoto) body.id_photo = info.idPhoto;
     var codes = info.dl_codes || info.licenseClass || "";
     var licenseNo = info.license_no || info.licenseNo || "";
     var licenseExpiry = info.license_expiry || info.licenseExpiry || "";
-    if (!codes || !licenseNo || !licenseExpiry) return null;
-    var licenseBody = {
-      dl_codes: codes,
-      license_no: licenseNo,
-      license_expiry: licenseExpiry
-    };
-    if (info.licensePhoto) licenseBody.license_photo = info.licensePhoto;
-    return licenseBody;
+    if (codes) body.dl_codes = codes;
+    if (licenseNo) body.license_no = licenseNo;
+    if (licenseExpiry) body.license_expiry = licenseExpiry;
+    if (info.licensePhoto) body.license_photo = info.licensePhoto;
+    if (info.birthdate) body.birthdate = info.birthdate;
+    if (info.parentName) body.parent_name = info.parentName;
+    if (info.parentPhone) body.parent_phone = NS.validation.normalizePhone(info.parentPhone || "") || info.parentPhone;
+    if (info.parentIdPhoto) body.parent_id_photo = info.parentIdPhoto;
+    if (info.parentConsentAt) body.parent_consent_at = info.parentConsentAt;
+    if (info.privacyAcceptedAt) body.privacy_accepted_at = info.privacyAcceptedAt;
+    if (!Object.keys(body).length) return null;
+    return body;
   }
 
   /* Saves a local booking to Laravel; the local copy is discarded if the server rejects it. */
@@ -950,26 +959,93 @@
     };
   }
 
+  function ageFromBirthdate(iso) {
+    if (!iso) return null;
+    var born = new Date(String(iso) + "T00:00:00");
+    if (isNaN(born.getTime())) return null;
+    var now = new Date();
+    var age = now.getFullYear() - born.getFullYear();
+    var md = now.getMonth() - born.getMonth();
+    if (md < 0 || (md === 0 && now.getDate() < born.getDate())) age -= 1;
+    return age;
+  }
+
+  function applyPrivacyAndParent(info, who) {
+    if (!info.privacyConsent) {
+      throw new Error("Accept the Data Privacy notice before we store your ID.");
+    }
+    who.privacyAcceptedAt = new Date().toISOString();
+    var birthdate = NS.security.sanitizeText(info.birthdate || "", 10);
+    if (!birthdate) throw new Error("Enter your birth date so we can check if parent consent is needed.");
+    who.birthdate = birthdate;
+    var age = ageFromBirthdate(birthdate);
+    if (age != null && age <= 17) {
+      var parentName = NS.security.sanitizeText(info.parentName || "", 80);
+      var parentPhone = NS.validation.normalizePhone(info.parentPhone || "");
+      if (!parentName) throw new Error("Enter the parent or guardian name.");
+      if (!NS.validation.phMobile(parentPhone)) throw new Error("Enter the parent or guardian mobile number (09XXXXXXXXX).");
+      if (!info.parentConsent) throw new Error("The parent or guardian must tick the consent box.");
+      who.parentName = parentName;
+      who.parentPhone = parentPhone;
+      who.parentIdPhoto = assertPhoto(info.parentIdPhoto, "a valid ID of the parent or guardian", 750000);
+      who.parentConsentAt = new Date().toISOString();
+    }
+    return who;
+  }
+
+  function hasValidIdInfo(info) {
+    if (!info) return false;
+    var photo = !!(info.idPhoto || info.licensePhoto);
+    var number = !!(info.idNumber || info.license_no || info.licenseNo);
+    return photo && number;
+  }
+
+  function bookedRanges(vehicleId, exceptId) {
+    return bookings()
+      .filter(function (b) {
+        return b.vehicleId === vehicleId && ACTIVE_BOOKING[b.status] && b.id !== exceptId;
+      })
+      .map(function (b) {
+        return { start: b.startDate, end: b.endDate, status: b.status, ref: b.ref };
+      });
+  }
+
+  function assertBothPartiesHaveId(booking) {
+    if (!booking || !booking.vehicleId) return;
+    var current = bookings().filter(function (b) {
+      return b.vehicleId === booking.vehicleId && b.status === "ongoing" && b.id !== booking.id;
+    })[0];
+    if (!current) return;
+    if (!hasValidIdInfo(current.driverInfo)) {
+      throw new Error(
+        "This car is in use and the current renter has no valid ID on file. Staff must collect that ID before another booking is confirmed."
+      );
+    }
+    if (!hasValidIdInfo(booking.driverInfo)) {
+      throw new Error("This car is currently in use. Upload a valid ID for the new renter before the booking is confirmed.");
+    }
+  }
+
   function normalizeDriverInfo(driveMode, info, context) {
     context = context || {};
     info = info || {};
     if (!info.agreed) throw new Error("Agree to the rental terms to continue.");
 
     if (driveMode === "chauffeur") {
-      var who = assertIdentity(info);
+      var who = applyPrivacyAndParent(info, assertIdentity(info));
       var gov = assertGovernmentId(info, context.endDate);
       who.idType = gov.idType;
       who.idNumber = gov.idNumber;
       who.idExpiry = gov.idExpiry;
       who.idIssue = gov.idIssue;
-      who.idPhoto = assertPhoto(info.idPhoto, "a photo of your government ID", 320000);
+      who.idPhoto = assertPhoto(info.idPhoto, "a photo of your government ID", 750000);
       who.itinerary = NS.security.sanitizeText(info.itinerary, 180);
       if (!who.itinerary) throw new Error("Enter the itinerary or destination.");
       who.agreed = true;
       return who;
     }
 
-    var renter = assertIdentity(info);
+    var renter = applyPrivacyAndParent(info, assertIdentity(info));
     var address = NS.security.sanitizeText(info.address, 120);
     if (!address) throw new Error("Enter your address.");
     var codes = NS.security.sanitizeText(info.dl_codes || info.licenseClass || "", 40);
@@ -993,6 +1069,7 @@
       throw new Error("This license is limited to daylight driving. Choose pickup and return times between 05:00 and 18:00.");
     }
 
+    var second = assertGovernmentId(info, context.endDate);
     renter.address = address;
     renter.dl_codes = codes;
     renter.license_no = licenseNo;
@@ -1004,6 +1081,11 @@
     renter.licenseAddress = address;
     renter.emergencyPhone = renter.phone;
     renter.licensePhoto = assertPhoto(info.licensePhoto, "a photo of your driver's license", 750000);
+    renter.idType = second.idType;
+    renter.idNumber = second.idNumber;
+    renter.idExpiry = second.idExpiry;
+    renter.idIssue = second.idIssue;
+    renter.idPhoto = assertPhoto(info.idPhoto, "a photo of your second valid ID", 750000);
     renter.agreed = true;
     return renter;
   }
@@ -1229,8 +1311,8 @@
     ) {
       throw new Error("Staff must process this status.");
     }
-    if (next === "confirmed" && booking.paymentStatus !== "paid") {
-      throw new Error("Confirm only after payment.");
+    if (next === "confirmed") {
+      assertBothPartiesHaveId(booking);
     }
     booking.status = next;
     booking.updatedAt = new Date().toISOString();
@@ -2808,6 +2890,12 @@
       licenseExpiry: apiDay(row.license_expiry) || (prev && prev.licenseExpiry) || "",
       avatar: (prev && prev.avatar) || "",
       status: row.status || (prev && prev.status) || "active",
+      birthdate: apiDay(row.birthdate) || (prev && prev.birthdate) || "",
+      privacyAcceptedAt: row.privacy_accepted_at || (prev && prev.privacyAcceptedAt) || "",
+      isBadRenter: !!(row.is_bad_renter || (prev && prev.isBadRenter)),
+      badRenterReason: row.bad_renter_reason || (prev && prev.badRenterReason) || "",
+      badRenterLabeledBy: row.bad_renter_labeled_by || (prev && prev.badRenterLabeledBy) || "",
+      badRenterLabeledAt: row.bad_renter_labeled_at || (prev && prev.badRenterLabeledAt) || "",
       createdAt: row.created_at
     };
   }
@@ -3132,6 +3220,31 @@
     return localISODate(new Date());
   }
 
+  function flagBadRenter(userId, reason, labeledBy) {
+    reason = NS.security.sanitizeText(reason || "", 400);
+    if (reason.length < 8) throw new Error("Write why this renter is being labeled (at least 8 characters).");
+    var list = NS.store.get("users", []);
+    var target = null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === userId) target = list[i];
+    }
+    if (!target || target.role !== "customer") throw new Error("Only a renter account can be labeled.");
+    target.isBadRenter = true;
+    target.badRenterReason = reason;
+    target.badRenterLabeledBy = labeledBy && labeledBy.id;
+    target.badRenterLabeledAt = new Date().toISOString();
+    NS.store.set("users", list);
+    if (NS.api && target.apiId != null && labeledBy && labeledBy.apiId != null) {
+      return NS.api.post("/users/" + encodeURIComponent(target.apiId) + "/flag", {
+        reason: reason,
+        labeled_by: labeledBy.apiId
+      }).then(function () {
+        return target;
+      });
+    }
+    return Promise.resolve(target);
+  }
+
   function pushUserProfileToApi(user) {
     if (!NS.api || !user || user.apiId == null) return;
     var body = {
@@ -3144,6 +3257,8 @@
     if (user.department) body.department = user.department;
     if (user.licenseNo) body.license_no = user.licenseNo;
     if (user.licenseExpiry) body.license_expiry = user.licenseExpiry;
+    if (user.birthdate) body.birthdate = user.birthdate;
+    if (user.privacyAcceptedAt) body.privacy_accepted_at = user.privacyAcceptedAt;
     NS.api.users.update(user.apiId, body).catch(warnApiFailure);
   }
 
@@ -3313,6 +3428,9 @@
     getVehicle: getVehicle,
     getBooking: getBooking,
     isAvailable: isAvailable,
+    bookedRanges: bookedRanges,
+    ageFromBirthdate: ageFromBirthdate,
+    flagBadRenter: flagBadRenter,
     availableVehicles: availableVehicles,
     AVAILABILITY_LABELS: AVAILABILITY_LABELS,
     vehicleAvailability: vehicleAvailability,
