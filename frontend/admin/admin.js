@@ -196,7 +196,7 @@
     var recentHost = document.getElementById("admin-recent");
     var recentSorted = incoming.slice();
     recentHost.innerHTML =
-      '<p class="section-summary">' + recentSorted.length + " incoming · first in, first out</p>" +
+      '<p class="section-summary">' + recentSorted.length + " incoming · first in, last out</p>" +
       (recentSorted.length
       ? recentSorted
           .slice(0, 8)
@@ -1618,7 +1618,7 @@
       var counts = { pending: 0, active: 0, completed: 0 };
       incoming.forEach(function (b) { counts[bookingBucket(b.status)] += 1; });
       if (summary) {
-        summary.textContent = incoming.length + " total · " + counts.pending + " pending · " + counts.active + " active · " + counts.completed + " done · first in, first out";
+        summary.textContent = incoming.length + " total · " + counts.pending + " pending · " + counts.active + " active · " + counts.completed + " done · first in, last out";
       }
       if (filter !== "all") {
         incoming = incoming.filter(function (b) { return bookingBucket(b.status) === filter; });

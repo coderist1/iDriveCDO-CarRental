@@ -366,6 +366,8 @@
       if (NS.pickupMap) NS.pickupMap.mount(form);
       bindUploads(form);
       bindSubmit(form);
+      renderFlags(form);
+      syncSubmitGate(form);
       form.addEventListener("input", function (e) {
         if (e.target && e.target.name) e.target.dataset.userEdited = "1";
         if (e.target && e.target.classList) {
@@ -703,6 +705,52 @@
       });
     }
 
+    function idsConflict(form) {
+      var scans = form._scans || {};
+      var licenseName = scans["license-front"] && scans["license-front"].fullName;
+      var secondName = scans["self-id"] && scans["self-id"].fullName;
+      if (form.id !== "self-form" || !licenseName || !secondName) return false;
+      return !NS.validation.namesMatch(licenseName, secondName);
+    }
+
+    function nameMismatchOpen(form) {
+      var scans = form._scans || {};
+      var typed = form.fullName && form.fullName.value;
+      if (!typed) return false;
+      return Object.keys(scans).some(function (slot) {
+        var name = scans[slot] && scans[slot].fullName;
+        return name && !NS.validation.namesMatch(typed, name);
+      });
+    }
+
+    function bookingGateErrors(form) {
+      var errors = [];
+      if (!form.agreeTerms || !form.agreeTerms.checked) {
+        errors.push("Agree to the rental terms before continuing to payment.");
+      }
+      if (!form.privacyConsent || !form.privacyConsent.checked) {
+        errors.push("Accept the Data Privacy notice before continuing to payment.");
+      }
+      if (idsConflict(form)) {
+        errors.push(
+          "The name on the driver’s license and the second ID do not match. Upload matching IDs or correct the details before continuing."
+        );
+      } else if (nameMismatchOpen(form) && !(form.mismatchAck && form.mismatchAck.checked)) {
+        errors.push(
+          "The ID name does not match what you typed. Correct the form, or tick that you reviewed the mismatch."
+        );
+      }
+      return errors;
+    }
+
+    function syncSubmitGate(form) {
+      var btn = form.querySelector('button[type="submit"]');
+      if (!btn || btn.getAttribute("data-busy") === "1") return;
+      var blocked = bookingGateErrors(form).length > 0;
+      if (form.phone && form.phone.getAttribute("data-phone-blocked") === "1") blocked = true;
+      btn.disabled = blocked;
+    }
+
     function renderFlags(form) {
       var host = form.querySelector(".ocr-flags");
       var ack = form.querySelector(".mismatch-ack");
@@ -718,6 +766,18 @@
           messages.push({ level: "warn", text: "Name on the " + slotLabel(slot) + " reads as “" + data.fullName + "”, which does not match what you typed." });
         }
       });
+      if (idsConflict(form)) {
+        mismatch = true;
+        messages.push({
+          level: "bad",
+          text:
+            "The driver’s license and the second ID show different names (“" +
+            (scans["license-front"].fullName || "") +
+            "” vs “" +
+            (scans["self-id"].fullName || "") +
+            "”). Fix this before continuing to payment."
+        });
+      }
 
       function expired(value, label) {
         if (!value) return;
@@ -765,13 +825,16 @@
       }
 
       if (ack) {
-        ack.hidden = !mismatch;
-        if (!mismatch && form.mismatchAck) form.mismatchAck.checked = false;
+        /* Two conflicting IDs cannot be waved through with the mismatch checkbox. */
+        var showAck = mismatch && !idsConflict(form);
+        ack.hidden = !showAck;
+        if (!showAck && form.mismatchAck) form.mismatchAck.checked = false;
       }
       host.hidden = messages.length === 0;
       host.innerHTML = messages.map(function (item) {
         return '<p class="' + (item.level === "bad" ? "ocr-flag-bad" : "ocr-flag-warn") + '">' + NS.security.escapeHtml(item.text) + "</p>";
       }).join("");
+      syncSubmitGate(form);
     }
 
     function ocrValues(form, key) {
@@ -799,12 +862,25 @@
         e.preventDefault();
         if (busy) return;
         var mode = form.id === "chauffeur-form" ? "chauffeur" : "self";
+        renderFlags(form);
+        var gateErrors = bookingGateErrors(form);
+        if (gateErrors.length) {
+          showAlert(form, gateErrors[0], "err");
+          syncSubmitGate(form);
+          return;
+        }
         var gate = NS.auth.assertActive ? NS.auth.assertActive() : Promise.resolve();
         gate.then(function () {
           return NS.ui.askYesNo("Save this booking and continue to payment?", { title: "Save booking", yes: "Continue", no: "Not yet" });
         }).then(function (ok) {
           if (ok === undefined) return;
           if (!ok) return;
+          gateErrors = bookingGateErrors(form);
+          if (gateErrors.length) {
+            showAlert(form, gateErrors[0], "err");
+            syncSubmitGate(form);
+            return;
+          }
           if (form.phone && form.phone.getAttribute("data-phone-blocked") === "1") {
             showAlert(form, "This mobile number is already registered.", "err");
             return;
@@ -815,14 +891,16 @@
           showAlert(form, "", "ok");
           var btn = form.querySelector('button[type="submit"]');
           if (btn) {
+            btn.setAttribute("data-busy", "1");
             btn.disabled = true;
             btn.textContent = "Creating booking…";
           }
           function fail(err) {
             busy = false;
             if (btn) {
-              btn.disabled = false;
+              btn.removeAttribute("data-busy");
               btn.textContent = "Continue to payment";
+              syncSubmitGate(form);
             }
             if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
             showAlert(form, err.message || "Could not create booking.", "err");

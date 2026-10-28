@@ -57,6 +57,15 @@
     return (list || bookings()).slice().sort(fifoCompare);
   }
 
+  /* First in, last out: newest booking is checked first (highest queue number / latest created time). */
+  function filoCompare(a, b) {
+    return fifoCompare(b, a);
+  }
+
+  function filoOrder(list) {
+    return (list || bookings()).slice().sort(filoCompare);
+  }
+
   function nextQueueNo(list) {
     var max = 0;
     (list || bookings()).forEach(function (b) {
@@ -96,9 +105,9 @@
     return 0;
   }
 
-  /* Earliest booking still waiting for the desk. That is the one to check. */
+  /* Newest pending booking (FILO). That is the one the desk should check first. */
   function firstBookingToCheck() {
-    var ordered = fifoOrder();
+    var ordered = filoOrder();
     for (var i = 0; i < ordered.length; i++) {
       if (ordered[i].status === "pending") return ordered[i];
     }
@@ -109,7 +118,7 @@
     if (!booking) return "";
     var total = bookings().length;
     var n = queuePosition(booking);
-    var line = "Queue " + n + " of " + total;
+    var line = "Queue " + n + " of " + total + " · FILO";
     var first = firstBookingToCheck();
     if (first && first.id === booking.id) return line + " · Check this booking first";
     if (booking.status === "pending" && first) return line + " · Check after queue " + queuePosition(first);
@@ -676,7 +685,7 @@
 
   function incomingBookings() {
     if (!NS.auth.hasRole("staff")) throw new Error("Staff access required.");
-    return fifoOrder().filter(function (b) {
+    return filoOrder().filter(function (b) {
       return b.status === "pending";
     });
   }
@@ -923,7 +932,17 @@
     if (!fullName || fullName.length < 3) throw new Error("Enter your full name.");
     if (!NS.validation.phMobile(phone)) throw new Error("Enter a Philippine mobile number (09XXXXXXXXX).");
     if (!NS.validation.email(email)) throw new Error("Enter a valid email address.");
-    var ocrNames = Array.isArray(info.ocrNames) ? info.ocrNames : [];
+    var ocrNames = Array.isArray(info.ocrNames) ? info.ocrNames.filter(Boolean) : [];
+    var i;
+    for (i = 0; i < ocrNames.length; i++) {
+      for (var j = i + 1; j < ocrNames.length; j++) {
+        if (!NS.validation.namesMatch(ocrNames[i], ocrNames[j])) {
+          throw new Error(
+            "The names on the uploaded IDs do not match each other. Upload matching IDs or correct the details before continuing to payment."
+          );
+        }
+      }
+    }
     var nameMismatch = ocrNames.some(function (ocrName) {
       return ocrName && !NS.validation.namesMatch(fullName, ocrName);
     });
@@ -972,7 +991,7 @@
 
   function applyPrivacyAndParent(info, who) {
     if (!info.privacyConsent) {
-      throw new Error("Accept the Data Privacy notice before we store your ID.");
+      throw new Error("Accept the Data Privacy notice before continuing to payment.");
     }
     who.privacyAcceptedAt = new Date().toISOString();
     var birthdate = NS.security.sanitizeText(info.birthdate || "", 10);
@@ -1029,7 +1048,7 @@
   function normalizeDriverInfo(driveMode, info, context) {
     context = context || {};
     info = info || {};
-    if (!info.agreed) throw new Error("Agree to the rental terms to continue.");
+    if (!info.agreed) throw new Error("Agree to the rental terms before continuing to payment.");
 
     if (driveMode === "chauffeur") {
       var who = applyPrivacyAndParent(info, assertIdentity(info));
@@ -3421,6 +3440,7 @@
     saveVehicleExtras: saveVehicleExtras,
     bookings: bookings,
     fifoOrder: fifoOrder,
+    filoOrder: filoOrder,
     bookingQueueText: bookingQueueText,
     firstBookingToCheck: firstBookingToCheck,
     audit: audit,
