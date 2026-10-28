@@ -461,7 +461,7 @@
         NS.ui.fmtDate(prediction.predictedAt) +
         "</small></div>" +
         (canSchedule && prediction.needsMaintenance
-          ? '<button class="btn btn-dark" type="button" id="ml-schedule-btn">Schedule maintenance</button>'
+          ? '<button class="btn btn-gold" type="button" id="ml-schedule-btn">Schedule maintenance</button>'
           : "");
 
       var schedule = document.getElementById("ml-schedule-btn");

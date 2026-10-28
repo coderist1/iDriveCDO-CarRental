@@ -23,7 +23,7 @@
       '<a class="btn btn-ghost" href="' +
       NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(booking.id)) +
       '">View booking</a>' +
-      '<a class="btn btn-dark" href="' +
+      '<a class="btn btn-gold" href="' +
       NS.routes.href("myBookings") +
       '">My bookings</a>' +
       "</div>";

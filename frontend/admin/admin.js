@@ -196,7 +196,7 @@
     var recentHost = document.getElementById("admin-recent");
     var recentSorted = incoming.slice();
     recentHost.innerHTML =
-      '<p class="section-summary">' + recentSorted.length + " incoming · first in, last out</p>" +
+      '<p class="section-summary">' + recentSorted.length + " incoming · first in, first out</p>" +
       (recentSorted.length
       ? recentSorted
           .slice(0, 8)
@@ -842,7 +842,9 @@
                   action +=
                     ' <button class="btn btn-ghost btn-sm" data-flag="' +
                     u.id +
-                    '">Bad renter</button>';
+                    '">' +
+                    (u.isBadRenter ? "Update reason" : "Bad renter") +
+                    "</button>";
                 }
                 var badge = u.isBadRenter ? " " + NS.ui.statusBadge("bad_renter") : "";
                 var why = u.isBadRenter && u.badRenterReason
@@ -890,18 +892,26 @@
       var flagBtn = e.target.closest("[data-flag]");
       if (flagBtn) {
         var flagId = flagBtn.getAttribute("data-flag");
-        var reason = window.prompt("Why is this renter being labeled Bad Renter? This reason is sent to their Inbox.");
-        if (!reason) return;
-        var staff = NS.auth.current();
-        NS.domain.flagBadRenter(flagId, reason, staff).then(
-          function () {
-            render();
-            NS.ui.toast("Renter labeled. The reason was sent to their Inbox.", "ok");
-          },
-          function (err) {
-            NS.ui.toast((err && err.message) || "Could not label this renter.", "err");
-          }
-        );
+        var target = NS.auth.listUsers().filter(function (u) {
+          return u.id === flagId;
+        })[0];
+        NS.ui.askBadRenterReason(target || { id: flagId }).then(function (reason) {
+          if (!reason) return;
+          var staff = NS.auth.current();
+          Promise.resolve()
+            .then(function () {
+              return NS.domain.flagBadRenter(flagId, reason, staff);
+            })
+            .then(
+              function () {
+                render();
+                NS.ui.toast("Renter labeled. The reason was sent to their Inbox.", "ok");
+              },
+              function (err) {
+                NS.ui.toast((err && err.message) || "Could not label this renter.", "err");
+              }
+            );
+        });
         return;
       }
       var fulfill = e.target.closest("[data-fulfill]");
@@ -1618,7 +1628,7 @@
       var counts = { pending: 0, active: 0, completed: 0 };
       incoming.forEach(function (b) { counts[bookingBucket(b.status)] += 1; });
       if (summary) {
-        summary.textContent = incoming.length + " total · " + counts.pending + " pending · " + counts.active + " active · " + counts.completed + " done · first in, last out";
+        summary.textContent = incoming.length + " total · " + counts.pending + " pending · " + counts.active + " active · " + counts.completed + " done · first in, first out";
       }
       if (filter !== "all") {
         incoming = incoming.filter(function (b) { return bookingBucket(b.status) === filter; });

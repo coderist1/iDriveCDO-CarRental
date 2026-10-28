@@ -105,9 +105,9 @@
     return 0;
   }
 
-  /* Newest pending booking (FILO). That is the one the desk should check first. */
+  /* Earliest pending booking (FIFO). That is the one the desk should check first. */
   function firstBookingToCheck() {
-    var ordered = filoOrder();
+    var ordered = fifoOrder();
     for (var i = 0; i < ordered.length; i++) {
       if (ordered[i].status === "pending") return ordered[i];
     }
@@ -118,7 +118,7 @@
     if (!booking) return "";
     var total = bookings().length;
     var n = queuePosition(booking);
-    var line = "Queue " + n + " of " + total + " · FILO";
+    var line = "Queue " + n + " of " + total;
     var first = firstBookingToCheck();
     if (first && first.id === booking.id) return line + " · Check this booking first";
     if (booking.status === "pending" && first) return line + " · Check after queue " + queuePosition(first);
@@ -685,7 +685,7 @@
 
   function incomingBookings() {
     if (!NS.auth.hasRole("staff")) throw new Error("Staff access required.");
-    return filoOrder().filter(function (b) {
+    return fifoOrder().filter(function (b) {
       return b.status === "pending";
     });
   }

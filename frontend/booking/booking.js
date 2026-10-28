@@ -1434,7 +1434,7 @@
       returnBtn +
       staffAccept +
       cancel +
-      '<button class="btn btn-dark" type="button" onclick="window.print()">Print receipt</button></div></div>';
+      '<button class="btn btn-ghost" type="button" onclick="window.print()">Print receipt</button></div></div>';
 
     var ratingForm = document.getElementById("rating-form");
     if (ratingForm) {

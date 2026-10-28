@@ -91,6 +91,121 @@
     });
   }
 
+  /** Modal form used by Admin / Staff to label a customer Bad Renter. Returns the reason or null. */
+  function askBadRenterReason(customer, options) {
+    options = options || {};
+    var name =
+      customer && (customer.firstName || customer.lastName)
+        ? String(customer.firstName || "") + " " + String(customer.lastName || "")
+        : "this renter";
+    name = name.trim();
+    var prior = (customer && customer.badRenterReason) || "";
+
+    return new Promise(function (resolve) {
+      var existing = document.getElementById("bad-renter-overlay");
+      if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+
+      var overlay = document.createElement("div");
+      overlay.id = "bad-renter-overlay";
+      overlay.className = "password-modal";
+      overlay.innerHTML =
+        '<form class="password-dialog bad-renter-dialog" role="dialog" aria-modal="true" aria-labelledby="bad-renter-title" novalidate>' +
+        '<div class="password-dialog-head">' +
+        "<div>" +
+        '<p class="eyebrow">Desk action</p>' +
+        '<h2 id="bad-renter-title">Label Bad Renter</h2>' +
+        "</div>" +
+        '<button class="btn btn-ghost btn-sm" type="button" data-bad-close aria-label="Close">Close</button>' +
+        "</div>" +
+        "<p>You are labeling <strong>" +
+        NS.security.escapeHtml(name) +
+        "</strong>. Write the reason below. It is sent to their Inbox.</p>" +
+        '<label class="field">Reason' +
+        '<textarea class="form-control" name="reason" id="bad-renter-reason" rows="4" maxlength="400" required ' +
+        'placeholder="Example: Damaged the vehicle and refused the repair invoice.">' +
+        NS.security.escapeHtml(prior) +
+        "</textarea>" +
+        '<span class="fineprint" id="bad-renter-hint">8–400 characters. Be specific enough for the renter and for desk records.</span>' +
+        '<p class="field-error" id="bad-renter-error" hidden></p>' +
+        "</label>" +
+        '<div class="btn-row">' +
+        '<button class="btn btn-gold" type="submit">Label Bad Renter</button>' +
+        "</div></form>";
+
+      var form = overlay.querySelector("form");
+      var reasonEl = overlay.querySelector("#bad-renter-reason");
+      var errEl = overlay.querySelector("#bad-renter-error");
+      var hintEl = overlay.querySelector("#bad-renter-hint");
+      var settled = false;
+
+      function setError(msg) {
+        if (!errEl) return;
+        if (msg) {
+          errEl.hidden = false;
+          errEl.textContent = msg;
+        } else {
+          errEl.hidden = true;
+          errEl.textContent = "";
+        }
+      }
+
+      function updateCount() {
+        if (!hintEl || !reasonEl) return;
+        var n = reasonEl.value.trim().length;
+        hintEl.textContent =
+          n +
+          " / 400 characters. Need at least 8. This reason is sent to their Inbox.";
+      }
+
+      function close(value) {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener("keydown", onKey);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(value == null ? null : value);
+      }
+
+      function onKey(e) {
+        if (e.key === "Escape") close(null);
+      }
+
+      overlay.addEventListener("click", function (e) {
+        if (e.target === overlay || e.target.closest("[data-bad-close]")) close(null);
+      });
+
+      if (reasonEl) {
+        reasonEl.addEventListener("input", function () {
+          setError("");
+          updateCount();
+        });
+        updateCount();
+      }
+
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var reason = reasonEl ? reasonEl.value.trim() : "";
+        if (reason.length < 8) {
+          setError("Write why this renter is being labeled (at least 8 characters).");
+          if (reasonEl) reasonEl.focus();
+          return;
+        }
+        if (reason.length > 400) {
+          setError("Keep the reason to 400 characters or fewer.");
+          if (reasonEl) reasonEl.focus();
+          return;
+        }
+        close(reason);
+      });
+
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(overlay);
+      if (reasonEl) {
+        reasonEl.focus();
+        reasonEl.setSelectionRange(reasonEl.value.length, reasonEl.value.length);
+      }
+    });
+  }
+
   function logoUrl() {
     return NS.routes.base() + "shared/img/logo.jpg";
   }
@@ -232,13 +347,13 @@
           "<span>" +
           NS.security.escapeHtml(me.firstName) +
           "</span></a>" +
-          '<button class="btn btn-gold" id="logout-btn" type="button">Sign out</button>' +
+          '<button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Sign out</button>' +
           "</div>"
         : '<div class="nav-user">' +
-          '<a class="btn btn-ghost" href="' +
+          '<a class="btn btn-ghost btn-sm" href="' +
           NS.routes.href("login") +
-          '">Login</a>' +
-          '<a class="btn btn-gold" href="' +
+          '">Log in</a>' +
+          '<a class="btn btn-gold btn-sm" href="' +
           NS.routes.href("register") +
           '">Register</a>' +
           "</div>";
@@ -255,8 +370,8 @@
         '<button class="nav-toggle" id="nav-toggle" type="button" aria-label="Menu">Menu</button>' +
         '<nav class="site-nav" id="site-nav">' +
         navLink(NS.routes.href("home"), "Home", "home") +
-        navLink(NS.routes.href("fleet"), "Available Cars", "fleet") +
-        navLink(NS.routes.href("myBookings"), "View Booking Status", "bookings") +
+        navLink(NS.routes.href("fleet"), "Cars", "fleet") +
+        navLink(NS.routes.href("myBookings"), "Bookings", "bookings") +
         navLink(NS.routes.href("contact"), "Contact", "contact") +
         '<a class="nav-phone" href="tel:09269864450">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>' +
@@ -278,20 +393,19 @@
         '<div class="sf-row">' +
         '<div class="sf-contact">' +
         '<a class="sf-phone" href="tel:09269864450">0926 986 4450</a>' +
-        '<a class="btn sf-btn" data-book="1" href="' +
+        '<a class="btn btn-gold btn-sm" data-book="1" href="' +
         NS.routes.href("fleet") +
         '">Book a car</a>' +
         "</div>" +
         '<nav class="sf-links">' +
-        '<a href="' + NS.routes.href("fleet") + '">Available cars</a>' +
-        '<a href="' + NS.routes.href("myBookings") + '">Booking status</a>' +
+        '<a href="' + NS.routes.href("fleet") + '">Cars</a>' +
+        '<a href="' + NS.routes.href("myBookings") + '">Bookings</a>' +
         '<a href="' + NS.routes.href("about") + '">About</a>' +
         '<a href="' + NS.routes.href("contact") + '">Contact</a>' +
         "</nav></div>" +
         '<div class="sf-bottom">' +
         "<div>" +
         "<p>Capistrano Montalvan Streets, Cagayan de Oro, Philippines, 9000</p>" +
-        '<p class="fineprint">Frontend-only demo. Payments are simulated and never sent to a server.</p>' +
         "</div>" +
         '<div class="sf-social">' +
         '<a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 8h3V4h-3a4 4 0 0 0-4 4v2H8v4h2v8h4v-8h3l1-4h-4V8z"/></svg></a>' +
@@ -325,10 +439,10 @@
         '<span class="role-pill">' +
         roleLabel +
         "</span>" +
-        '<a class="btn btn-ghost" href="' +
+        '<a class="nav-link" href="' +
         NS.routes.href("home") +
         '">Guest site</a>' +
-        '<button class="btn btn-gold" id="logout-btn" type="button">Sign out</button>' +
+        '<button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Sign out</button>' +
         "</div></nav></header>";
       bindNavChrome();
     }
@@ -367,7 +481,7 @@
         '<span class="role-pill">' +
         NS.security.escapeHtml(me.firstName || "Driver") +
         "</span>" +
-        '<button class="btn btn-gold" id="logout-btn" type="button">Sign out</button>' +
+        '<button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Sign out</button>' +
         "</div></nav></header>";
       bindNavChrome();
     }
@@ -1448,6 +1562,7 @@
     qs: qs,
     toast: toast,
     askYesNo: askYesNo,
+    askBadRenterReason: askBadRenterReason,
     openTerms: openTerms,
     openPrivacy: openPrivacy,
     bookingDetailListHtml: bookingDetailListHtml,
