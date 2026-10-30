@@ -173,10 +173,10 @@
       })
       .catch(function (error) {
         if (error.name === "AbortError") {
-          throw new Error("The ML API did not respond. Make sure start-ml-api.bat is running.");
+          throw new Error("The ML API did not respond. Run backend/ml/start-ml-api.bat.");
         }
         if (error instanceof TypeError) {
-          throw new Error("Cannot reach the ML API at " + API_BASE + ". Start start-ml-api.bat first.");
+          throw new Error("Cannot reach the ML API at " + API_BASE + ". Run backend/ml/start-ml-api.bat first.");
         }
         throw error;
       })

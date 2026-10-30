@@ -505,30 +505,69 @@
 
   var ID_PHOTO_RE = /^data:image\/(jpeg|jpg|png|webp);base64,/i;
 
+  function dayField(value) {
+    if (!value) return "";
+    return String(value).slice(0, 10);
+  }
+
+  /* Server document wins for photos and typed ID fields so a stale local copy cannot hide them. */
   function identityFromDocument(info, doc) {
     var out = Object.assign({}, info || {});
     if (!doc) return out;
-    if (doc.license_photo) out.licensePhoto = out.licensePhoto || doc.license_photo;
-    if (doc.id_photo) out.idPhoto = out.idPhoto || doc.id_photo;
-    out.licenseName = out.licenseName || doc.license_name || "";
-    out.licenseNo = out.licenseNo || doc.license_no || "";
-    out.licenseExpiry = out.licenseExpiry || (doc.license_expiry ? String(doc.license_expiry).slice(0, 10) : "");
-    out.licenseAddress = out.licenseAddress || doc.license_address || "";
-    out.idType = out.idType || doc.id_type || "";
-    out.idNumber = out.idNumber || doc.id_number || "";
-    out.idExpiry = out.idExpiry || (doc.id_expiry ? String(doc.id_expiry).slice(0, 10) : "");
+    if (doc.license_photo) out.licensePhoto = doc.license_photo;
+    if (doc.id_photo) out.idPhoto = doc.id_photo;
+    if (doc.parent_id_photo) out.parentIdPhoto = doc.parent_id_photo;
+    if (doc.license_name) {
+      out.licenseName = doc.license_name;
+      if (!out.fullName) out.fullName = doc.license_name;
+    }
+    if (doc.license_no) {
+      out.licenseNo = doc.license_no;
+      out.license_no = doc.license_no;
+    }
+    if (doc.license_expiry) {
+      out.licenseExpiry = dayField(doc.license_expiry);
+      out.license_expiry = out.licenseExpiry;
+    }
+    if (doc.dl_codes) {
+      out.dl_codes = doc.dl_codes;
+      out.licenseClass = doc.dl_codes;
+    }
+    if (doc.license_address) {
+      out.licenseAddress = doc.license_address;
+      if (!out.address) out.address = doc.license_address;
+    }
+    if (doc.id_type) out.idType = doc.id_type;
+    if (doc.id_number) out.idNumber = doc.id_number;
+    if (doc.id_expiry) out.idExpiry = dayField(doc.id_expiry);
+    if (doc.birthdate) out.birthdate = dayField(doc.birthdate);
     return out;
   }
 
   function idPhotos(info) {
     var shots = [];
     function add(label, src) {
-      if (src && ID_PHOTO_RE.test(src)) shots.push({ label: label, src: src });
+      var photo = typeof src === "string" ? src.trim() : "";
+      if (photo && ID_PHOTO_RE.test(photo)) shots.push({ label: label, src: photo });
     }
     add("Driver's license, front", info.licensePhoto);
     add("Driver's license, back", info.licenseBack);
-    add("Government ID", info.idPhoto);
+    add(info.idType ? info.idType : "Government ID", info.idPhoto);
+    add("Parent / guardian ID", info.parentIdPhoto);
     return shots;
+  }
+
+  function rememberDriverInfo(booking, info) {
+    if (!booking || !booking.id || !info) return;
+    var all = NS.domain.allBookings();
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].id === booking.id) {
+        all[i].driverInfo = Object.assign({}, all[i].driverInfo || {}, info);
+        booking.driverInfo = all[i].driverInfo;
+        break;
+      }
+    }
+    if (NS.store) NS.store.set("bookings", all);
   }
 
   function openIdCheck(booking, info) {
@@ -543,8 +582,8 @@
       if (value) fields.push("<li><strong>" + esc(label) + ":</strong> <span>" + esc(value) + "</span></li>");
     }
     add("Name on ID", info.licenseName || info.fullName);
-    add("License number", info.licenseNo);
-    add("License expiry", info.licenseExpiry);
+    add("License number", info.licenseNo || info.license_no);
+    add("License expiry", info.licenseExpiry || info.license_expiry);
     add("Address on ID", info.licenseAddress || info.address);
     add("DL codes", info.dl_codes || info.licenseClass);
     add("Restrictions", info.restrictions);
@@ -564,7 +603,8 @@
       "</div></div></article>";
     var photos = modal.querySelector(".id-check-photos");
     if (!shots.length) {
-      photos.innerHTML = '<p class="fineprint">No ID photo is on file for this booking. Bookings made before ID photos were saved to the server only have the typed details. Use "Message customer" to ask for a clear photo of the ID, or check the original ID at pick-up.</p>';
+      photos.innerHTML =
+        '<p class="fineprint">No ID photo is on file for this booking. If the customer just uploaded one, wait for the booking to finish saving, then open View ID again. Otherwise message the customer or check the physical ID at pick-up.</p>';
     } else {
       shots.forEach(function (shot) {
         var fig = document.createElement("figure");
@@ -593,20 +633,41 @@
     document.body.appendChild(modal);
   }
 
+  function resolveBookingApiId(booking) {
+    if (!booking) return null;
+    if (booking.apiId != null && booking.apiId !== "") return booking.apiId;
+    if (!booking.ref) return null;
+    var match = NS.domain.allBookings().filter(function (b) {
+      return b.apiId != null && b.ref === booking.ref && b.id !== booking.id;
+    })[0];
+    return match ? match.apiId : null;
+  }
+
   function showBookingId(booking) {
-    var info = booking.driverInfo || {};
-    if (!booking.apiId || !NS.api) {
+    var info = Object.assign({}, booking.driverInfo || {});
+    var apiId = resolveBookingApiId(booking);
+    if (!apiId || !NS.api) {
       openIdCheck(booking, info);
+      if (!apiId) {
+        NS.ui.toast(
+          "This booking is a local-only copy (common with old demo data). Refresh the page to load server bookings, then open View ID on one of those.",
+          "err"
+        );
+      }
       return;
     }
     var me = NS.auth.current() || {};
-    var path =
-      "/bookings/" +
-      encodeURIComponent(booking.apiId) +
-      "/id-document?viewer_role=" +
-      encodeURIComponent(me.role || "");
+    var role = String(me.role || "").toLowerCase();
+    if (role !== "admin" && role !== "staff") {
+      openIdCheck(booking, info);
+      NS.ui.toast("Sign in as admin or staff to load the saved ID photo from the server.", "err");
+      return;
+    }
     function load() {
-      return NS.api.get(path, { timeoutMs: 30000 });
+      return NS.api.get("/bookings/" + encodeURIComponent(apiId) + "/id-document", {
+        query: { viewer_role: role },
+        timeoutMs: 60000
+      });
     }
     NS.ui.toast("Loading the saved ID…", "ok");
     load()
@@ -616,14 +677,22 @@
       })
       .then(
         function (res) {
-          openIdCheck(booking, identityFromDocument(info, res && res.document));
+          var merged = identityFromDocument(info, res && res.document);
+          rememberDriverInfo(booking, merged);
+          openIdCheck(booking, merged);
+          if (!idPhotos(merged).length) {
+            NS.ui.toast("ID details loaded, but no photo is stored on the server for this booking.", "err");
+          }
         },
         function (err) {
           openIdCheck(booking, info);
-          var reason = err && err.status === 404
-            ? "This booking is not on the server."
-            : (err && err.message) || "The server could not be reached.";
-          NS.ui.toast("Could not load the saved ID photo (" + reason + ") Showing what is on this browser.", "err");
+          var reason =
+            err && err.status === 403
+              ? "Only admin or staff can view renter IDs."
+              : err && err.status === 404
+                ? "This booking is not on the server."
+                : (err && err.message) || "The server could not be reached.";
+          NS.ui.toast("Could not load the saved ID photo (" + reason + "). Showing what is on this browser.", "err");
         }
       );
   }

@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap");
+/* Inter + Roboto are loaded via <link> in each HTML page (not @import — Bootstrap was winning the cascade). */
 
 :root {
   --primary: #c4504b;
@@ -33,14 +33,18 @@
   --sans: "Roboto", "Segoe UI", sans-serif;
   --display: "Inter", "Segoe UI", sans-serif;
   --serif: "Inter", "Segoe UI", sans-serif;
+  /* Override Bootstrap so Desk / Open Desk use the same type stack */
+  --bs-font-sans-serif: "Roboto", "Segoe UI", sans-serif;
+  --bs-body-font-family: "Roboto", "Segoe UI", sans-serif;
+  --bs-body-font-weight: 400;
+  --bs-headings-font-family: "Inter", "Segoe UI", sans-serif;
+  --bs-btn-font-family: "Inter", "Segoe UI", sans-serif;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 
 body {
-  --bs-body-font-family: var(--sans);
-  --bs-font-sans-serif: var(--sans);
   font-family: var(--sans);
   color: var(--ink);
   min-height: 100vh;
@@ -49,6 +53,27 @@ body {
   line-height: 1.55;
   font-weight: 400;
   background-color: #ffffff;
+}
+body.desk-mode,
+body.site-mode,
+body[data-page] {
+  font-family: var(--sans);
+}
+body.desk-mode .admin-side,
+body.desk-mode .admin-side a,
+body.desk-mode .desk-shortcut,
+body.desk-mode .side-label,
+body.desk-mode .desk-hero,
+body.desk-mode .stat,
+body.desk-mode table {
+  font-family: var(--sans);
+}
+body.desk-mode h1,
+body.desk-mode h2,
+body.desk-mode h3,
+body.desk-mode .brand-workspace,
+body.desk-mode .side-head strong {
+  font-family: var(--display);
 }
 body > * { flex-shrink: 0; }
 #app-footer { margin-top: auto; }
@@ -515,15 +540,8 @@ h1, h2, h3, .brand span, .brand-workspace {
   background: #fff;
   box-shadow: 0 24px 60px rgba(17, 24, 39, 0.28);
 }
-.auth-dialog .auth-submit { width: auto; margin-top: 0.4rem; }
+.auth-dialog .auth-submit { width: auto; margin-top: 0; }
 .auth-dialog .auth-actions { margin-top: 0.55rem; }
-.auth-dialog .google-signin { width: 175px; min-width: 0; }
-.auth-dialog .auth-actions .btn-gold {
-  width: 175px;
-  min-width: 175px;
-  height: 40px;
-  min-height: 40px;
-}
 .auth-close { min-width: 44px; width: 44px; padding: 0; font-size: 1.2rem; line-height: 1; }
 .auth-switch {
   border: 0;
@@ -871,10 +889,11 @@ h1, h2, h3, .brand span, .brand-workspace {
   -webkit-backdrop-filter: var(--glass-blur);
   border: var(--glass-border);
   border-radius: 22px;
-  overflow: hidden;
   box-shadow: var(--shadow), var(--glass-shine);
   transition: transform 0.28s ease, box-shadow 0.28s ease, background 0.28s ease;
 }
+.vehicle-card, .booking-card, .panel, .receipt { overflow: hidden; }
+.form-card { overflow: visible; }
 .vehicle-card:hover, .booking-card:hover {
   transform: translateY(-5px);
   background: rgba(255, 255, 255, 0.62);
@@ -1769,7 +1788,8 @@ textarea { min-height: 120px; resize: vertical; }
   padding: 0.55rem 0.7rem;
   text-decoration: none;
   color: var(--ink);
-  font-weight: 700;
+  font-family: var(--display);
+  font-weight: 600;
   font-size: 0.9rem;
   border-radius: 12px;
 }
@@ -1782,13 +1802,18 @@ textarea { min-height: 120px; resize: vertical; }
   margin: 0 0.2rem 0.55rem;
   border-bottom: 1px solid rgba(196, 80, 75, 0.12);
 }
-.side-head strong { display: block; font-size: 1.02rem; }
+.side-head strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 1.02rem;
+}
 .side-head span { display: block; font-size: 0.75rem; color: var(--muted); font-weight: 650; word-break: break-all; }
 .side-group { margin-bottom: 0.55rem; }
 .side-label {
   margin: 0.35rem 0.7rem 0.25rem;
+  font-family: var(--display);
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: 650;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #9ca3af;
@@ -3713,36 +3738,114 @@ body.site-mode .site-footer {
   }
 }
 
-/* Google sign-in */
+/* Auth actions: two small equal buttons, stacked, centered — no overlap */
 .oauth-divider { display: flex; align-items: center; gap: 0.75rem; margin: 0.4rem 0; color: var(--muted, #6b7280); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; }
 .oauth-divider::before, .oauth-divider::after { content: ""; flex: 1; height: 1px; background: rgba(0, 0, 0, 0.12); }
-.google-signin { display: flex; justify-content: flex-start; align-items: center; width: 175px; min-height: 40px; }
-.google-signin-note { text-align: left; margin: 0.25rem 0 0; }
 .layout.layout-narrow { grid-template-columns: minmax(0, 460px); justify-content: center; }
 .layout.layout-narrow.layout-narrow-wide { grid-template-columns: minmax(0, 560px); }
-.auth-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.3rem; }
-.auth-actions .google-signin { width: 175px; min-height: 40px; }
-.auth-actions .btn-gold {
-  width: 175px;
-  min-width: 175px;
-  height: 40px;
-  min-height: 40px;
-  margin: 0;
+
+.auth-actions {
+  --auth-btn-w: 168px;
+  --auth-btn-h: 40px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.7rem 0 0.15rem;
+  width: 100%;
+  flex-shrink: 0;
 }
-body .auth-actions .btn.google-fallback {
-  width: 175px;
-  min-width: 175px;
-  height: 40px;
-  min-height: 40px;
-  display: inline-flex;
+
+#login-form .auth-actions > .btn,
+#login-form .auth-actions > .btn.btn-gold,
+.register-form .auth-actions > .btn,
+.auth-dialog .auth-actions > .btn,
+.auth-actions > .btn[type="submit"] {
+  display: inline-flex !important;
+  width: var(--auth-btn-w) !important;
+  min-width: var(--auth-btn-w) !important;
+  max-width: var(--auth-btn-w) !important;
+  height: var(--auth-btn-h) !important;
+  min-height: var(--auth-btn-h) !important;
+  margin: 0 !important;
+  padding: 0 0.8rem !important;
+  font-size: 0.84rem !important;
+  border-radius: 8px !important;
+  flex: none !important;
+  align-self: center !important;
+}
+
+.google-signin-slot {
+  position: relative;
+  width: var(--auth-btn-w);
+  height: var(--auth-btn-h);
+  flex: none;
+  align-self: center;
+}
+.google-signin-slot .btn.google-custom {
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  margin: 0 !important;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  background: #fff;
-  border: 1px solid #dadce0;
-  color: #3c4043;
-  font-weight: 700;
-  opacity: 0.75;
+  background: #fff !important;
+  border: 1.5px solid #1f1f1f !important;
+  color: #141414 !important;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.84rem;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  pointer-events: none;
+}
+.google-signin {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0.02;
+  z-index: 2;
+}
+.google-signin:empty { display: none; }
+.google-signin > div,
+.google-signin iframe {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+}
+
+.google-signin-note { text-align: center; margin: 0.35rem 0 0; }
+
+body .auth-actions .btn.google-fallback,
+.google-signin-slot > .btn.google-fallback {
+  width: var(--auth-btn-w) !important;
+  min-width: var(--auth-btn-w) !important;
+  max-width: var(--auth-btn-w) !important;
+  height: var(--auth-btn-h) !important;
+  min-height: var(--auth-btn-h) !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: #fff !important;
+  border: 1.5px solid #1f1f1f !important;
+  color: #141414 !important;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.84rem;
+  border-radius: 8px !important;
+  opacity: 1;
   cursor: not-allowed;
 }
 .google-g { font-weight: 800; color: #4285f4; }

@@ -811,6 +811,8 @@
   function renterDocumentBody(booking) {
     var info = booking.driverInfo || {};
     var body = {};
+    var licenseName = info.licenseName || info.fullName || "";
+    if (licenseName) body.license_name = licenseName;
     if (info.idType) body.id_type = info.idType;
     if (info.idNumber) body.id_number = info.idNumber;
     if (info.idExpiry) body.id_expiry = info.idExpiry;
@@ -818,9 +820,14 @@
     var codes = info.dl_codes || info.licenseClass || "";
     var licenseNo = info.license_no || info.licenseNo || "";
     var licenseExpiry = info.license_expiry || info.licenseExpiry || "";
+    var licenseAddress = info.licenseAddress || info.address || "";
     if (codes) body.dl_codes = codes;
     if (licenseNo) body.license_no = licenseNo;
     if (licenseExpiry) body.license_expiry = licenseExpiry;
+    if (licenseAddress) body.license_address = licenseAddress;
+    if (info.emergencyPhone || info.phone) {
+      body.emergency_phone = NS.validation.normalizePhone(info.emergencyPhone || info.phone || "") || info.emergencyPhone || info.phone;
+    }
     if (info.licensePhoto) body.license_photo = info.licensePhoto;
     if (info.birthdate) body.birthdate = info.birthdate;
     if (info.parentName) body.parent_name = info.parentName;
@@ -3001,6 +3008,40 @@
     remapBookingRefs("driverDetailsId", adopted.renamed);
   }
 
+  /* Typed ID fields from sync (photos stay on the id-document route). */
+  function driverInfoFromApiDoc(doc, prevInfo) {
+    var out = Object.assign({}, prevInfo || {});
+    if (!doc) return out;
+    if (doc.license_name) out.licenseName = doc.license_name;
+    if (doc.license_name && !out.fullName) out.fullName = doc.license_name;
+    if (doc.license_no) {
+      out.license_no = doc.license_no;
+      out.licenseNo = doc.license_no;
+    }
+    if (doc.license_expiry) {
+      out.license_expiry = apiDay(doc.license_expiry);
+      out.licenseExpiry = out.license_expiry;
+    }
+    if (doc.dl_codes) {
+      out.dl_codes = doc.dl_codes;
+      out.licenseClass = doc.dl_codes;
+    }
+    if (doc.license_address) {
+      out.licenseAddress = doc.license_address;
+      if (!out.address) out.address = doc.license_address;
+    }
+    if (doc.emergency_phone) out.emergencyPhone = doc.emergency_phone;
+    if (doc.id_type) out.idType = doc.id_type;
+    if (doc.id_number) out.idNumber = doc.id_number;
+    if (doc.id_expiry) out.idExpiry = apiDay(doc.id_expiry);
+    if (doc.birthdate) out.birthdate = apiDay(doc.birthdate);
+    /* Prefer server photos when the sync payload includes them (usually hidden). */
+    if (doc.license_photo) out.licensePhoto = doc.license_photo;
+    if (doc.id_photo) out.idPhoto = doc.id_photo;
+    if (doc.parent_id_photo) out.parentIdPhoto = doc.parent_id_photo;
+    return out;
+  }
+
   function syncBookingsFromApi(rows) {
     var vehicleIds = apiIdIndex(vehicles());
     var driverIds = apiIdIndex(drivers());
@@ -3025,6 +3066,7 @@
         var end = apiDay(r.end_date) || start;
         var days = Number(r.days) || Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) || 1);
         var chauffeur = String(r.drive_mode || "").toLowerCase() === "chauffeur";
+        var doc = r.renter_document || r.renterDocument || null;
         var mapped = {
           vehicleId: vehicleIds[r.vehicle_id] || "veh_api_" + r.vehicle_id,
           startDate: start,
@@ -3046,7 +3088,8 @@
           cancelledAt: r.cancelled_at || (prev && prev.cancelledAt) || "",
           subtotal: Number(r.subtotal) || 0,
           extras: Number(r.extras) || 0,
-          total: Number(r.total) || (Number(r.subtotal) || 0) + (Number(r.extras) || 0)
+          total: Number(r.total) || (Number(r.subtotal) || 0) + (Number(r.extras) || 0),
+          driverInfo: driverInfoFromApiDoc(doc, prev && prev.driverInfo)
         };
         if (prev && !/^bkg_api_/.test(prev.id)) return mapped;
         if (prev) return mapped;
@@ -3066,7 +3109,11 @@
           mapped
         );
       }, function (b) {
-        return !!getVehicle(b.vehicleId);
+        /* Drop old local-only demo bookings after sync. Keep only a fresh
+           in-flight create (no apiId yet) so pushBookingToApi can finish. */
+        if (!getVehicle(b.vehicleId)) return false;
+        var created = Date.parse(b.createdAt || b.updatedAt || 0);
+        return !isNaN(created) && Date.now() - created < 5 * 60 * 1000;
       });
     ensureQueueNumbers(mergedBookings);
     saveBookings(mergedBookings);

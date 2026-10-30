@@ -92,16 +92,27 @@
     var raw = String(value || "").toUpperCase().replace(/\s+/g, "");
     var digits = compactId(value);
     switch (type) {
+      /* LTO: A12-34-567890 (letter + 2 + 2 + 6). */
       case "Driver's License":
         return /^[A-Z]\d{2}-?\d{2}-?\d{6}$/.test(raw);
+      /*
+       * PhilID: front PCN is 16 digits; confidential PSN is 12.
+       * Some renters / OCR reads also enter a shorter 9-digit form — accept all three.
+       */
       case "National ID":
-        return /^\d{16}$/.test(digits);
+        return /^(?:\d{9}|\d{12}|\d{16})$/.test(digits);
+      /*
+       * DFA passport: P1234567A (current), EB1234567 (2005–2016),
+       * plus older letter+6 / two-letter+6 still seen on long-valid books.
+       */
       case "Passport":
-        return /^[A-Z]{1,2}\d{6,8}[A-Z]?$/.test(digits);
+        return /^(?:[A-Z]\d{7}[A-Z]|[A-Z]{2}\d{6,7}|[A-Z]\d{6})$/.test(digits);
+      /* UMID CRN: ####-#######-# → 12 digits. */
       case "UMID":
         return /^\d{12}$/.test(digits);
+      /* Postal Reference Number varies by card generation — keep flexible. */
       case "Postal ID":
-        return /^[A-Z0-9-]{6,16}$/.test(raw);
+        return /^[A-Z0-9-]{5,20}$/.test(raw);
       default:
         return false;
     }
@@ -112,13 +123,13 @@
       case "Driver's License":
         return "like N04-12-345678";
       case "National ID":
-        return "16 digits";
+        return "9, 12, or 16 digits";
       case "Passport":
-        return "like P1234567A";
+        return "like P1234567A or EB1234567";
       case "UMID":
-        return "12 digits";
+        return "12 digits, like 0111-1234567-8";
       case "Postal ID":
-        return "the number printed on the card";
+        return "the Postal Reference Number on the card";
       default:
         return "the number printed on the ID";
     }

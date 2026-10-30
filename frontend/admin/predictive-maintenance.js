@@ -504,7 +504,7 @@
           return true;
         })
         .catch(function () {
-          apiState.textContent = "ML API offline · start start-ml-api.bat";
+          apiState.textContent = "ML API offline · run backend/ml/start-ml-api.bat";
           apiState.className = "ml-api-state is-offline";
           return false;
         });

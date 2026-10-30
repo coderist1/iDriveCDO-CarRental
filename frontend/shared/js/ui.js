@@ -1208,7 +1208,10 @@
       '<label class="field">Email <input class="form-control" name="email" type="email" autocomplete="username" required></label>' +
       '<label class="field">Password <input class="form-control" name="password" type="password" autocomplete="current-password" required></label>' +
       '<div class="auth-actions">' +
+      '<div class="google-signin-slot">' +
+      '<button type="button" class="btn google-custom" tabindex="-1" aria-hidden="true"><span class="google-g" aria-hidden="true">G</span> Google</button>' +
       '<div id="auth-modal-google-login" class="google-signin" aria-live="polite"></div>' +
+      "</div>" +
       '<button class="btn btn-gold" type="submit">Sign in</button>' +
       "</div>" +
       '<p class="form-foot">No account yet? <button type="button" class="auth-switch" data-auth-panel="signup">Sign up</button></p>' +
@@ -1229,7 +1232,10 @@
       '<div class="terms-row"><label class="check-min"><input type="checkbox" name="terms" value="1"> <span>I accept the rental terms</span></label>' +
       '<button type="button" class="terms-read" data-terms-open="account">Read the terms</button></div>' +
       '<div class="auth-actions">' +
+      '<div class="google-signin-slot">' +
+      '<button type="button" class="btn google-custom" tabindex="-1" aria-hidden="true"><span class="google-g" aria-hidden="true">G</span> Google</button>' +
       '<div id="auth-modal-google-signup" class="google-signin" aria-live="polite"></div>' +
+      "</div>" +
       '<button class="btn btn-gold" type="submit">Create account</button>' +
       "</div>" +
       '<p class="fineprint google-signin-note">With Google, we\'ll ask for your mobile number right after you sign in.</p>' +
@@ -1350,11 +1356,12 @@
 
     function googleUnavailable(host, msg) {
       if (!host) return;
-      host.innerHTML =
+      var slot = host.closest(".google-signin-slot") || host;
+      slot.innerHTML =
         '<button type="button" class="btn google-fallback" aria-disabled="true" title="' +
         NS.security.escapeHtml(msg) +
         '"><span class="google-g" aria-hidden="true">G</span> Google</button>';
-      host.querySelector("button").addEventListener("click", function () {
+      slot.querySelector("button").addEventListener("click", function () {
         authAlert(alertBox, msg);
       });
     }
@@ -1379,6 +1386,10 @@
     function paintGoogleButton(host) {
       if (!host || !googleClientId || !window.google || !window.google.accounts) return;
       host.innerHTML = "";
+      var row = host.closest(".auth-actions");
+      var cssW = row && window.getComputedStyle(row).getPropertyValue("--auth-btn-w").trim();
+      var btnWidth = parseInt(cssW, 10);
+      if (!btnWidth || btnWidth < 160) btnWidth = 200;
       window.google.accounts.id.renderButton(host, {
         type: "standard",
         theme: "outline",
@@ -1387,7 +1398,7 @@
         shape: "rectangular",
         logo_alignment: "left",
         locale: "en",
-        width: 175
+        width: btnWidth
       });
     }
 

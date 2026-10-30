@@ -545,6 +545,30 @@
       input.classList.toggle("is-low-confidence", low);
     }
 
+    /* Drop OCR-filled values for one upload slot so a bad read cannot stick after Remove / re-upload. */
+    function clearSlotOcrFields(form, slot) {
+      var map = OCR_FILL[slot] || {};
+      var prev = (form._scans && form._scans[slot]) || {};
+      Object.keys(map).forEach(function (ocrKey) {
+        var inputName = map[ocrKey];
+        /* Keep the renter's chosen ID type; only photo-derived fields are wiped. */
+        if (!inputName || inputName === "idType") return;
+        var input = form.elements[inputName];
+        if (!input || !input.tagName) return;
+        var prevVal = prev[ocrKey];
+        var edited = input.dataset.userEdited === "1";
+        var fromScan =
+          prevVal != null &&
+          String(prevVal) !== "" &&
+          valuesAgree(inputName, input.value, prevVal);
+        if (!edited || fromScan || !String(input.value || "").trim()) {
+          input.value = "";
+          delete input.dataset.userEdited;
+          paintConfidence(input, 0);
+        }
+      });
+    }
+
     function applyExtracted(form, slot, data) {
       form._scans = form._scans || {};
       form._scans[slot] = data || {};
@@ -631,9 +655,12 @@
         if (clearBtn) {
           clearBtn.addEventListener("click", function () {
             setPhoto("");
+            clearSlotOcrFields(form, slot);
             if (form._scans) delete form._scans[slot];
             setStatus("");
             renderFlags(form);
+            syncParentConsent(form);
+            syncSubmitGate(form);
           });
         }
         fileInput.addEventListener("change", function () {
@@ -671,6 +698,10 @@
               }
               setStatus("Reading the ID… this can take a few seconds.");
               pick.disabled = true;
+              /* Wipe the previous OCR fill for this slot before the new read, so a bad ID number cannot linger. */
+              clearSlotOcrFields(form, slot);
+              if (form._scans) delete form._scans[slot];
+              renderFlags(form);
               var picked = slot === "chauffeur-id" && form.idType ? form.idType.value : slot.indexOf("license") === 0 ? "Driver's License" : "";
               /* Read the original file: the stored copy is shrunk and recompressed, which blurs small digits. */
               NS.ocr.scan(file, function (progress, attempt) {
@@ -893,7 +924,7 @@
           if (btn) {
             btn.setAttribute("data-busy", "1");
             btn.disabled = true;
-            btn.textContent = "Creating booking…";
+            btn.textContent = "Continue to payment";
           }
           function fail(err) {
             busy = false;
@@ -974,7 +1005,7 @@
             fail(err);
             return;
           }
-          if (btn) btn.textContent = "Saving to server…";
+          if (btn) btn.textContent = "Continue to payment";
           NS.domain.pushBookingToApi(booking.id).then(function () {
             showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
             location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));

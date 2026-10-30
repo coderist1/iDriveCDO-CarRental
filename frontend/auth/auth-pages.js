@@ -237,11 +237,12 @@
     var host = document.getElementById("google-signin");
     if (!host || !NS.api || !NS.api.googleConfig) return;
     function unavailable(msg) {
-      host.innerHTML =
+      var slot = host.closest(".google-signin-slot") || host;
+      slot.innerHTML =
         '<button type="button" class="btn google-fallback" aria-disabled="true" title="' +
         NS.security.escapeHtml(msg) +
         '"><span class="google-g" aria-hidden="true">G</span> Google</button>';
-      host.querySelector("button").addEventListener("click", function () {
+      slot.querySelector("button").addEventListener("click", function () {
         showAlert(form, msg, "err");
       });
     }
@@ -276,6 +277,11 @@
           }
         });
         host.innerHTML = "";
+        var row = host.closest(".auth-actions");
+        var cssW = row && window.getComputedStyle(row).getPropertyValue("--auth-btn-w").trim();
+        var btnWidth = parseInt(cssW, 10);
+        if (!btnWidth || btnWidth < 160) btnWidth = 200;
+        // Invisible Google control sits on top of our matching "Google" button.
         global.google.accounts.id.renderButton(host, {
           type: "standard",
           theme: "outline",
@@ -284,7 +290,7 @@
           shape: "rectangular",
           logo_alignment: "left",
           locale: "en",
-          width: 175
+          width: btnWidth
         });
       })
       .catch(function (err) {
