@@ -279,7 +279,7 @@
         : free
         ? '<a class="btn btn-gold btn-block" href="' +
           NS.routes.href("book", bookQuery) +
-          '">Book this car</a>'
+          '">Book Now</a>'
         : '<p class="notice">' +
           (state === "maintenance"
             ? "This car is under maintenance and cannot be booked right now."

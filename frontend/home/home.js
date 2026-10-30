@@ -17,6 +17,34 @@
     var count = document.getElementById("avail-count");
     if (count) count.textContent = available.length + " vehicles available now";
 
+    var search = document.querySelector(".hp-search");
+    if (search) {
+      function iso(d) {
+        return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+      }
+      var today = new Date();
+      var start = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+      var end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 4);
+      if (search.start) {
+        search.start.min = iso(today);
+        if (!search.start.value) search.start.value = iso(start);
+      }
+      if (search.end) {
+        search.end.min = search.start && search.start.value ? search.start.value : iso(today);
+        if (!search.end.value) search.end.value = iso(end);
+      }
+      if (search.start) {
+        search.start.addEventListener("change", function () {
+          if (search.end) search.end.min = search.start.value;
+          if (search.end && search.end.value && search.end.value <= search.start.value) {
+            var next = new Date(search.start.value + "T00:00:00");
+            next.setDate(next.getDate() + 1);
+            search.end.value = iso(next);
+          }
+        });
+      }
+    }
+
     var lineup = document.getElementById("hp-lineup");
     if (lineup) {
       var picks = (available.length >= 5 ? available : all).slice(0, 5);
@@ -63,6 +91,9 @@
             "<p>Rate: <strong>from " +
             NS.ui.peso(v.dailyRate) +
             " / day</strong></p>" +
+            '<a class="btn btn-gold" href="' +
+            NS.routes.href("book", "?vehicle=" + encodeURIComponent(v.id)) +
+            '">Book Now</a>' +
             "</article>"
           );
         })

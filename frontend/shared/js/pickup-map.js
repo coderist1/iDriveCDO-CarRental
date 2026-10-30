@@ -92,10 +92,13 @@
   }
 
   function pinIcon(color) {
-    var fill = color === "red" ? "#dc2626" : "#2563eb";
+    var drop = color === "red";
+    var fill = drop ? "#dc2626" : "#2563eb";
+    var shape = drop ? " trip-pin-square" : "";
+    var label = drop ? "Drop-off" : "Pick-up";
     return global.L.divIcon({
       className: "trip-pin",
-      html: '<span class="trip-pin-dot" style="background:' + fill + '"></span>',
+      html: '<span class="trip-pin-dot' + shape + '" style="background:' + fill + '" title="' + label + '"></span><span class="visually-hidden">' + label + "</span>",
       iconSize: [22, 28],
       iconAnchor: [11, 26],
       popupAnchor: [0, -22]

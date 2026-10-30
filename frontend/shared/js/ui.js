@@ -395,7 +395,7 @@
         '<a class="sf-phone" href="tel:09269864450">0926 986 4450</a>' +
         '<a class="btn btn-gold btn-sm" data-book="1" href="' +
         NS.routes.href("fleet") +
-        '">Book a car</a>' +
+        '">Book Now</a>' +
         "</div>" +
         '<nav class="sf-links">' +
         '<a href="' + NS.routes.href("fleet") + '">Cars</a>' +
@@ -535,7 +535,7 @@
   function statusBadge(status) {
     var labels = {
       pending: "Pending",
-      confirmed: "Confirmed",
+      confirmed: "Approved",
       ongoing: "Ongoing",
       completed: "Completed",
       cancelled: "Cancelled",
@@ -639,7 +639,7 @@
       (v.dailyRate ? peso(v.dailyRate) + "<span>/day</span>" : "Rate on request") +
       "</strong>" +
       (free && v.dailyRate
-        ? '<a class="btn btn-gold" href="' + bookLink + '">Book</a>'
+        ? '<a class="btn btn-gold" href="' + bookLink + '">Book Now</a>'
         : '<a class="btn btn-ghost" href="' + link + '">View</a>') +
       "</div></div></article>"
     );
@@ -830,7 +830,7 @@
   }
 
   function readIdPhoto(file, done) {
-    readImageFile(file, done, { maxSide: 900, maxBytes: 280000, label: "ID photo" });
+    readImageFile(file, done, { maxSide: 960, maxBytes: 700000, label: "ID photo" });
   }
 
   function readImageFile(file, done, options) {
@@ -876,8 +876,7 @@
           dataUrl = canvas.toDataURL("image/jpeg", 0.55);
         }
         if (dataUrl.length > maxBytes) {
-          done(new Error(label + " is still too large after compression."), null);
-          return;
+          dataUrl = canvas.toDataURL("image/jpeg", 0.4);
         }
         done(null, dataUrl);
       };
@@ -1127,12 +1126,14 @@
       var privacy = e.target.closest("[data-privacy-open]");
       if (privacy) {
         e.preventDefault();
+        e.stopPropagation();
         openPrivacy();
         return;
       }
       var btn = e.target.closest("[data-terms-open]");
       if (!btn) return;
       e.preventDefault();
+      e.stopPropagation();
       openTerms(btn.getAttribute("data-terms-open") || "account");
     });
   }
@@ -1227,10 +1228,8 @@
       '<label class="field">Birth date <input class="form-control" name="birthdate" type="date" required></label>' +
       "</div>" +
       '<p class="fineprint">Password: 8+ characters with upper, lower, number, and a symbol.</p>' +
-      '<div class="terms-row"><label class="check-min"><input type="checkbox" name="privacy" value="1"> <span>I have read the Data Privacy notice and I consent (RA 10173)</span></label>' +
-      '<button type="button" class="terms-read" data-privacy-open>Read the notice</button></div>' +
-      '<div class="terms-row"><label class="check-min"><input type="checkbox" name="terms" value="1"> <span>I accept the rental terms</span></label>' +
-      '<button type="button" class="terms-read" data-terms-open="account">Read the terms</button></div>' +
+      '<div class="terms-row"><label class="check-min"><input type="checkbox" name="privacy" value="1"> <span>I have read the Data Privacy notice and I consent (RA 10173). <button type="button" class="terms-read" data-privacy-open>Read the notice</button></span></label></div>' +
+      '<div class="terms-row"><label class="check-min"><input type="checkbox" name="terms" value="1"> <span>I accept the rental terms <button type="button" class="terms-read" data-terms-open="account">Read the terms</button></span></label></div>' +
       '<div class="auth-actions">' +
       '<div class="google-signin-slot">' +
       '<button type="button" class="btn google-custom" tabindex="-1" aria-hidden="true"><span class="google-g" aria-hidden="true">G</span> Google</button>' +

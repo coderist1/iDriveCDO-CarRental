@@ -215,7 +215,10 @@
       }
       refresh();
     }
-    NS.pages.refreshBookFleet = refillFleet;
+    NS.pages.refreshBookFleet = function () {
+      refillFleet();
+      if (NS.pages.bookWizard && NS.pages.bookWizard.refreshCars) NS.pages.bookWizard.refreshCars();
+    };
 
     var today = new Date();
     var startDefault = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
@@ -225,12 +228,16 @@
     var qPickup = NS.ui.qs("pickup");
 
     function vehicleOptions(selected) {
-      return vehicles.map(function (v) {
+      var opts = vehicles.map(function (v) {
         return (
           '<option value="' + v.id + '"' + (v.id === selected ? " selected" : "") + ">" +
           NS.security.escapeHtml(v.name) + " — " + NS.ui.peso(v.dailyRate) + "/day</option>"
         );
       }).join("");
+      if (!selected) {
+        return '<option value="" selected disabled>Choose a car</option>' + opts;
+      }
+      return opts;
     }
 
     function selfHandover(form) {
@@ -363,8 +370,12 @@
     [selfForm, chauffeurForm].forEach(function (form) {
       applyDefaults(form);
       snapshot(form);
-      if (NS.pickupMap) NS.pickupMap.mount(form);
       bindUploads(form);
+      try {
+        if (NS.pickupMap) NS.pickupMap.mount(form);
+      } catch (mapErr) {
+        console.warn("iDrive: map could not start; ID upload still works.", mapErr);
+      }
       bindSubmit(form);
       renderFlags(form);
       syncSubmitGate(form);
@@ -391,44 +402,10 @@
         if (e.target && (e.target.name === "startDate" || e.target.name === "endDate")) refillFleet();
         else refresh();
       });
-      var back = form.querySelector("[data-change-type]");
-      if (back) {
-        back.addEventListener("click", function () {
-          var go = function () {
-            resetForm(form);
-            selfForm.hidden = true;
-            chauffeurForm.hidden = true;
-            typeStep.hidden = false;
-            refresh();
-          };
-          if (serialize(form) === form._snapshot) {
-            go();
-            return;
-          }
-          NS.ui.askYesNo("Changing the rental type resets what you already entered on this form.", {
-            title: "Change rental type",
-            yes: "Reset and go back",
-            no: "Stay"
-          }).then(function (ok) { if (ok) go(); });
-        });
-      }
+      /* Change drive type is handled by the wizard so earlier steps stay filled. */
     });
 
-    typeStep.querySelectorAll("[data-rental]").forEach(function (card) {
-      card.addEventListener("click", function () {
-        var mode = card.getAttribute("data-rental");
-        var form = mode === "chauffeur" ? chauffeurForm : selfForm;
-        typeStep.hidden = true;
-        selfForm.hidden = mode !== "self";
-        chauffeurForm.hidden = mode !== "chauffeur";
-        applyDefaults(form);
-        snapshot(form);
-        renderFlags(form);
-        refresh();
-        var heading = form.querySelector("h1");
-        if (heading && heading.focus) heading.focus();
-      });
-    });
+    /* Drive-type cards are handled by the 5-step wizard so each screen stays short. */
 
     function activeForm() {
       if (!selfForm.hidden) return selfForm;
@@ -459,17 +436,55 @@
       photoHost.innerHTML = '<img src="' + safeSrc + '" alt="' + NS.security.escapeHtml(vehicle.name || "Vehicle") + '" loading="eager">';
     }
 
+    function emptyEstimate(message) {
+      renderPhoto(null);
+      var body = document.getElementById("book-summary-body");
+      if (!body) return;
+      body.innerHTML =
+        "<h3>Trip estimate</h3><p class='notice'>" +
+        NS.security.escapeHtml(message || "Pick dates and a car to see the total.") +
+        "</p>";
+    }
+
     function refresh() {
       var body = document.getElementById("book-summary-body");
       if (!body) return;
       var form = activeForm();
+      var wiz = NS.pages.bookWizard;
+      var stepNow = wiz && typeof wiz.currentStep === "function" ? wiz.currentStep() : 0;
+      var pickedCar = wiz && typeof wiz.chosenVehicle === "function" ? wiz.chosenVehicle() : "";
+      /* Dates step: never show a car total — the renter has not confirmed a vehicle yet. */
+      if (!form || stepNow <= 1) {
+        emptyEstimate(stepNow <= 1 ? "Set your dates, then choose a car to see the total." : "Pick dates and a car to see the total.");
+        return;
+      }
       if (!form) {
-        renderPhoto(null);
-        body.innerHTML = "<h3>Trip estimate</h3><p class='notice'>Choose self-drive or chauffeur to see the total.</p>";
+        var preview = pickedCar ? NS.domain.getVehicle(pickedCar) : null;
+        if (!preview) {
+          emptyEstimate("Tap a car to see the trip total.");
+          return;
+        }
+        var startIso = (document.getElementById("wiz-start") || {}).value || "";
+        var endIso = (document.getElementById("wiz-end") || {}).value || "";
+        renderPhoto(preview);
+        if (startIso && endIso) {
+          try {
+            var softQuote = NS.domain.quote(preview.id, startIso, endIso, [], { ignoreAvailability: true });
+            body.innerHTML = estimateHtml(softQuote, "self", "");
+            return;
+          } catch (previewErr) {
+            /* Fall through to the empty state. */
+          }
+        }
+        emptyEstimate("Tap a car to see the trip total.");
         return;
       }
       var mode = form.id === "chauffeur-form" ? "chauffeur" : "self";
       var vehicle = selectedVehicle(form);
+      if (!vehicle) {
+        emptyEstimate("Choose a car to see the trip total.");
+        return;
+      }
       renderPhoto(vehicle);
       var addons = mode === "chauffeur" ? ["driver"] : [];
       try {
@@ -581,8 +596,9 @@
         var input = form.elements[inputName];
         if (!input) return;
         if (!input.tagName && input.length) {
-          /* Radio group (ID type): only choose for the renter if they haven't picked one. */
-          if (!input.value && Array.prototype.some.call(input, function (r) { return r.value === value; })) {
+          /* Radio group (ID type): keep a choice the renter already made. */
+          var pickedAlready = !!input.value;
+          if (Array.prototype.some.call(input, function (r) { return r.value === value; }) && !pickedAlready) {
             input.value = value;
             filled.push(FIELD_LABEL[inputName] || inputName);
             syncChauffeurIdChoice(form);
@@ -591,8 +607,8 @@
         }
         if (input.tagName === "SELECT" && !Array.prototype.some.call(input.options, function (opt) { return opt.value === value; })) return;
         var score = data.confidence ? Number(data.confidence[ocrKey]) || 0 : 0;
-        /* Prefilled profile values give way to the license; anything the renter typed stays. */
-        if (input.dataset.userEdited !== "1" || !String(input.value || "").trim()) {
+        /* A fresh scan overwrites empty or OCR-filled fields; typed corrections stay. */
+        if (input.dataset.userEdited !== "1") {
           input.value = value;
           filled.push(FIELD_LABEL[inputName] || inputName);
           paintConfidence(input, score);
@@ -646,12 +662,37 @@
             preview.innerHTML = '<img src="' + String(dataUrl).replace(/"/g, "") + '" alt="">';
           } else {
             preview.classList.add("is-empty");
-            preview.textContent = "No photo yet";
+            preview.textContent = "Drop a photo here or use Upload";
           }
           if (clearBtn) clearBtn.hidden = !dataUrl;
         }
 
-        pick.addEventListener("click", function () { fileInput.click(); });
+        function openPicker(e) {
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          fileInput.click();
+        }
+        pick.addEventListener("click", openPicker);
+        if (preview) preview.addEventListener("click", openPicker);
+        [block, preview].forEach(function (zone) {
+          if (!zone) return;
+          zone.addEventListener("dragover", function (e) {
+            e.preventDefault();
+            block.classList.add("is-drop");
+          });
+          zone.addEventListener("dragleave", function () {
+            block.classList.remove("is-drop");
+          });
+          zone.addEventListener("drop", function (e) {
+            e.preventDefault();
+            block.classList.remove("is-drop");
+            var dropped = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (!dropped) return;
+            readChosenFile(dropped);
+          });
+        });
         if (clearBtn) {
           clearBtn.addEventListener("click", function () {
             setPhoto("");
@@ -663,32 +704,27 @@
             syncSubmitGate(form);
           });
         }
-        fileInput.addEventListener("change", function () {
-          var file = fileInput.files && fileInput.files[0];
-          fileInput.value = "";
+        function readChosenFile(file) {
           if (!file) return;
           setStatus("Checking the photo…");
           var check = NS.ocr && NS.ocr.assessQuality
             ? NS.ocr.assessQuality(file, { profile: kind === "selfie" ? "selfie" : "document" })
             : Promise.resolve({ ok: true, issues: [] });
           check.then(function (result) {
+            var qualityNote = "";
             if (!result.ok) {
-              setPhoto("");
-              setStatus(result.issues.map(function (issue) { return issue.message; }).join(" "));
-              return;
+              qualityNote = result.issues.map(function (issue) { return issue.message; }).join(" ");
+              setStatus(qualityNote + " Trying to read it anyway…");
             }
             var read = slot === "license-front" ? NS.ui.readLicensePhoto : NS.ui.readIdPhoto;
-            read(file, function (err, dataUrl) {
-              if (err) {
-                setStatus(err.message || "Could not read that image.");
-                return;
-              }
+            function afterAttached(dataUrl) {
               setPhoto(dataUrl);
               if (kind === "selfie" || slot === "parent-id") {
                 setStatus(
-                  slot === "parent-id"
+                  (qualityNote ? qualityNote + " " : "") +
+                  (slot === "parent-id"
                     ? "Parent ID attached. Check that the name and photo are clear."
-                    : "Photo attached. It is kept with this booking and is not printed on the receipt."
+                    : "Photo attached. It is kept with this booking and is not printed on the receipt.")
                 );
                 return;
               }
@@ -702,7 +738,11 @@
               clearSlotOcrFields(form, slot);
               if (form._scans) delete form._scans[slot];
               renderFlags(form);
-              var picked = slot === "chauffeur-id" && form.idType ? form.idType.value : slot.indexOf("license") === 0 ? "Driver's License" : "";
+              var picked = form.idType && form.idType.value
+                ? form.idType.value
+                : slot.indexOf("license") === 0
+                  ? "Driver's License"
+                  : "";
               /* Read the original file: the stored copy is shrunk and recompressed, which blurs small digits. */
               NS.ocr.scan(file, function (progress, attempt) {
                 setStatus((attempt ? "Photo looks turned, trying another angle… " : "Reading the ID… ") + Math.round((Number(progress) || 0) * 100) + "%");
@@ -710,7 +750,7 @@
                 pick.disabled = false;
                 var filled = applyExtracted(form, slot, data);
                 var unclear = unclearLabels(slot, data);
-                var chosen = slot === "chauffeur-id" && form.idType ? form.idType.value : "";
+                var chosen = form.idType ? form.idType.value : "";
                 var typeNote = chosen && data.idType && data.idType !== chosen
                   ? " This looks like a " + data.idType + ", but you chose " + chosen + ". Please pick the right ID type."
                   : "";
@@ -718,8 +758,9 @@
                 syncParentConsent(form);
                 refresh();
                 setStatus(
+                  (qualityNote ? qualityNote + " " : "") +
                   (filled.length
-                    ? "Filled " + filled.join(", ") + " from the photo. Check each one against your " + (slot === "chauffeur-id" ? "ID" : "license") + "."
+                    ? "Filled " + filled.join(", ") + " from the photo. Check each one against your " + (slot.indexOf("license") === 0 ? "license" : "ID") + "."
                     : "Photo attached, but the details could not be read. Type them in below.") +
                   (unclear.length ? " Couldn't read clearly: " + unclear.join(", ") + " (highlighted). Please type these." : "") +
                   typeNote
@@ -728,10 +769,30 @@
                 pick.disabled = false;
                 setStatus((error && error.message) || "Could not read this photo. Type the details in below.");
               });
+            }
+            read(file, function (err, dataUrl) {
+              if (dataUrl) {
+                afterAttached(dataUrl);
+                return;
+              }
+              var fallback = new FileReader();
+              fallback.onload = function () {
+                afterAttached(String(fallback.result || ""));
+              };
+              fallback.onerror = function () {
+                setStatus((err && err.message) || "Could not read that image.");
+              };
+              fallback.readAsDataURL(file);
             });
           }).catch(function () {
             setStatus("Could not check that photo. You can type the details in below, or try another picture.");
           });
+        }
+
+        fileInput.addEventListener("change", function () {
+          var file = fileInput.files && fileInput.files[0];
+          fileInput.value = "";
+          readChosenFile(file);
         });
       });
     }
@@ -924,13 +985,13 @@
           if (btn) {
             btn.setAttribute("data-busy", "1");
             btn.disabled = true;
-            btn.textContent = "Continue to payment";
+            btn.textContent = btn.getAttribute("data-pay-ready") || "Continue to payment";
           }
           function fail(err) {
             busy = false;
             if (btn) {
               btn.removeAttribute("data-busy");
-              btn.textContent = "Continue to payment";
+              btn.textContent = btn.getAttribute("data-pay-ready") || "Continue to payment";
               syncSubmitGate(form);
             }
             if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
@@ -1005,7 +1066,7 @@
             fail(err);
             return;
           }
-          if (btn) btn.textContent = "Continue to payment";
+          if (btn) btn.textContent = btn.getAttribute("data-pay-ready") || "Continue to payment";
           NS.domain.pushBookingToApi(booking.id).then(function () {
             showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
             location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));
@@ -1017,6 +1078,320 @@
       });
     }
 
+    function bindBookingWizard() {
+      var search = document.getElementById("book-search");
+      var cars = document.getElementById("book-cars");
+      if (!search || !cars) return;
+      var wizStart = document.getElementById("wiz-start");
+      var wizEnd = document.getElementById("wiz-end");
+      var wizPickupTime = document.getElementById("wiz-pickup-time");
+      var wizReturnTime = document.getElementById("wiz-return-time");
+      var carGrid = document.getElementById("book-car-grid");
+      var carEmpty = document.getElementById("book-car-empty");
+      var stepStatus = document.querySelector("[data-step-status]");
+      var labels = ["Dates", "Car", "Drive type", "ID", "Review"];
+      var step = 1;
+      var mode = "";
+      var chosenVehicle = vehicleId || "";
+
+      function daysAhead(iso) {
+        if (!iso) return 0;
+        var start = new Date(iso + "T00:00:00");
+        var now = new Date();
+        now.setHours(0, 0, 0, 0);
+        return Math.round((start - now) / 86400000);
+      }
+
+      function isReservation() {
+        return daysAhead(wizStart && wizStart.value) >= 3;
+      }
+
+      function syncMirrors() {
+        [selfForm, chauffeurForm].forEach(function (form) {
+          if (wizStart && form.startDate) form.startDate.value = wizStart.value;
+          if (wizEnd && form.endDate) {
+            form.endDate.min = wizStart.value || localISO(today);
+            form.endDate.value = wizEnd.value;
+          }
+          if (wizPickupTime && form.pickupTime) form.pickupTime.value = wizPickupTime.value;
+          if (wizReturnTime && form.returnTime) form.returnTime.value = wizReturnTime.value;
+          if (form.vehicleId && chosenVehicle) form.vehicleId.value = chosenVehicle;
+        });
+      }
+
+      function paintReserveHint() {
+        var hint = search.querySelector("[data-reserve-hint]");
+        if (!hint) return;
+        if (isReservation()) {
+          hint.textContent = "Pickup is 3 or more days away. This will be a reservation. A downpayment is needed before staff can approve it.";
+        } else {
+          hint.textContent = "Pickup is soon. After review you continue to payment.";
+        }
+      }
+
+      function paintPayLabels() {
+        var reserve = isReservation();
+        document.querySelectorAll("[data-pay-label]").forEach(function (btn) {
+          var label = reserve ? "Pay downpayment" : "Continue to payment";
+          btn.textContent = label;
+          btn.setAttribute("data-pay-ready", label);
+        });
+        [selfForm, chauffeurForm].forEach(function (form) {
+          var note = form.querySelector("[data-reserve-note]");
+          if (!note) return;
+          if (reserve) {
+            note.hidden = false;
+            note.textContent = "This is a reservation. Pay the downpayment next. Staff approve the booking only after that payment is recorded. You will also get a reservation confirmation email.";
+          } else {
+            note.hidden = true;
+            note.textContent = "";
+          }
+        });
+      }
+
+      function paintReview(form) {
+        var host = form.querySelector("[data-review]");
+        if (!host) return;
+        var v = selectedVehicle(form);
+        var rows = [
+          ["Car", v ? v.name : "Not chosen"],
+          ["Drive type", form.id === "chauffeur-form" ? "With chauffeur" : "Self-drive"],
+          ["Pickup", NS.ui.fmtDate(form.startDate.value) + " · " + (form.pickupTime.value || "")],
+          ["Return", NS.ui.fmtDate(form.endDate.value) + " · " + (form.returnTime.value || "")],
+          ["Pickup location", form.pickup ? form.pickup.value : ""],
+          ["Drop-off / delivery", form.dropoff ? form.dropoff.value : ""],
+          ["Name", form.fullName ? form.fullName.value : ""],
+          ["ID", ((form.idType && form.idType.value) || "") + (form.idNumber && form.idNumber.value ? " · " + form.idNumber.value : "")]
+        ];
+        if (form.license_no && form.license_no.value) rows.push(["License", form.license_no.value]);
+        host.innerHTML = "<ul class='booking-detail-list'>" + rows.filter(function (r) {
+          return r[1];
+        }).map(function (r) {
+          return "<li><strong>" + NS.security.escapeHtml(r[0]) + ":</strong> <span>" + NS.security.escapeHtml(r[1]) + "</span></li>";
+        }).join("") + "</ul>";
+      }
+
+      function paintCars() {
+        syncMirrors();
+        refillFleet();
+        if (!carGrid) return;
+        var list = vehicles.slice();
+        carEmpty.hidden = list.length > 0;
+        carGrid.innerHTML = list.map(function (v) {
+          var selected = v.id === chosenVehicle;
+          return (
+            '<button class="book-car-card' + (selected ? " is-selected" : "") + '" type="button" role="option" aria-selected="' +
+            (selected ? "true" : "false") + '" data-pick-car="' + v.id + '">' +
+            '<img src="' + NS.security.escapeHtml(v.image || FALLBACK_IMAGE) + '" alt="">' +
+            "<div><p class='eyebrow'>" + NS.security.escapeHtml(v.type || "") + "</p>" +
+            "<strong>" + NS.security.escapeHtml(v.name) + "</strong>" +
+            "<p>" + NS.ui.peso(v.dailyRate) + "<span>/day</span></p></div></button>"
+          );
+        }).join("");
+      }
+
+      function showStep(next) {
+        step = Math.max(1, Math.min(5, next));
+        if (stepStatus) stepStatus.textContent = "Step " + step + " of 5 · " + labels[step - 1];
+        document.querySelectorAll("[data-step-dot]").forEach(function (el) {
+          var n = Number(el.getAttribute("data-step-dot"));
+          el.classList.toggle("is-current", n === step);
+          el.classList.toggle("is-done", n < step);
+        });
+        search.hidden = step !== 1;
+        cars.hidden = step !== 2;
+        typeStep.hidden = step !== 3;
+        selfForm.hidden = !(mode === "self" && step >= 3);
+        chauffeurForm.hidden = !(mode === "chauffeur" && step >= 3);
+        if (step === 3 && mode) typeStep.hidden = true;
+        [selfForm, chauffeurForm].forEach(function (form) {
+          if (form.hidden) return;
+          form.querySelectorAll("[data-pane]").forEach(function (pane) {
+            var name = pane.getAttribute("data-pane");
+            pane.hidden = !((step === 3 && name === "trip") || (step === 4 && name === "id") || (step === 5 && name === "review"));
+          });
+          if (step === 5) paintReview(form);
+        });
+        if (step === 2) paintCars();
+        paintReserveHint();
+        paintPayLabels();
+        syncMirrors();
+        refresh();
+        var shown = !selfForm.hidden ? selfForm : !chauffeurForm.hidden ? chauffeurForm : search;
+        var heading = shown && shown.querySelector("h1");
+        if (heading && heading.focus) heading.focus();
+        var maps = (shown && (shown._pickupMaps || (shown._pickupMap ? [shown._pickupMap] : []))) || [];
+        if (maps.length) {
+          setTimeout(function () {
+            maps.forEach(function (map) {
+              if (map && map.invalidateSize) map.invalidateSize();
+            });
+          }, 80);
+        }
+      }
+
+      function canLeave(from) {
+        if (from === 1) {
+          if (!wizStart.value || !wizEnd.value) {
+            showAlert(search, "Choose a pickup and return date.", "err");
+            return false;
+          }
+          if (wizEnd.value <= wizStart.value) {
+            showAlert(search, "Return date must be after the pickup date.", "err");
+            return false;
+          }
+          showAlert(search, "", "ok");
+          return true;
+        }
+        if (from === 2) {
+          if (!chosenVehicle) {
+            if (carEmpty) carEmpty.hidden = false;
+            NS.ui.toast("Choose a car to continue.", "err");
+            return false;
+          }
+          return true;
+        }
+        if (from === 3) {
+          if (!mode) {
+            showAlert(typeStep, "Choose self-drive or chauffeur.", "err");
+            return false;
+          }
+          var tripForm = mode === "chauffeur" ? chauffeurForm : selfForm;
+          if (mode === "chauffeur") {
+            if (!tripForm.pickup.value || tripForm.pickup.value.length < 5) {
+              showAlert(tripForm, "Enter a pickup location.", "err");
+              return false;
+            }
+            if (!tripForm.dropoff.value || tripForm.dropoff.value.length < 5) {
+              showAlert(tripForm, "Enter a drop-off location.", "err");
+              return false;
+            }
+            if (!tripForm.itinerary.value.trim()) {
+              showAlert(tripForm, "Enter the itinerary or destination.", "err");
+              return false;
+            }
+          } else if (selfHandover(tripForm) === "deliver" && (!tripForm.dropoff.value || tripForm.dropoff.value.length < 5)) {
+            showAlert(tripForm, "Enter the delivery address.", "err");
+            return false;
+          }
+          showAlert(tripForm, "", "ok");
+          return true;
+        }
+        if (from === 4) {
+          var idForm = mode === "chauffeur" ? chauffeurForm : selfForm;
+          if (mode === "self") {
+            if (!idForm.licensePhoto || !idForm.licensePhoto.value) {
+              showAlert(idForm, "Upload a photo of your driver’s license.", "err");
+              return false;
+            }
+            if (!idForm.license_no.value || !idForm.license_expiry.value || !idForm.dl_codes.value) {
+              showAlert(idForm, "Fill in the license number, expiry, and DL codes.", "err");
+              return false;
+            }
+          }
+          if (!idForm.idType || !idForm.idType.value) {
+            showAlert(idForm, "Choose which ID you are uploading.", "err");
+            return false;
+          }
+          if (!idForm.idPhoto || !idForm.idPhoto.value) {
+            showAlert(idForm, "Upload a photo of that ID.", "err");
+            return false;
+          }
+          if (!idForm.idNumber || !idForm.idNumber.value) {
+            showAlert(idForm, "Enter the ID number, or wait for the scan to fill it.", "err");
+            return false;
+          }
+          var gate = bookingGateErrors(idForm);
+          var idOnly = gate.filter(function (msg) {
+            return !/terms|privacy|Agree/i.test(msg);
+          });
+          if (idOnly.length) {
+            showAlert(idForm, idOnly[0], "err");
+            return false;
+          }
+          showAlert(idForm, "", "ok");
+          return true;
+        }
+        return true;
+      }
+
+      if (wizStart) {
+        wizStart.min = localISO(today);
+        wizStart.value = qStart || localISO(startDefault);
+        wizEnd.min = wizStart.value;
+        wizEnd.value = qEnd || localISO(endDefault);
+      }
+      [wizStart, wizEnd, wizPickupTime, wizReturnTime].forEach(function (el) {
+        if (!el) return;
+        el.addEventListener("change", function () {
+          if (el === wizStart && wizEnd) wizEnd.min = wizStart.value;
+          syncMirrors();
+          paintReserveHint();
+          paintPayLabels();
+          if (step === 2) paintCars();
+          else refresh();
+        });
+      });
+      if (carGrid) {
+        carGrid.addEventListener("click", function (e) {
+          var btn = e.target.closest("[data-pick-car]");
+          if (!btn) return;
+          chosenVehicle = btn.getAttribute("data-pick-car");
+          vehicleId = chosenVehicle;
+          syncMirrors();
+          paintCars();
+          refresh();
+        });
+      }
+      flow.addEventListener("click", function (e) {
+        if (e.target.closest("[data-wizard-next]")) {
+          if (!canLeave(step)) return;
+          showStep(step + 1);
+        } else if (e.target.closest("[data-wizard-back]")) {
+          if (step === 3 && mode) {
+            mode = "";
+            showStep(3);
+            return;
+          }
+          showStep(step - 1);
+        }
+      });
+      typeStep.querySelectorAll("[data-rental]").forEach(function (card) {
+        card.addEventListener("click", function () {
+          mode = card.getAttribute("data-rental") || "";
+          var form = mode === "chauffeur" ? chauffeurForm : selfForm;
+          syncMirrors();
+          applyDefaults(form);
+          snapshot(form);
+          showStep(3);
+        });
+      });
+      [selfForm, chauffeurForm].forEach(function (form) {
+        var back = form.querySelector("[data-change-type]");
+        if (!back) return;
+        back.onclick = function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          mode = "";
+          showStep(3);
+        };
+      });
+
+      /* Always open on Dates. A pre-picked car from Fleet is kept for step 2,
+         but Drive type is never the first screen — the renter must set dates first. */
+      if (vehicleId) chosenVehicle = vehicleId;
+      syncMirrors();
+      showStep(1);
+      NS.pages.bookWizard = {
+        go: showStep,
+        sync: syncMirrors,
+        refreshCars: paintCars,
+        currentStep: function () { return step; },
+        chosenVehicle: function () { return chosenVehicle || ""; }
+      };
+    }
+
+    bindBookingWizard();
     refillFleet();
   }
 
@@ -1049,18 +1424,8 @@
   }
 
   function bindRentalChoice() {
-    var typeStep = document.getElementById("rental-type");
-    if (!typeStep || typeStep.getAttribute("data-choice") === "1") return;
-    typeStep.setAttribute("data-choice", "1");
-    typeStep.querySelectorAll("[data-rental]").forEach(function (card) {
-      card.disabled = false;
-      card.addEventListener("click", function () {
-        openRentalType(card.getAttribute("data-rental"));
-      });
-    });
+    /* The 5-step wizard owns drive-type clicks so this page does not jump past Dates and Car. */
   }
-
-  bindRentalChoice();
 
 
   NS.pages.bookings = function myBookings() {
@@ -1138,9 +1503,18 @@
         .then(function (ok) {
           if (!ok) return;
           try {
-            NS.domain.requestVehicleReturn(id, "", NS.security.getCsrf());
-            NS.ui.toast("Return request sent. Staff will accept it at the desk.", "ok");
-            render();
+            var updated = NS.domain.requestVehicleReturn(id, "", NS.security.getCsrf());
+            var push = updated && updated._statusPush;
+            Promise.resolve(push).then(function (saved) {
+              if (updated.apiId == null) {
+                NS.ui.toast("Return saved here, but this booking is not on the server. Staff may not see it.", "err");
+              } else if (saved === null) {
+                NS.ui.toast("Return saved here, but the server did not get it. Ask staff to refresh after the desk syncs.", "err");
+              } else {
+                NS.ui.toast("Return request sent. Staff will see it in Inbox and Bookings.", "ok");
+              }
+              render();
+            });
           } catch (err) {
             NS.ui.toast(err.message, "err");
           }
@@ -1507,9 +1881,18 @@
           .then(function (ok) {
             if (!ok) return;
             try {
-              NS.domain.requestVehicleReturn(booking.id, "", NS.security.getCsrf());
-              NS.ui.toast("Return request sent. Staff will accept it at the desk.", "ok");
-              location.reload();
+              var updated = NS.domain.requestVehicleReturn(booking.id, "", NS.security.getCsrf());
+              var push = updated && updated._statusPush;
+              Promise.resolve(push).then(function (saved) {
+                if (updated.apiId == null) {
+                  NS.ui.toast("Return saved here, but this booking is not on the server. Staff may not see it.", "err");
+                } else if (saved === null) {
+                  NS.ui.toast("Return saved here, but the server did not get it. Try again or ask the desk.", "err");
+                } else {
+                  NS.ui.toast("Return request sent. Staff will see it in Inbox and Bookings.", "ok");
+                }
+                location.reload();
+              });
             } catch (err) {
               NS.ui.toast(err.message, "err");
             }

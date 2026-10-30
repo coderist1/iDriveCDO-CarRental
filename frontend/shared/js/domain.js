@@ -1353,7 +1353,7 @@
     var list = bookings();
     for (var i = 0; i < list.length; i++) if (list[i].id === booking.id) list[i] = booking;
     saveBookings(list);
-    pushBookingStatusToApi(booking);
+    var apiPush = pushBookingStatusToApi(booking);
     audit("booking-status", me.id, booking.ref + " → " + next);
 
     var statusThread = threads().filter(function (t) {
@@ -1361,7 +1361,7 @@
     })[0];
     if (!statusThread && (next === "return_requested" || next === "completed")) {
       var customer = NS.auth.userById(booking.userId) || me;
-      statusThread = notifyStaffOfBooking(booking, customer);
+      statusThread = openReturnThread(booking, customer, next === "return_requested");
     }
     if (statusThread) {
       var note;
@@ -1392,7 +1392,45 @@
       }
       saveThread(statusThread);
     }
+    if (next === "return_requested" && booking.apiId == null && NS.ui && NS.ui.toast) {
+      NS.ui.toast("Return saved here, but this booking is not on the server yet. Staff may not see it until it syncs.", "err");
+    }
+    booking._statusPush = apiPush;
     return booking;
+  }
+
+  function openReturnThread(booking, customer, asReturn) {
+    var existing = threads().filter(function (t) {
+      return t.bookingId === booking.id;
+    })[0];
+    if (existing) {
+      if (asReturn) {
+        existing.kind = "return";
+        existing.topic = "Return · " + booking.ref;
+        existing.unreadStaff = true;
+        existing.status = "open";
+        saveThread(existing);
+      }
+      return existing;
+    }
+    var thread = {
+      id: "thd_" + NS.security.randomHex(8),
+      kind: asReturn ? "return" : "booking",
+      topic: asReturn ? "Return · " + booking.ref : "Booking " + booking.ref,
+      bookingId: booking.id,
+      bookingRef: booking.ref,
+      customerId: customer.id,
+      customerName: NS.security.sanitizeText((customer.firstName || "") + " " + (customer.lastName || ""), 80),
+      customerEmail: customer.email || "",
+      customerPhone: customer.phone || "",
+      status: "open",
+      unreadStaff: true,
+      unreadCustomer: false,
+      messages: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    return saveThread(thread);
   }
 
   function requestVehicleReturn(bookingId, notes, csrf) {
@@ -3067,6 +3105,19 @@
         var days = Number(r.days) || Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) || 1);
         var chauffeur = String(r.drive_mode || "").toLowerCase() === "chauffeur";
         var doc = r.renter_document || r.renterDocument || null;
+        var serverStatus = fromApiStatus(r.status);
+        /* Keep a local return request if the PUT has not landed on the server yet. */
+        if (
+          prev &&
+          prev.status === "return_requested" &&
+          (serverStatus === "confirmed" || serverStatus === "ongoing")
+        ) {
+          var localT = Date.parse(prev.updatedAt || 0);
+          var serverT = Date.parse(r.updated_at || 0);
+          if (!isNaN(localT) && (isNaN(serverT) || localT > serverT)) {
+            serverStatus = "return_requested";
+          }
+        }
         var mapped = {
           vehicleId: vehicleIds[r.vehicle_id] || "veh_api_" + r.vehicle_id,
           startDate: start,
@@ -3081,11 +3132,13 @@
           fuelBeforeRent: r.fuel_before_rent || "",
           fuelUponReturn: r.fuel_upon_return || "",
           paymentMethod: r.payment_method || "",
-          status: fromApiStatus(r.status),
+          status: serverStatus,
           dateReserve: r.date_reserve,
           paymentStatus: String(r.payment_status).toLowerCase() === "paid" ? "paid" : "unpaid",
           cancelReason: r.cancel_reason || (prev && prev.cancelReason) || "",
           cancelledAt: r.cancelled_at || (prev && prev.cancelledAt) || "",
+          returnRequestedAt: r.return_requested_at || (prev && prev.returnRequestedAt) || "",
+          returnNotes: r.return_notes || (prev && prev.returnNotes) || "",
           subtotal: Number(r.subtotal) || 0,
           extras: Number(r.extras) || 0,
           total: Number(r.total) || (Number(r.subtotal) || 0) + (Number(r.extras) || 0),
@@ -3248,8 +3301,114 @@
         syncBookingsFromApi(data.bookings || []);
         syncPaymentsFromApi(data.payments || []);
         syncVehicleRecordsFromApi(data.fuel_records || [], data.maintenances || [], data.vehicle_registrations || []);
+        syncThreadsFromApi(data.message_threads || data.messageThreads || []);
+        ensureReturnThreadsFromBookings();
         return true;
       });
+  }
+
+  function syncThreadsFromApi(rows) {
+    if (!Array.isArray(rows) || !rows.length) return;
+    var bookingByApi = {};
+    bookings().forEach(function (b) {
+      if (b.apiId != null) bookingByApi[b.apiId] = b;
+    });
+    var userByApi = {};
+    NS.store.get("users", []).forEach(function (u) {
+      if (u.apiId != null) userByApi[u.apiId] = u;
+    });
+    var local = threads();
+    var byApi = {};
+    var byBooking = {};
+    local.forEach(function (t) {
+      if (t.apiId != null) byApi[t.apiId] = t;
+      if (t.bookingId) byBooking[t.bookingId] = t;
+    });
+    rows.forEach(function (r) {
+      var booking = r.booking_id != null ? bookingByApi[r.booking_id] : null;
+      var prev = byApi[r.thread_id] || (booking && byBooking[booking.id]) || null;
+      var customer = r.customer_id != null ? userByApi[r.customer_id] : null;
+      var messages = (r.messages || []).map(function (m) {
+        return {
+          id: "msg_api_" + m.message_id,
+          apiId: m.message_id,
+          fromRole: m.from_role === "staff" ? "staff" : "customer",
+          fromUserId: m.from_user_id
+            ? (userByApi[m.from_user_id] && userByApi[m.from_user_id].id) || "usr_api_" + m.from_user_id
+            : null,
+          fromName: m.from_name || "",
+          body: m.body || "",
+          at: m.sent_at || m.created_at || new Date().toISOString()
+        };
+      });
+      var thread = {
+        id: prev ? prev.id : "thd_api_" + r.thread_id,
+        apiId: r.thread_id,
+        kind: r.kind || "booking",
+        topic: r.topic || "Message",
+        bookingId: booking ? booking.id : (prev && prev.bookingId) || null,
+        bookingRef: booking ? booking.ref : (prev && prev.bookingRef) || "",
+        customerId: customer
+          ? customer.id
+          : r.customer_id != null
+            ? "usr_api_" + r.customer_id
+            : (prev && prev.customerId) || null,
+        customerName: r.customer_name || (prev && prev.customerName) || "",
+        customerEmail: r.customer_email || (prev && prev.customerEmail) || "",
+        customerPhone: r.customer_phone || (prev && prev.customerPhone) || "",
+        status: r.status || "open",
+        unreadStaff: !!r.unread_staff,
+        unreadCustomer: !!r.unread_customer,
+        messages: messages.length ? messages : (prev && prev.messages) || [],
+        createdAt: r.created_at || (prev && prev.createdAt) || new Date().toISOString(),
+        updatedAt: r.updated_at || (prev && prev.updatedAt) || new Date().toISOString()
+      };
+      byApi[r.thread_id] = thread;
+      if (thread.bookingId) byBooking[thread.bookingId] = thread;
+    });
+    var merged = [];
+    var seen = {};
+    Object.keys(byApi).forEach(function (k) {
+      var t = byApi[k];
+      if (seen[t.id]) return;
+      seen[t.id] = 1;
+      merged.push(t);
+    });
+    local.forEach(function (t) {
+      if (t.apiId != null || seen[t.id]) return;
+      if (t.bookingId && byBooking[t.bookingId] && byBooking[t.bookingId].apiId != null) return;
+      seen[t.id] = 1;
+      merged.push(t);
+    });
+    saveThreads(merged);
+  }
+
+  /* If bookings say return_requested but inbox has no return thread, open one for the desk. */
+  function ensureReturnThreadsFromBookings() {
+    bookings().forEach(function (b) {
+      if (b.status !== "return_requested") return;
+      var customer = NS.auth.userById(b.userId) || {
+        id: b.userId,
+        firstName: "Customer",
+        lastName: "",
+        email: "",
+        phone: ""
+      };
+      var thread = openReturnThread(b, customer, true);
+      if (!thread.messages || !thread.messages.length) {
+        pushThreadMessage(
+          thread,
+          "customer",
+          customer,
+          "Customer requested vehicle return for " +
+            b.ref +
+            " at " +
+            (b.dropoff || "the return location") +
+            ". Please accept the return at the desk."
+        );
+        saveThread(thread);
+      }
+    });
   }
 
   function warnApiFailure(err) {
@@ -3328,11 +3487,47 @@
     NS.api.users.update(user.apiId, body).catch(warnApiFailure);
   }
 
+  function resolveBookingApiId(booking) {
+    if (!booking) return null;
+    if (booking.apiId != null && booking.apiId !== "") return booking.apiId;
+    var fromLocalId = String(booking.id || "").match(/^bkg_api_(\d+)$/);
+    if (fromLocalId) return Number(fromLocalId[1]);
+    if (!booking.ref) return null;
+    var list = bookings();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].ref === booking.ref && list[i].apiId != null && list[i].apiId !== "") {
+        return list[i].apiId;
+      }
+      var m = String(list[i].id || "").match(/^bkg_api_(\d+)$/);
+      if (list[i].ref === booking.ref && m) return Number(m[1]);
+    }
+    return null;
+  }
+
   function pushBookingStatusToApi(booking) {
-    if (!booking || booking.apiId == null || !NS.api) return;
-    NS.api.bookings.update(booking.apiId, { status: toApiStatus(booking.status) }).catch(function (err) {
+    if (!booking || !NS.api) {
+      return Promise.resolve(null);
+    }
+    var apiId = resolveBookingApiId(booking);
+    if (apiId == null) {
+      return Promise.resolve(null);
+    }
+    if (booking.apiId == null) {
+      booking.apiId = apiId;
+      var list = bookings();
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === booking.id || list[i].ref === booking.ref) {
+          list[i].apiId = apiId;
+        }
+      }
+      saveBookings(list);
+    }
+    var body = { status: toApiStatus(booking.status) };
+    if (booking.returnNotes) body.return_notes = booking.returnNotes;
+    return NS.api.bookings.update(apiId, body).catch(function (err) {
       console.warn("iDrive: booking status was not saved to the server.", err);
       if (NS.ui && NS.ui.toast) NS.ui.toast("Server did not save the status change: " + apiErrorMessage(err), "err");
+      return null;
     });
   }
 

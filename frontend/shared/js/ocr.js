@@ -150,6 +150,42 @@
     return { given: parts[0], last: parts.length > 1 ? parts.slice(1).join(" ") : "" };
   }
 
+  function pad2(n) {
+    return (n < 10 ? "0" : "") + n;
+  }
+
+  function toISODate(value) {
+    var s = String(value || "").trim();
+    if (!s) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    var dmy = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    if (dmy) {
+      var d = Number(dmy[1]);
+      var m = Number(dmy[2]);
+      var y = dmy[3];
+      if (d > 12 && m <= 12) return y + "-" + pad2(m) + "-" + pad2(d);
+      if (m > 12 && d <= 12) return y + "-" + pad2(d) + "-" + pad2(m);
+      return y + "-" + pad2(m) + "-" + pad2(d);
+    }
+    var parsed = Date.parse(s);
+    if (!isNaN(parsed)) {
+      var dt = new Date(parsed);
+      return dt.getFullYear() + "-" + pad2(dt.getMonth() + 1) + "-" + pad2(dt.getDate());
+    }
+    return "";
+  }
+
+  function normalizeIdType(value) {
+    var raw = String(value || "").toLowerCase();
+    if (!raw) return "";
+    if (/national|philsys|phil id|philid/.test(raw)) return "National ID";
+    if (/passport/.test(raw)) return "Passport";
+    if (/umid|crn/.test(raw)) return "UMID";
+    if (/postal/.test(raw)) return "Postal ID";
+    if (/license|lto/.test(raw)) return "Driver's License";
+    return "";
+  }
+
   /**
    * Sends the ID photo to the server Gemini reader and returns the same field
    * shape the booking / register forms already fill.
@@ -168,19 +204,28 @@
     }).then(function (res) {
       if (onProgress) onProgress(1, 0);
       var raw = (res && res.fields) || {};
+      var birthdate = toISODate(raw.birthDate || raw.birthdate || "");
+      var expiry = toISODate(raw.expiryDate || raw.expiry || "");
+      var issueDate = toISODate(raw.issueDate || raw.issue_date || "");
       var fields = {
         fullName: raw.fullName || "",
         idNumber: raw.idNumber || "",
-        birthdate: raw.birthDate || raw.birthdate || "",
-        expiry: raw.expiryDate || raw.expiry || "",
+        birthdate: birthdate,
+        expiry: expiry,
+        issueDate: issueDate,
         address: raw.address || "",
+        idType: normalizeIdType(raw.idType || raw.id_type || ""),
+        licenseClass: raw.licenseClass || raw.dl_codes || raw.dlCodes || "",
         nameParts: splitName(raw.fullName || ""),
         confidence: {
           fullName: raw.fullName ? 0.92 : 0,
           idNumber: raw.idNumber ? 0.92 : 0,
-          birthdate: raw.birthDate || raw.birthdate ? 0.92 : 0,
-          expiry: raw.expiryDate || raw.expiry ? 0.92 : 0,
-          address: raw.address ? 0.92 : 0
+          birthdate: birthdate ? 0.92 : 0,
+          expiry: expiry ? 0.92 : 0,
+          issueDate: issueDate ? 0.92 : 0,
+          address: raw.address ? 0.92 : 0,
+          idType: raw.idType ? 0.88 : 0,
+          licenseClass: raw.licenseClass || raw.dl_codes ? 0.88 : 0
         },
         unclear: []
       };

@@ -99,9 +99,10 @@
         ? NS.ocr.assessQuality(file, { profile: "document" })
         : Promise.resolve({ ok: true, issues: [] });
       check.then(function (result) {
+        var qualityNote = "";
         if (!result.ok) {
-          setStatus(result.issues.map(function (issue) { return issue.message; }).join(" "));
-          return;
+          qualityNote = result.issues.map(function (issue) { return issue.message; }).join(" ");
+          setStatus(qualityNote + " Trying to read it anyway…");
         }
         NS.ui.readLicensePhoto(file, function (err, dataUrl) {
         if (err) {
@@ -150,9 +151,10 @@
               if (birthEl && !birthEl.value) birthEl.value = data.birthdate;
             }
             setStatus(
-              found.length
+              (qualityNote ? qualityNote + " " : "") +
+              (found.length
                 ? "Read " + found.join(", ") + ". Please review and edit anything that looks off."
-                : "ID attached, but we couldn't read the details. Please type them in."
+                : "ID attached, but we couldn't read the details. Please type them in.")
             );
           })
           .catch(function (e) {

@@ -154,6 +154,8 @@
 
   function adminHome() {
     mountAdminNav();
+    function paintHome() {
+    mountAdminNav();
     var r = NS.domain.report();
     var incoming = NS.domain.incomingBookings();
     var returns = NS.domain.pendingReturns();
@@ -250,6 +252,9 @@
             .join("")
         : "<p class='notice'>No vehicle returns waiting.</p>");
     }
+    }
+    paintHome();
+    NS.pages.onSynced = paintHome;
   }
 
   function adminVehicles() {
@@ -711,7 +716,7 @@
           var u = NS.auth.userById(b.userId);
           var actions = "";
           if (b.status === "pending") {
-            actions += '<button class="btn btn-gold btn-sm" data-act="confirmed" data-id="' + b.id + '">Confirm</button>';
+            actions += '<button class="btn btn-gold btn-sm" data-act="confirmed" data-id="' + b.id + '">Approve</button>';
             actions += '<button class="btn btn-ghost btn-sm" data-act="rejected" data-id="' + b.id + '">Reject</button>';
           }
           if (b.paymentStatus !== "paid" && b.status !== "cancelled" && b.status !== "rejected") {
@@ -1682,6 +1687,11 @@
     var listHost = document.getElementById("thread-list");
     var viewHost = document.getElementById("thread-view");
     var selectedId = NS.ui.qs("id") || "";
+    if (document.body.getAttribute("data-inbox-bound") === "1") {
+      if (NS.pages._inboxRefresh) NS.pages._inboxRefresh();
+      return;
+    }
+    document.body.setAttribute("data-inbox-bound", "1");
 
     function bookingBucket(status) {
       if (status === "pending") return "pending";
@@ -1963,10 +1973,20 @@
     if (incomingFilter) incomingFilter.addEventListener("change", renderIncoming);
     if (threadFilter) threadFilter.addEventListener("change", renderList);
 
+    function refreshInbox() {
+      mountAdminNav();
+      renderIncoming();
+      renderReturns();
+      renderList();
+      renderThread();
+    }
+
     renderIncoming();
     renderReturns();
     renderList();
     renderThread();
+    NS.pages._inboxRefresh = refreshInbox;
+    NS.pages.onSynced = refreshInbox;
   }
 
   NS.admin = NS.admin || {};

@@ -134,6 +134,14 @@
         function (applied) {
           if (applied) markSynced();
           if (NS.auth && NS.auth.current) NS.auth.current();
+          /* Desk pages often paint from a previous sync; refresh once new server data lands. */
+          if (applied && started && NS.pages && typeof NS.pages.onSynced === "function") {
+            try {
+              NS.pages.onSynced();
+            } catch (refreshErr) {
+              console.warn("iDrive: page refresh after sync failed.", refreshErr);
+            }
+          }
         },
         function (e) {
           console.warn("iDrive: could not sync from the backend; showing local data.", e);
