@@ -331,11 +331,55 @@
     };
   }
 
+  /* Any pending / confirmed / ongoing / return_requested booking for this renter (one car at a time). */
+  function activeBookingForUser(userId, exceptId) {
+    if (!userId) return null;
+    var list = bookings();
+    var fallback = null;
+    for (var i = 0; i < list.length; i++) {
+      var b = list[i];
+      if (b.userId !== userId) continue;
+      if (exceptId && b.id === exceptId) continue;
+      if (!ACTIVE_BOOKING[b.status]) continue;
+      if (b.status === "ongoing" || b.status === "return_requested") return b;
+      if (!fallback) fallback = b;
+    }
+    return fallback;
+  }
+
+  function assertOneCarAtATime(userId, exceptId) {
+    var active = activeBookingForUser(userId, exceptId);
+    if (!active) return;
+    if (active.status === "ongoing" || active.status === "return_requested") {
+      throw new Error(
+        "This account already has a trip in progress (" +
+          active.ref +
+          "). Return that vehicle before booking another car."
+      );
+    }
+    throw new Error(
+      "You already have an active booking (" +
+        active.ref +
+        "). One car at a time — finish, pay, or cancel it before starting a new one."
+    );
+  }
+
   function ongoingBookingForUser(userId) {
     if (!userId) return null;
     var list = bookings();
     for (var i = 0; i < list.length; i++) {
       if (list[i].userId === userId && list[i].status === "ongoing") return list[i];
+    }
+    return null;
+  }
+
+  function ongoingBookingForVehicle(vehicleId, exceptId) {
+    if (!vehicleId) return null;
+    var list = bookings();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].vehicleId !== vehicleId) continue;
+      if (exceptId && list[i].id === exceptId) continue;
+      if (list[i].status === "ongoing") return list[i];
     }
     return null;
   }
@@ -358,14 +402,7 @@
       var targetCustomer = NS.auth.userById(bookingUserId);
       if (!targetCustomer || targetCustomer.role !== "customer") throw new Error("Select a customer for this booking.");
     }
-    var ongoingTrip = ongoingBookingForUser(bookingUserId);
-    if (ongoingTrip) {
-      throw new Error(
-        "This account already has a trip in progress (" +
-          ongoingTrip.ref +
-          "). Return that vehicle before booking another car."
-      );
-    }
+    assertOneCarAtATime(bookingUserId);
     var driveMode = payload.driveMode === "chauffeur" ? "chauffeur" : "self";
     var pickup = NS.security.sanitizeText(payload.pickup, 120);
     var dropoff = NS.security.sanitizeText(payload.dropoff, 120);
@@ -409,11 +446,14 @@
       pickupTime: pickupTime,
       returnTime: returnTime
     });
-    assertBothPartiesHaveId({
-      vehicleId: q.vehicle.id,
-      driverInfo: driverInfo,
-      id: null
-    });
+    assertBothPartiesHaveId(
+      {
+        vehicleId: q.vehicle.id,
+        driverInfo: driverInfo,
+        id: null
+      },
+      { allowPending: true }
+    );
 
     try {
       if (csrf) NS.security.assertCsrf(csrf);
@@ -479,6 +519,10 @@
     }
     if (booking.numberOfPassengers > (q.vehicle.seats || 5)) {
       throw new Error("Passengers exceed this vehicle's capacity (" + q.vehicle.seats + ").");
+    }
+    assertOneCarAtATime(bookingUserId);
+    if (!isAvailable(booking.vehicleId, booking.startDate, booking.endDate)) {
+      throw new Error("Those dates overlap an existing booking for this car.");
     }
     var all = bookings();
     booking.queueNo = nextQueueNo(all);
@@ -858,6 +902,14 @@
       );
       throw new Error("Server did not save the booking: " + apiErrorMessage(err));
     }
+    try {
+      assertOneCarAtATime(booking.userId, booking.id);
+      if (!isAvailable(booking.vehicleId, booking.startDate, booking.endDate, booking.id)) {
+        throw new Error("Those dates overlap an existing booking for this car.");
+      }
+    } catch (precheck) {
+      return discard(precheck);
+    }
     return Promise.all([ensureCustomerOnApi(booking.userId), ensureRefMaps()]).then(function (res) {
       var apiUserId = res[0];
       var addonIds = (booking.addons || [])
@@ -1036,19 +1088,18 @@
       });
   }
 
-  function assertBothPartiesHaveId(booking) {
+  function assertBothPartiesHaveId(booking, options) {
+    options = options || {};
     if (!booking || !booking.vehicleId) return;
-    var current = bookings().filter(function (b) {
-      return b.vehicleId === booking.vehicleId && b.status === "ongoing" && b.id !== booking.id;
-    })[0];
+    var current = ongoingBookingForVehicle(booking.vehicleId, booking.id);
     if (!current) return;
-    if (!hasValidIdInfo(current.driverInfo)) {
+    if (!hasValidIdInfo(booking.driverInfo)) {
+      throw new Error("This car is currently in use. Upload a valid ID for the new renter before the booking is confirmed.");
+    }
+    if (!hasValidIdInfo(current.driverInfo) && !options.allowPending) {
       throw new Error(
         "This car is in use and the current renter has no valid ID on file. Staff must collect that ID before another booking is confirmed."
       );
-    }
-    if (!hasValidIdInfo(booking.driverInfo)) {
-      throw new Error("This car is currently in use. Upload a valid ID for the new renter before the booking is confirmed.");
     }
   }
 
@@ -1339,6 +1390,13 @@
     }
     if (next === "confirmed") {
       assertBothPartiesHaveId(booking);
+      assertOneCarAtATime(booking.userId, booking.id);
+      if (!isAvailable(booking.vehicleId, booking.startDate, booking.endDate, booking.id)) {
+        throw new Error("This car is already reserved for some of those dates.");
+      }
+    }
+    if (next === "ongoing") {
+      assertOneCarAtATime(booking.userId, booking.id);
     }
     booking.status = next;
     booking.updatedAt = new Date().toISOString();
@@ -3445,6 +3503,47 @@
     return localISODate(new Date());
   }
 
+  function notifyRenterBadLabel(target, reason, labeledBy) {
+    var staffName = labeledBy
+      ? NS.security.sanitizeText((labeledBy.firstName || "") + " " + (labeledBy.lastName || ""), 80)
+      : "iDrive desk";
+    var body =
+      "Your account was labeled Bad Renter. Reason: " +
+      reason +
+      ". Staff who labeled you: " +
+      (staffName || "iDrive desk") +
+      ".";
+    var existing = threads().filter(function (t) {
+      return t.kind === "notice" && (t.customerId === target.id || t.customerEmail === target.email);
+    })[0];
+    if (existing) {
+      pushThreadMessage(existing, "staff", labeledBy, body);
+      existing.topic = "Account labeled Bad Renter";
+      existing.unreadCustomer = true;
+      existing.unreadStaff = false;
+      return saveThread(existing);
+    }
+    var thread = {
+      id: "thd_" + NS.security.randomHex(8),
+      kind: "notice",
+      topic: "Account labeled Bad Renter",
+      bookingId: null,
+      bookingRef: "",
+      customerId: target.id,
+      customerName: NS.security.sanitizeText((target.firstName || "") + " " + (target.lastName || ""), 80),
+      customerEmail: target.email || "",
+      customerPhone: target.phone || "",
+      status: "open",
+      unreadStaff: false,
+      unreadCustomer: true,
+      messages: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    pushThreadMessage(thread, "staff", labeledBy || { firstName: "iDrive", lastName: "desk" }, body);
+    return saveThread(thread);
+  }
+
   function flagBadRenter(userId, reason, labeledBy) {
     reason = NS.security.sanitizeText(reason || "", 400);
     if (reason.length < 8) throw new Error("Write why this renter is being labeled (at least 8 characters).");
@@ -3459,6 +3558,7 @@
     target.badRenterLabeledBy = labeledBy && labeledBy.id;
     target.badRenterLabeledAt = new Date().toISOString();
     NS.store.set("users", list);
+    notifyRenterBadLabel(target, reason, labeledBy);
     if (NS.api && target.apiId != null && labeledBy && labeledBy.apiId != null) {
       return NS.api.post("/users/" + encodeURIComponent(target.apiId) + "/flag", {
         reason: reason,
@@ -3693,6 +3793,8 @@
     bookedRanges: bookedRanges,
     ageFromBirthdate: ageFromBirthdate,
     flagBadRenter: flagBadRenter,
+    ongoingBookingForVehicle: ongoingBookingForVehicle,
+    hasValidIdInfo: hasValidIdInfo,
     availableVehicles: availableVehicles,
     AVAILABILITY_LABELS: AVAILABILITY_LABELS,
     vehicleAvailability: vehicleAvailability,
@@ -3711,6 +3813,8 @@
     getRatingForBooking: getRatingForBooking,
     ratingsForVehicle: ratingsForVehicle,
     vehicleRatingSummary: vehicleRatingSummary,
+    activeBookingForUser: activeBookingForUser,
+    assertOneCarAtATime: assertOneCarAtATime,
     ongoingBookingForUser: ongoingBookingForUser,
     myBookings: myBookings,
     allBookings: allBookings,

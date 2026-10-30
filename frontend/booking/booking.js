@@ -20,8 +20,10 @@
     }
     box.hidden = false;
     box.textContent = message;
-    box.style.borderColor = type === "ok" ? "rgba(196, 80, 75,0.35)" : "rgba(155,28,28,0.45)";
-    box.style.color = type === "ok" ? "#a63f3b" : "#9b1c1c";
+    box.style.borderColor = "";
+    box.style.color = "";
+    box.classList.toggle("ok", type === "ok");
+    box.classList.toggle("err", type !== "ok");
     if (NS.ui && NS.ui.toast) NS.ui.toast(message, type === "ok" ? "ok" : "err");
   }
 
@@ -46,7 +48,7 @@
   function blockOngoingBooking() {
     var me = NS.auth.current();
     if (!me || me.role === "staff" || me.role === "admin") return false;
-    var trip = NS.domain.ongoingBookingForUser ? NS.domain.ongoingBookingForUser(me.id) : null;
+    var trip = NS.domain.activeBookingForUser ? NS.domain.activeBookingForUser(me.id) : null;
     if (!trip) return false;
     var flow = document.getElementById("booking-flow");
     var typeStep = document.getElementById("rental-type");
@@ -60,9 +62,9 @@
     box.innerHTML =
       '<p class="eyebrow">Active trip</p>' +
       "<h1>One car at a time</h1>" +
-      "<p>You already have a trip in progress (<strong>" +
+      "<p>You already have an active booking (<strong>" +
       NS.security.escapeHtml(trip.ref) +
-      "</strong>). Return that vehicle before booking another car.</p>" +
+      "</strong>). One car at a time — finish, pay, or cancel it before starting a new one.</p>" +
       '<div class="btn-row">' +
       '<a class="btn btn-gold" href="' +
       NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(trip.id)) +
@@ -229,11 +231,11 @@
 
     function vehicleOptions(selected) {
       var opts = vehicles.map(function (v) {
-        return (
+      return (
           '<option value="' + v.id + '"' + (v.id === selected ? " selected" : "") + ">" +
           NS.security.escapeHtml(v.name) + " — " + NS.ui.peso(v.dailyRate) + "/day</option>"
-        );
-      }).join("");
+      );
+    }).join("");
       if (!selected) {
         return '<option value="" selected disabled>Choose a car</option>' + opts;
       }
@@ -312,11 +314,8 @@
     }
 
     function syncParentConsent(form) {
-      var block = form.querySelector("[data-parent-consent]");
-      if (!block) return;
       var age = ageYears(form.birthdate && form.birthdate.value);
       var minor = age != null && age <= 17;
-      block.hidden = !minor;
       ["parentName", "parentPhone", "parentConsent"].forEach(function (name) {
         if (form[name]) form[name].required = minor;
       });
@@ -501,15 +500,29 @@
       var bookedHost = form.querySelector("[data-booked-dates]");
       if (bookedHost && NS.domain.bookedRanges) {
         var ranges = NS.domain.bookedRanges(form.vehicleId.value) || [];
-        bookedHost.textContent = ranges.length
-          ? "This car is already reserved: " +
-            ranges
-              .map(function (r) {
-                return NS.ui.fmtDate(r.start) + "–" + NS.ui.fmtDate(r.end) + " (" + r.status + ")";
-              })
-              .join("; ") +
-            ". Choose dates that do not overlap."
-          : "No overlapping reservations on this car for other dates.";
+        var occupant = NS.domain.ongoingBookingForVehicle
+          ? NS.domain.ongoingBookingForVehicle(form.vehicleId.value)
+          : null;
+        var bits = [];
+        if (occupant) {
+          bits.push(
+            "This car is currently on a trip (" +
+              occupant.ref +
+              "). Both renters must have a valid ID on file before staff can approve the new booking."
+          );
+        }
+        if (ranges.length) {
+          bits.push(
+            "Already reserved: " +
+              ranges
+                .map(function (r) {
+                  return NS.ui.fmtDate(r.start) + "–" + NS.ui.fmtDate(r.end) + " (" + r.status + ")";
+                })
+                .join("; ") +
+              ". Choose dates that do not overlap."
+          );
+        }
+        bookedHost.textContent = bits.length ? bits.join(" ") : "No overlapping reservations on this car for other dates.";
       }
     }
 
@@ -653,7 +666,16 @@
         var status = block.querySelector("[data-status]");
         if (!fileInput || !pick) return;
 
-        function setStatus(msg) { if (status) status.textContent = msg || ""; }
+        function setStatus(msg) {
+          var text = msg || "";
+          if (status) status.textContent = text;
+          if (!block) return;
+          block.classList.remove("is-reading", "is-ok", "is-err");
+          if (!text) return;
+          if (/Reading|Checking|Trying/i.test(text)) block.classList.add("is-reading");
+          else if (/Could not|unavailable|Try again|too large|not a/i.test(text)) block.classList.add("is-err");
+          else block.classList.add("is-ok");
+        }
         function setPhoto(dataUrl) {
           if (hidden) hidden.value = dataUrl || "";
           if (!preview) return;
@@ -756,7 +778,7 @@
                   : "";
                 renderFlags(form);
                 syncParentConsent(form);
-                refresh();
+      refresh();
                 setStatus(
                   (qualityNote ? qualityNote + " " : "") +
                   (filled.length
@@ -950,9 +972,9 @@
           }
         });
       }
-      form.addEventListener("submit", function (e) {
-        e.preventDefault();
-        if (busy) return;
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (busy) return;
         var mode = form.id === "chauffeur-form" ? "chauffeur" : "self";
         renderFlags(form);
         var gateErrors = bookingGateErrors(form);
@@ -966,7 +988,7 @@
           return NS.ui.askYesNo("Save this booking and continue to payment?", { title: "Save booking", yes: "Continue", no: "Not yet" });
         }).then(function (ok) {
           if (ok === undefined) return;
-          if (!ok) return;
+        if (!ok) return;
           gateErrors = bookingGateErrors(form);
           if (gateErrors.length) {
             showAlert(form, gateErrors[0], "err");
@@ -979,27 +1001,27 @@
           }
           var meNow = NS.auth.current();
           return NS.auth.ensurePhoneFree(form.phone.value, meNow && meNow.id).then(function () {
-          busy = true;
-          showAlert(form, "", "ok");
-          var btn = form.querySelector('button[type="submit"]');
-          if (btn) {
+        busy = true;
+        showAlert(form, "", "ok");
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) {
             btn.setAttribute("data-busy", "1");
-            btn.disabled = true;
-            btn.textContent = btn.getAttribute("data-pay-ready") || "Continue to payment";
-          }
-          function fail(err) {
-            busy = false;
-            if (btn) {
+          btn.disabled = true;
+            btn.textContent = "Saving…";
+        }
+        function fail(err) {
+          busy = false;
+          if (btn) {
               btn.removeAttribute("data-busy");
               btn.textContent = btn.getAttribute("data-pay-ready") || "Continue to payment";
               syncSubmitGate(form);
-            }
-            if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-            showAlert(form, err.message || "Could not create booking.", "err");
           }
-          try {
-            if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-            var csrfInput = form.querySelector('input[name="csrf"]');
+          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+          showAlert(form, err.message || "Could not create booking.", "err");
+        }
+        try {
+          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+          var csrfInput = form.querySelector('input[name="csrf"]');
             var notes = "";
             if (mode === "chauffeur") {
               var itinerary = form.itinerary.value.trim();
@@ -1062,16 +1084,16 @@
               addons: mode === "chauffeur" ? ["driver"] : [],
               notes: notes
             }, csrfInput ? csrfInput.value : "");
-          } catch (err) {
-            fail(err);
-            return;
-          }
+        } catch (err) {
+          fail(err);
+          return;
+        }
           if (btn) btn.textContent = btn.getAttribute("data-pay-ready") || "Continue to payment";
-          NS.domain.pushBookingToApi(booking.id).then(function () {
-            showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
-            location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));
-          }, fail);
-          });
+        NS.domain.pushBookingToApi(booking.id).then(function () {
+          showAlert(form, "Booking " + booking.ref + " created. Redirecting…", "ok");
+          location.href = NS.routes.href("payment", "?id=" + encodeURIComponent(booking.id));
+        }, fail);
+      });
         }).catch(function (err) {
           showAlert(form, (err && err.message) || "Your account has been disabled. Please contact the admin.", "err");
         });
@@ -1089,10 +1111,40 @@
       var carGrid = document.getElementById("book-car-grid");
       var carEmpty = document.getElementById("book-car-empty");
       var stepStatus = document.querySelector("[data-step-status]");
-      var labels = ["Dates", "Car", "Drive type", "ID", "Review"];
-      var step = 1;
+      var labelFor = {
+        dates: "Dates",
+        car: "Car",
+        mode: "Drive type",
+        id: "ID",
+        consent: "Parent consent",
+        review: "Review",
+        payment: "Payment"
+      };
+
+      function stepperSteps() {
+        return stepNames().concat(["payment"]);
+      }
+      var stepName = "dates";
       var mode = "";
       var chosenVehicle = vehicleId || "";
+
+      function needsConsent() {
+        var form = mode === "chauffeur" ? chauffeurForm : mode === "self" ? selfForm : null;
+        if (!form || !form.birthdate || !form.birthdate.value) return false;
+        var age = ageYears(form.birthdate.value);
+        return age != null && age <= 17;
+      }
+
+      function stepNames() {
+        return needsConsent()
+          ? ["dates", "car", "mode", "id", "consent", "review"]
+          : ["dates", "car", "mode", "id", "review"];
+      }
+
+      function occupantForChosen() {
+        if (!chosenVehicle || !NS.domain.ongoingBookingForVehicle) return null;
+        return NS.domain.ongoingBookingForVehicle(chosenVehicle);
+      }
 
       function daysAhead(iso) {
         if (!iso) return 0;
@@ -1149,6 +1201,22 @@
         });
       }
 
+      function paintInUseNote(form) {
+        var note = form.querySelector("[data-in-use-note]");
+        if (!note) return;
+        var occupant = occupantForChosen();
+        if (!occupant) {
+          note.hidden = true;
+          note.textContent = "";
+          return;
+        }
+        note.hidden = false;
+        note.textContent =
+          "This car is currently on trip " +
+          occupant.ref +
+          ". Both you and the current renter must have a valid ID on file before staff can approve this booking.";
+      }
+
       function paintReview(form) {
         var host = form.querySelector("[data-review]");
         if (!host) return;
@@ -1164,11 +1232,15 @@
           ["ID", ((form.idType && form.idType.value) || "") + (form.idNumber && form.idNumber.value ? " · " + form.idNumber.value : "")]
         ];
         if (form.license_no && form.license_no.value) rows.push(["License", form.license_no.value]);
+        if (needsConsent() && form.parentName && form.parentName.value) {
+          rows.push(["Parent / guardian", form.parentName.value]);
+        }
         host.innerHTML = "<ul class='booking-detail-list'>" + rows.filter(function (r) {
           return r[1];
         }).map(function (r) {
           return "<li><strong>" + NS.security.escapeHtml(r[0]) + ":</strong> <span>" + NS.security.escapeHtml(r[1]) + "</span></li>";
         }).join("") + "</ul>";
+        paintInUseNote(form);
       }
 
       function paintCars() {
@@ -1179,45 +1251,80 @@
         carEmpty.hidden = list.length > 0;
         carGrid.innerHTML = list.map(function (v) {
           var selected = v.id === chosenVehicle;
+          var occupant = NS.domain.ongoingBookingForVehicle ? NS.domain.ongoingBookingForVehicle(v.id) : null;
+          var inUse = occupant
+            ? "<p class='book-car-inuse'>In use now · both renters need a valid ID</p>"
+            : "";
           return (
             '<button class="book-car-card' + (selected ? " is-selected" : "") + '" type="button" role="option" aria-selected="' +
             (selected ? "true" : "false") + '" data-pick-car="' + v.id + '">' +
             '<img src="' + NS.security.escapeHtml(v.image || FALLBACK_IMAGE) + '" alt="">' +
             "<div><p class='eyebrow'>" + NS.security.escapeHtml(v.type || "") + "</p>" +
             "<strong>" + NS.security.escapeHtml(v.name) + "</strong>" +
-            "<p>" + NS.ui.peso(v.dailyRate) + "<span>/day</span></p></div></button>"
+            "<p>" + NS.ui.peso(v.dailyRate) + "<span>/day</span></p>" +
+            inUse +
+            "</div></button>"
           );
         }).join("");
       }
 
       function showStep(next) {
-        step = Math.max(1, Math.min(5, next));
-        if (stepStatus) stepStatus.textContent = "Step " + step + " of 5 · " + labels[step - 1];
-        document.querySelectorAll("[data-step-dot]").forEach(function (el) {
-          var n = Number(el.getAttribute("data-step-dot"));
-          el.classList.toggle("is-current", n === step);
-          el.classList.toggle("is-done", n < step);
+        var names = stepNames();
+        var idx;
+        if (typeof next === "number") {
+          idx = Math.max(0, Math.min(names.length - 1, next - 1));
+        } else {
+          idx = names.indexOf(next);
+          if (idx < 0) idx = 0;
+        }
+        stepName = names[idx];
+        var steps = stepperSteps();
+        var step = steps.indexOf(stepName) + 1;
+        var total = steps.length;
+        if (stepStatus) stepStatus.textContent = "Step " + step + " of " + total + " · " + (labelFor[stepName] || "");
+        var stepperOl = document.querySelector(".book-stepper ol");
+        if (stepperOl) stepperOl.classList.toggle("is-with-consent", needsConsent());
+        document.querySelectorAll("[data-step-name]").forEach(function (el) {
+          var name = el.getAttribute("data-step-name");
+          if (name === "consent") el.hidden = !needsConsent();
+          if (name === "payment") el.hidden = false;
+          var order = steps.indexOf(name);
+          var span = el.querySelector("span");
+          if (span && order >= 0) span.textContent = String(order + 1);
+          el.classList.toggle("is-current", name === stepName);
+          el.classList.toggle("is-done", order >= 0 && order < step - 1);
+          el.classList.toggle("is-next", name === "payment" && stepName === "review");
         });
-        search.hidden = step !== 1;
-        cars.hidden = step !== 2;
-        typeStep.hidden = step !== 3;
-        selfForm.hidden = !(mode === "self" && step >= 3);
-        chauffeurForm.hidden = !(mode === "chauffeur" && step >= 3);
-        if (step === 3 && mode) typeStep.hidden = true;
+        search.hidden = stepName !== "dates";
+        cars.hidden = stepName !== "car";
+        typeStep.hidden = stepName !== "mode";
+        var onForm = ["mode", "id", "consent", "review"].indexOf(stepName) !== -1;
+        selfForm.hidden = !(mode === "self" && onForm);
+        chauffeurForm.hidden = !(mode === "chauffeur" && onForm);
+        if (stepName === "mode" && mode) typeStep.hidden = true;
         [selfForm, chauffeurForm].forEach(function (form) {
           if (form.hidden) return;
           form.querySelectorAll("[data-pane]").forEach(function (pane) {
             var name = pane.getAttribute("data-pane");
-            pane.hidden = !((step === 3 && name === "trip") || (step === 4 && name === "id") || (step === 5 && name === "review"));
+            pane.hidden = !(
+              (stepName === "mode" && name === "trip") ||
+              (stepName === "id" && name === "id") ||
+              (stepName === "consent" && name === "consent") ||
+              (stepName === "review" && name === "review")
+            );
           });
-          if (step === 5) paintReview(form);
+          form.querySelectorAll("[data-id-next]").forEach(function (btn) {
+            btn.textContent = needsConsent() ? "Continue to parent consent" : "Review booking";
+          });
+          if (stepName === "review") paintReview(form);
+          if (stepName === "consent") syncParentConsent(form);
         });
-        if (step === 2) paintCars();
+        if (stepName === "car") paintCars();
         paintReserveHint();
         paintPayLabels();
         syncMirrors();
         refresh();
-        var shown = !selfForm.hidden ? selfForm : !chauffeurForm.hidden ? chauffeurForm : search;
+        var shown = !selfForm.hidden ? selfForm : !chauffeurForm.hidden ? chauffeurForm : stepName === "car" ? cars : search;
         var heading = shown && shown.querySelector("h1");
         if (heading && heading.focus) heading.focus();
         var maps = (shown && (shown._pickupMaps || (shown._pickupMap ? [shown._pickupMap] : []))) || [];
@@ -1231,7 +1338,7 @@
       }
 
       function canLeave(from) {
-        if (from === 1) {
+        if (from === "dates") {
           if (!wizStart.value || !wizEnd.value) {
             showAlert(search, "Choose a pickup and return date.", "err");
             return false;
@@ -1243,7 +1350,7 @@
           showAlert(search, "", "ok");
           return true;
         }
-        if (from === 2) {
+        if (from === "car") {
           if (!chosenVehicle) {
             if (carEmpty) carEmpty.hidden = false;
             NS.ui.toast("Choose a car to continue.", "err");
@@ -1251,7 +1358,7 @@
           }
           return true;
         }
-        if (from === 3) {
+        if (from === "mode") {
           if (!mode) {
             showAlert(typeStep, "Choose self-drive or chauffeur.", "err");
             return false;
@@ -1277,8 +1384,12 @@
           showAlert(tripForm, "", "ok");
           return true;
         }
-        if (from === 4) {
+        if (from === "id") {
           var idForm = mode === "chauffeur" ? chauffeurForm : selfForm;
+          if (!idForm.birthdate || !idForm.birthdate.value) {
+            showAlert(idForm, "Enter your birth date so we can check if parent consent is needed.", "err");
+            return false;
+          }
           if (mode === "self") {
             if (!idForm.licensePhoto || !idForm.licensePhoto.value) {
               showAlert(idForm, "Upload a photo of your driver’s license.", "err");
@@ -1312,6 +1423,27 @@
           showAlert(idForm, "", "ok");
           return true;
         }
+        if (from === "consent") {
+          var consentForm = mode === "chauffeur" ? chauffeurForm : selfForm;
+          if (!consentForm.parentName || !consentForm.parentName.value.trim()) {
+            showAlert(consentForm, "Enter the parent or guardian name.", "err");
+            return false;
+          }
+          if (!consentForm.parentPhone || !NS.validation.phMobile(consentForm.parentPhone.value)) {
+            showAlert(consentForm, "Enter the parent or guardian mobile number (09XXXXXXXXX).", "err");
+            return false;
+          }
+          if (!consentForm.parentIdPhoto || !consentForm.parentIdPhoto.value) {
+            showAlert(consentForm, "Upload a valid ID of the parent or guardian.", "err");
+            return false;
+          }
+          if (!consentForm.parentConsent || !consentForm.parentConsent.checked) {
+            showAlert(consentForm, "The parent or guardian must tick the consent box.", "err");
+            return false;
+          }
+          showAlert(consentForm, "", "ok");
+          return true;
+        }
         return true;
       }
 
@@ -1328,7 +1460,7 @@
           syncMirrors();
           paintReserveHint();
           paintPayLabels();
-          if (step === 2) paintCars();
+          if (stepName === "car") paintCars();
           else refresh();
         });
       });
@@ -1345,15 +1477,19 @@
       }
       flow.addEventListener("click", function (e) {
         if (e.target.closest("[data-wizard-next]")) {
-          if (!canLeave(step)) return;
-          showStep(step + 1);
+          if (!canLeave(stepName)) return;
+          var names = stepNames();
+          var i = names.indexOf(stepName);
+          showStep(names[Math.min(names.length - 1, i + 1)]);
         } else if (e.target.closest("[data-wizard-back]")) {
-          if (step === 3 && mode) {
+          if (stepName === "mode" && mode) {
             mode = "";
-            showStep(3);
+            showStep("mode");
             return;
           }
-          showStep(step - 1);
+          var backNames = stepNames();
+          var backI = backNames.indexOf(stepName);
+          showStep(backNames[Math.max(0, backI - 1)]);
         }
       });
       typeStep.querySelectorAll("[data-rental]").forEach(function (card) {
@@ -1363,7 +1499,7 @@
           syncMirrors();
           applyDefaults(form);
           snapshot(form);
-          showStep(3);
+          showStep("mode");
         });
       });
       [selfForm, chauffeurForm].forEach(function (form) {
@@ -1373,7 +1509,7 @@
           e.preventDefault();
           e.stopPropagation();
           mode = "";
-          showStep(3);
+          showStep("mode");
         };
       });
 
@@ -1381,12 +1517,16 @@
          but Drive type is never the first screen — the renter must set dates first. */
       if (vehicleId) chosenVehicle = vehicleId;
       syncMirrors();
-      showStep(1);
+      showStep("dates");
       NS.pages.bookWizard = {
         go: showStep,
         sync: syncMirrors,
         refreshCars: paintCars,
-        currentStep: function () { return step; },
+        currentStep: function () {
+          var names = stepNames();
+          var i = names.indexOf(stepName);
+          return i < 0 ? 1 : i + 1;
+        },
         chosenVehicle: function () { return chosenVehicle || ""; }
       };
     }
@@ -1513,7 +1653,7 @@
               } else {
                 NS.ui.toast("Return request sent. Staff will see it in Inbox and Bookings.", "ok");
               }
-              render();
+            render();
             });
           } catch (err) {
             NS.ui.toast(err.message, "err");
@@ -1828,7 +1968,7 @@
         ? '<div class="license-photo-view"><p class="eyebrow">Live photo</p><img src="' +
           String(info.selfie).replace(/"/g, "") +
           '" alt="Renter photo"></div>'
-        : "") +
+          : "") +
       (booking.returnNotes
         ? "<p>Return notes: " + NS.security.escapeHtml(booking.returnNotes) + "</p>"
         : "") +
@@ -1868,8 +2008,8 @@
             } catch (err) {
               NS.ui.bindCsrf(ratingForm);
               NS.ui.toast(err.message, "err");
-            }
-          });
+          }
+        });
       });
     }
 
@@ -1891,7 +2031,7 @@
                 } else {
                   NS.ui.toast("Return request sent. Staff will see it in Inbox and Bookings.", "ok");
                 }
-                location.reload();
+              location.reload();
               });
             } catch (err) {
               NS.ui.toast(err.message, "err");

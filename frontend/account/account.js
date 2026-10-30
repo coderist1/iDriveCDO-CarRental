@@ -26,6 +26,19 @@
     if (!me || !welcome) return;
     paintAvatar(document.getElementById("account-avatar"), me, "xl");
     welcome.textContent = "Hello, " + me.firstName + ".";
+    var flagNotice = document.getElementById("account-flag-notice");
+    if (flagNotice) {
+      if (me.isBadRenter) {
+        flagNotice.hidden = false;
+        flagNotice.textContent =
+          "The desk labeled this account Bad renter" +
+          (me.badRenterReason ? ": " + me.badRenterReason : ".") +
+          " The reason is also saved in Messages from the desk.";
+      } else {
+        flagNotice.hidden = true;
+        flagNotice.textContent = "";
+      }
+    }
     var list = NS.domain.myBookings();
     stats.innerHTML = '<div class="stat"><span>' + list.length + "</span>trips</div>";
     recent.innerHTML = list.length
@@ -70,7 +83,7 @@
                 '"><strong>' +
                 NS.security.escapeHtml(t.topic) +
                 "</strong><span>" +
-                (t.unreadCustomer ? "New desk reply" : "Conversation") +
+                (t.kind === "notice" ? "Desk notice" : t.unreadCustomer ? "New desk reply" : "Conversation") +
                 "</span></button>"
               );
             })

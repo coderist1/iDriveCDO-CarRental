@@ -714,41 +714,83 @@
         .map(function (b) {
           var v = NS.domain.getVehicle(b.vehicleId);
           var u = NS.auth.userById(b.userId);
-          var actions = "";
-          if (b.status === "pending") {
-            actions += '<button class="btn btn-gold btn-sm" data-act="confirmed" data-id="' + b.id + '">Approve</button>';
-            actions += '<button class="btn btn-ghost btn-sm" data-act="rejected" data-id="' + b.id + '">Reject</button>';
+          var occupant = NS.domain.ongoingBookingForVehicle
+            ? NS.domain.ongoingBookingForVehicle(b.vehicleId, b.id)
+            : null;
+          var bothIds = !!(occupant && b.status === "pending");
+          var note = "";
+          var secondary = "";
+          var primary = "";
+          if (bothIds) {
+            note =
+              '<p class="fineprint card-actions-note">Car is on trip ' +
+              NS.security.escapeHtml(occupant.ref) +
+              ". Both renters need a valid ID before you can approve.</p>";
+            secondary +=
+              '<button class="btn btn-ghost" type="button" data-id-photo="' +
+              occupant.id +
+              '">View current renter ID</button>';
           }
-          if (b.paymentStatus !== "paid" && b.status !== "cancelled" && b.status !== "rejected") {
-            actions +=
-              '<a class="btn btn-gold btn-sm" href="payments.html?booking=' +
+          secondary +=
+            '<button class="btn btn-ghost" type="button" data-id-photo="' +
+            b.id +
+            '">View ID</button>';
+          secondary +=
+            '<button class="btn btn-ghost" type="button" data-msg="' +
+            b.id +
+            '">Message</button>';
+          if (NS.domain.cashlessReceipt && NS.domain.cashlessReceipt(b)) {
+            secondary +=
+              '<button class="btn btn-ghost" type="button" data-pay-receipt="' +
+              b.id +
+              '">View receipt</button>';
+          }
+          var unpaid =
+            b.paymentStatus !== "paid" && b.status !== "cancelled" && b.status !== "rejected";
+          if (b.status === "pending") {
+            primary +=
+              '<button class="btn btn-reject" type="button" data-act="rejected" data-id="' +
+              b.id +
+              '">Reject</button>';
+            if (unpaid) {
+              primary +=
+                '<a class="btn btn-pay" href="payments.html?booking=' +
+                encodeURIComponent(b.id) +
+                '">Record payment</a>';
+              primary +=
+                '<button class="btn btn-approve" type="button" data-act="confirmed" data-id="' +
+                b.id +
+                '" disabled aria-disabled="true" title="Record payment before approving">Approve</button>';
+            } else {
+              primary +=
+                '<button class="btn btn-approve" type="button" data-act="confirmed" data-id="' +
+                b.id +
+                '">Approve</button>';
+            }
+          } else if (unpaid) {
+            primary +=
+              '<a class="btn btn-pay" href="payments.html?booking=' +
               encodeURIComponent(b.id) +
               '">Record payment</a>';
           }
           if (b.status === "confirmed") {
-            actions += '<button class="btn btn-dark btn-sm" data-act="ongoing" data-id="' + b.id + '">Start trip</button>';
+            primary +=
+              '<button class="btn btn-approve" type="button" data-act="ongoing" data-id="' +
+              b.id +
+              '">Start trip</button>';
           }
           if (b.status === "ongoing") {
-            actions += '<button class="btn btn-gold btn-sm" data-act="completed" data-id="' + b.id + '">Complete</button>';
+            primary +=
+              '<button class="btn btn-approve" type="button" data-act="completed" data-id="' +
+              b.id +
+              '">Complete</button>';
           }
           if (b.status === "return_requested") {
-            actions +=
-              '<button class="btn btn-gold btn-sm" data-accept-return="' + b.id + '">Accept return</button>';
-          }
-          if (NS.domain.cashlessReceipt && NS.domain.cashlessReceipt(b)) {
-            actions +=
-              '<button class="btn btn-ghost btn-sm" data-pay-receipt="' +
+            primary +=
+              '<button class="btn btn-approve" type="button" data-accept-return="' +
               b.id +
-              '">View receipt</button>';
+              '">Accept return</button>';
           }
-          actions +=
-            '<button class="btn btn-ghost btn-sm" data-id-photo="' +
-            b.id +
-            '">View ID</button>';
-          actions +=
-            '<button class="btn btn-ghost btn-sm" data-msg="' +
-            b.id +
-            '">Message</button>';
           return (
             '<article class="booking-card booking-card-stacked"><div><p class="eyebrow">Booking ' +
             NS.security.escapeHtml(b.ref) +
@@ -761,7 +803,13 @@
             NS.ui.statusBadge(b.status) +
             NS.ui.statusBadge(b.paymentStatus) +
             '</div><div class="card-actions">' +
-            actions +
+            note +
+            '<div class="card-actions-secondary">' +
+            secondary +
+            "</div>" +
+            (primary
+              ? '<div class="card-actions-primary">' + primary + "</div>"
+              : "") +
             "</div></article>"
           );
         })
@@ -823,18 +871,40 @@
       var act = e.target.getAttribute("data-act");
       var id = e.target.getAttribute("data-id");
       if (!act) return;
+      if (e.target.disabled || e.target.getAttribute("aria-disabled") === "true") {
+        NS.ui.toast("Record payment before approving this booking.", "err");
+        return;
+      }
+      var target = NS.domain.getBooking(id);
+      var occupantNow =
+        target && NS.domain.ongoingBookingForVehicle
+          ? NS.domain.ongoingBookingForVehicle(target.vehicleId, target.id)
+          : null;
       var labels = {
-        confirmed: "Confirm this booking?",
-        rejected: "Reject this booking?",
+        confirmed: occupantNow
+          ? "This car is currently in use. Approve only if both renters have a valid ID on file? A confirmation email will be sent."
+          : "Approve this booking? A confirmation email will be sent to the renter.",
+        rejected: "Reject this booking? Keep this away from Approve — this cannot be undone from this screen.",
         ongoing: "Start this trip?",
         completed: "Mark this trip complete?"
       };
-      NS.ui.askYesNo(labels[act] || "Save this booking edit?", { title: "Save edit" }).then(function (ok) {
+      NS.ui.askYesNo(labels[act] || "Save this booking edit?", {
+        title: act === "rejected" ? "Reject booking" : "Save edit",
+        yes: act === "rejected" ? "Reject" : "Yes",
+        no: "Cancel"
+      }).then(function (ok) {
         if (!ok) return;
         try {
           NS.domain.setBookingStatus(id, act, NS.security.getCsrf());
           render();
-          NS.ui.toast("Booking updated.", "ok");
+          NS.ui.toast(
+            act === "confirmed"
+              ? "Booking approved. A confirmation email was sent to the renter."
+              : act === "rejected"
+                ? "Booking rejected."
+                : "Booking updated.",
+            "ok"
+          );
         } catch (err) {
           NS.ui.toast(err.message, "err");
         }
@@ -914,11 +984,11 @@
                       "</button>";
                 if (u.role === "customer") {
                   action +=
-                    ' <button class="btn btn-ghost btn-sm" data-flag="' +
+                    ' <span class="card-actions-risk"><button class="btn btn-risk" data-flag="' +
                     u.id +
                     '">' +
-                    (u.isBadRenter ? "Update reason" : "Bad renter") +
-                    "</button>";
+                    (u.isBadRenter ? "Update reason" : "Label bad renter") +
+                    "</button></span>";
                 }
                 var badge = u.isBadRenter ? " " + NS.ui.statusBadge("bad_renter") : "";
                 var why = u.isBadRenter && u.badRenterReason
@@ -1728,10 +1798,13 @@
                 checkFirstBadge(b) +
                 NS.ui.statusBadge(b.status) +
                 NS.ui.statusBadge(b.paymentStatus) +
-                '</div><div class="card-actions"><a class="btn btn-ghost btn-sm" href="bookings.html">Open desk</a>' +
-                '<button class="btn btn-gold btn-sm" data-open="' +
+                '</div><div class="card-actions">' +
+                '<div class="card-actions-primary">' +
+                '<button class="btn btn-ghost" type="button" data-open="' +
                 b.id +
-                '">Message customer</button></div></article>'
+                '">Message customer</button>' +
+                '<a class="btn btn-pay" href="bookings.html">Open desk</a>' +
+                "</div></div></article>"
               );
             })
             .join("")
@@ -1795,7 +1868,7 @@
                 NS.security.escapeHtml(t.topic) +
                 "</strong><span>" +
                 NS.security.escapeHtml(t.customerName || "Guest") +
-                (t.kind === "return" ? " · return" : "") +
+                (t.kind === "return" ? " · return" : t.kind === "notice" ? " · notice" : "") +
                 (t.unreadStaff ? " · new" : "") +
                 "</span></button>"
               );
@@ -1806,6 +1879,7 @@
 
     function kindLabel(kind) {
       if (kind === "return") return "Vehicle return";
+      if (kind === "notice") return "Account notice";
       if (kind === "booking") return "Booking received";
       return "Customer message";
     }
