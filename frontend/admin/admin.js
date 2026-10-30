@@ -195,6 +195,8 @@
         jump("reports.html", "Reports", "Revenue and mix") +
         "</div></div>";
     }
+    var split = document.getElementById("desk-home-split");
+    if (split) split.classList.toggle("is-returns-empty", !returns.length);
     var recentHost = document.getElementById("admin-recent");
     var recentSorted = incoming.slice();
     recentHost.innerHTML =
@@ -205,19 +207,31 @@
           .map(function (b) {
             var v = NS.domain.getVehicle(b.vehicleId);
             var u = NS.auth.userById(b.userId);
+            var customer = u ? u.firstName + " " + u.lastName : "Customer";
             return (
-              '<a class="row-link" href="inbox.html"><strong>' +
+              '<a class="queue-row" href="inbox.html">' +
+              '<div class="queue-col queue-id">' +
+              '<span class="queue-ref">' +
               NS.security.escapeHtml(b.ref) +
-              "</strong><span>" +
-              NS.security.escapeHtml(u ? u.firstName + " " + u.lastName : "Customer") +
-              " · " +
-              NS.security.escapeHtml(NS.domain.bookingQueueText(b)) +
-              " · " +
-              NS.security.escapeHtml(v ? v.name : "") +
               "</span>" +
-              NS.ui.statusBadge(b.paymentStatus) +
+              '<span class="queue-meta">' +
+              NS.security.escapeHtml(NS.domain.bookingQueueText(b)) +
+              "</span>" +
+              '<span class="queue-badges">' +
               NS.ui.statusBadge(b.status) +
-              "</a>"
+              NS.ui.statusBadge(b.paymentStatus) +
+              "</span></div>" +
+              '<div class="queue-col queue-people">' +
+              '<strong class="queue-anchor">' +
+              NS.security.escapeHtml(customer) +
+              "</strong>" +
+              '<span class="queue-meta">' +
+              NS.security.escapeHtml(v ? v.name : "") +
+              "</span></div>" +
+              '<div class="queue-col queue-go">' +
+              '<span class="btn btn-ghost btn-sm queue-open">Open</span>' +
+              '<span class="queue-chevron" aria-hidden="true">›</span>' +
+              "</div></a>"
             );
           })
           .join("")
@@ -225,6 +239,7 @@
     var returnsHost = document.getElementById("admin-returns");
     if (returnsHost) {
       // Overview is a read-only glance; the Inbox owns the interactive return workflow.
+      returnsHost.classList.toggle("is-empty", !returns.length);
       returnsHost.innerHTML =
         '<p class="section-summary">' + returns.length + " waiting for the desk</p>" +
         (returns.length
@@ -235,22 +250,36 @@
             .map(function (b) {
               var v = NS.domain.getVehicle(b.vehicleId);
               var u = NS.auth.userById(b.userId);
+              var customer = u ? u.firstName + " " + u.lastName : "Customer";
               return (
-                '<a class="row-link" href="inbox.html"><strong>' +
+                '<a class="queue-row" href="inbox.html">' +
+                '<div class="queue-col queue-id">' +
+                '<span class="queue-ref">' +
                 NS.security.escapeHtml(b.ref) +
-                "</strong><span>" +
-                NS.security.escapeHtml(u ? u.firstName + " " + u.lastName : "Customer") +
-                " · " +
-                NS.security.escapeHtml(v ? v.name : "") +
-                " · " +
-                NS.security.escapeHtml(b.dropoff || "") +
                 "</span>" +
+                '<span class="queue-badges">' +
                 NS.ui.statusBadge(b.status) +
-                "</a>"
+                "</span></div>" +
+                '<div class="queue-col queue-people">' +
+                '<strong class="queue-anchor">' +
+                NS.security.escapeHtml(customer) +
+                "</strong>" +
+                '<span class="queue-meta">' +
+                NS.security.escapeHtml(v ? v.name : "") +
+                (b.dropoff ? " · " + NS.security.escapeHtml(b.dropoff) : "") +
+                "</span></div>" +
+                '<div class="queue-col queue-go">' +
+                '<span class="btn btn-ghost btn-sm queue-open">Open</span>' +
+                '<span class="queue-chevron" aria-hidden="true">›</span>' +
+                "</div></a>"
               );
             })
             .join("")
-        : "<p class='notice'>No vehicle returns waiting.</p>");
+        : '<div class="empty-state empty-state-compact" role="status">' +
+            '<span class="empty-state-mark" aria-hidden="true"></span>' +
+            "<p><strong>No returns waiting</strong></p>" +
+            "<p class=\"fineprint\">Return requests will show here.</p>" +
+            "</div>");
     }
     }
     paintHome();
@@ -1365,101 +1394,190 @@
     var fuelHost = document.getElementById("fuel-list");
 
     function renderLists() {
-      regsHost.innerHTML = NS.domain
-        .vehicleRegs()
-        .map(function (r) {
-          var v = NS.domain.getVehicle(r.vehicleId);
-          return (
-            "<p><strong>" +
-            NS.security.escapeHtml(v ? v.name : r.vehicleId) +
-            "</strong> · " +
-            NS.security.escapeHtml(r.plateNumber) +
-            " · next renewal " +
-            NS.security.escapeHtml(r.nextRegRenewal) +
-            " (day " +
-            NS.security.escapeHtml(r.renewalScheduledDay || "—") +
-            ")</p>"
-          );
-        })
-        .join("") || "<p class='notice'>No registration records.</p>";
+      var regs = NS.domain.vehicleRegs();
+      regsHost.innerHTML = regs.length
+        ? '<div class="ops-table-wrap"><table class="ops-table">' +
+          "<thead><tr><th>Vehicle</th><th>Plate</th><th class=\"num\">Renewal date</th><th class=\"num\">Next renewal</th></tr></thead><tbody>" +
+          regs
+            .map(function (r) {
+              var v = NS.domain.getVehicle(r.vehicleId);
+              var dayLabel = r.renewalScheduledDay
+                ? (/^\d{4}-\d{2}-\d{2}$/.test(String(r.renewalScheduledDay))
+                    ? "day " + String(r.renewalScheduledDay).slice(-2)
+                    : "day " + r.renewalScheduledDay)
+                : "";
+              return (
+                "<tr><td><strong class=\"ops-vehicle\">" +
+                NS.security.escapeHtml(v ? v.name : r.vehicleId) +
+                "</strong>" +
+                (dayLabel
+                  ? '<span class="ops-meta">' + NS.security.escapeHtml(dayLabel) + "</span>"
+                  : "") +
+                "</td><td><span class=\"ops-meta\">" +
+                NS.security.escapeHtml(r.plateNumber || "—") +
+                "</span></td><td class=\"num\">" +
+                NS.security.escapeHtml(r.renewalScheduledDay || "—") +
+                "</td><td class=\"num\">" +
+                NS.security.escapeHtml(r.nextRegRenewal || "—") +
+                "</td></tr>"
+              );
+            })
+            .join("") +
+          "</tbody></table></div>"
+        : "<p class='notice'>No registration records.</p>";
 
-      maintHost.innerHTML = NS.domain
-        .maintenances()
-        .map(function (m) {
-          var v = NS.domain.getVehicle(m.vehicleId);
-          return (
-            '<article class="booking-card"><div><p class="eyebrow">' +
-            NS.security.escapeHtml(m.scheduledDate) +
-            "</p><h3>" +
-            NS.security.escapeHtml(m.maintenanceType) +
-            "</h3><p>" +
-            NS.security.escapeHtml(v ? v.name : m.vehicleId) +
-            (m.notes ? "<br>" + NS.security.escapeHtml(m.notes) : "") +
-            "</p></div><div>" +
-            NS.ui.statusBadge(m.finished ? "completed" : "pending") +
-            (canManage && !m.finished
-              ? '<button class="btn btn-gold btn-sm" data-finish="' + m.id + '">Mark finished</button>'
-              : "") +
-            "</div></article>"
-          );
-        })
-        .join("") || "<p class='notice'>No maintenance jobs.</p>";
+      var jobs = NS.domain.maintenances();
+      maintHost.innerHTML = jobs.length
+        ? '<div class="ops-maint-list">' +
+          jobs
+            .map(function (m) {
+              var v = NS.domain.getVehicle(m.vehicleId);
+              return (
+                '<article class="ops-maint-row">' +
+                '<div class="ops-maint-main">' +
+                '<strong class="ops-vehicle">' +
+                NS.security.escapeHtml(v ? v.name : m.vehicleId) +
+                "</strong>" +
+                '<span class="ops-meta">' +
+                NS.security.escapeHtml(m.maintenanceType) +
+                (m.notes ? " · " + NS.security.escapeHtml(m.notes) : "") +
+                "</span></div>" +
+                '<div class="ops-maint-date num">' +
+                NS.security.escapeHtml(m.scheduledDate) +
+                "</div>" +
+                '<div class="ops-maint-status">' +
+                NS.ui.statusBadge(m.finished ? "completed" : "pending") +
+                (canManage && !m.finished
+                  ? '<button class="btn btn-pay btn-sm" type="button" data-finish="' +
+                    m.id +
+                    '">Mark finished</button>'
+                  : "") +
+                "</div></article>"
+              );
+            })
+            .join("") +
+          "</div>"
+        : "<p class='notice'>No maintenance jobs.</p>";
 
-      fuelHost.innerHTML = NS.domain
-        .fuelRecords()
-        .slice(0, 20)
-        .map(function (f) {
-          var v = NS.domain.getVehicle(f.vehicleId);
-          return (
-            "<p><strong>" +
-            NS.security.escapeHtml(v ? v.name : f.vehicleId) +
-            "</strong> · " +
-            NS.security.escapeHtml(f.fuelType) +
-            " · " +
-            NS.ui.fmtDate(f.recordedAt) +
-            "</p>"
-          );
-        })
-        .join("") || "<p class='notice'>No fuel records.</p>";
+      var fuels = NS.domain.fuelRecords().slice(0, 20);
+      fuelHost.innerHTML = fuels.length
+        ? '<div class="ops-table-wrap"><table class="ops-table">' +
+          "<thead><tr><th>Vehicle</th><th>Fuel type</th><th class=\"num\">Recorded</th></tr></thead><tbody>" +
+          fuels
+            .map(function (f) {
+              var v = NS.domain.getVehicle(f.vehicleId);
+              return (
+                "<tr><td><strong class=\"ops-vehicle\">" +
+                NS.security.escapeHtml(v ? v.name : f.vehicleId) +
+                "</strong></td><td><span class=\"ops-meta\">" +
+                NS.security.escapeHtml(f.fuelType || "—") +
+                "</span></td><td class=\"num\">" +
+                NS.security.escapeHtml(NS.ui.fmtDate(f.recordedAt)) +
+                "</td></tr>"
+              );
+            })
+            .join("") +
+          "</tbody></table></div>"
+        : "<p class='notice'>No fuel records.</p>";
     }
 
     if (canManage) {
       forms.innerHTML =
-        '<div class="form-card">' +
+        '<div class="form-card fleet-ops-vehicle">' +
+        "<h3>Select vehicle</h3>" +
+        '<p class="fineprint">This vehicle applies to registration, maintenance, and fuel below.</p>' +
+        '<label class="field">Vehicle <select class="form-select" id="fleet-ops-vehicle" required>' +
+        vehicleOptionsHtml() +
+        "</select></label></div>" +
+        '<div class="fleet-ops-grid">' +
+        '<div class="form-card fleet-ops-card">' +
         "<h3>Save registration</h3>" +
-        '<form id="reg-form" class="row g-2 align-items-end">' +
-        '<div class="col-md-5"><label class="field">Vehicle <select class="form-select" name="vehicleId" required>' +
-        vehicleOptionsHtml() +
-        "</select></label></div>" +
-        '<div class="col-md-2"><label class="field">Renewal date <input class="form-control" name="renewalScheduledDay" type="date"></label></div>' +
-        '<div class="col-md-3"><label class="field">Next renewal <input class="form-control" name="nextRegRenewal" type="date" required></label></div>' +
-        '<div class="col-md-2"><button class="btn btn-gold" type="submit">Save</button></div></form></div>' +
-        '<div class="form-card">' +
+        '<form id="reg-form" class="fleet-ops-form">' +
+        '<input type="hidden" name="vehicleId">' +
+        '<div class="fleet-ops-fields">' +
+        '<label class="field">Renewal date <input class="form-control" name="renewalScheduledDay" type="date" required></label>' +
+        '<label class="field">Next renewal <span class="field-hint">auto-filled +1 year · editable</span>' +
+        '<input class="form-control" name="nextRegRenewal" type="date" required></label>' +
+        "</div>" +
+        '<div class="fleet-ops-actions"><button class="btn btn-pay" type="submit">Save</button></div>' +
+        "</form></div>" +
+        '<div class="form-card fleet-ops-card">' +
         "<h3>Schedule maintenance</h3>" +
-        '<form id="mnt-form" class="row g-2 align-items-end">' +
-        '<div class="col-md-4"><label class="field">Vehicle <select class="form-select" name="vehicleId" required>' +
-        vehicleOptionsHtml() +
-        "</select></label></div>" +
-        '<div class="col-md-3"><label class="field">Type <input class="form-control" name="maintenanceType" required></label></div>' +
-        '<div class="col-md-3"><label class="field">Scheduled <input class="form-control" name="scheduledDate" type="date" required></label></div>' +
-        '<div class="col-md-2"><button class="btn btn-gold" type="submit">Save</button></div></form></div>' +
-        '<div class="form-card">' +
+        '<form id="mnt-form" class="fleet-ops-form">' +
+        '<input type="hidden" name="vehicleId">' +
+        '<div class="fleet-ops-fields">' +
+        '<label class="field">Type <select class="form-select" name="maintenanceType" required>' +
+        "<option value=\"\">Choose type</option>" +
+        "<option>Oil change</option>" +
+        "<option>Tire rotation</option>" +
+        "<option>Brake service</option>" +
+        "<option>Battery check</option>" +
+        "<option>Tune-up</option>" +
+        "<option>Body / exterior</option>" +
+        "<option>Other</option>" +
+        "</select></label>" +
+        '<label class="field">Scheduled <input class="form-control" name="scheduledDate" type="date" required></label>' +
+        "</div>" +
+        '<div class="fleet-ops-actions"><button class="btn btn-pay" type="submit">Save</button></div>' +
+        "</form></div>" +
+        '<div class="form-card fleet-ops-card">' +
         "<h3>Log fuel type</h3>" +
-        '<form id="fuel-form" class="row g-2 align-items-end">' +
-        '<div class="col-md-5"><label class="field">Vehicle <select class="form-select" name="vehicleId" required>' +
-        vehicleOptionsHtml() +
-        "</select></label></div>" +
-        '<div class="col-md-3"><label class="field">Fuel type <select class="form-select" name="fuelType"><option>Gasoline</option><option>Diesel</option></select></label></div>' +
-        '<div class="col-md-2"><button class="btn btn-gold" type="submit">Save</button></div></form></div>';
+        '<form id="fuel-form" class="fleet-ops-form">' +
+        '<input type="hidden" name="vehicleId">' +
+        '<div class="fleet-ops-fields">' +
+        '<label class="field">Fuel type <select class="form-select" name="fuelType" required>' +
+        "<option>Gasoline</option><option>Diesel</option></select></label>" +
+        "</div>" +
+        '<div class="fleet-ops-actions"><button class="btn btn-pay" type="submit">Save</button></div>' +
+        "</form></div>" +
+        "</div>";
 
       ["reg-form", "mnt-form", "fuel-form"].forEach(function (id) {
         var f = document.getElementById(id);
         if (f) NS.ui.bindCsrf(f);
       });
 
+      var vehiclePick = document.getElementById("fleet-ops-vehicle");
+      function syncVehicleContext() {
+        var vid = vehiclePick ? vehiclePick.value : "";
+        ["reg-form", "mnt-form", "fuel-form"].forEach(function (id) {
+          var form = document.getElementById(id);
+          if (form && form.vehicleId) form.vehicleId.value = vid;
+        });
+      }
+      if (vehiclePick) {
+        vehiclePick.addEventListener("change", syncVehicleContext);
+        syncVehicleContext();
+      }
+
+      var regForm = document.getElementById("reg-form");
+      function addOneYear(iso) {
+        if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+        var d = new Date(iso + "T00:00:00");
+        d.setFullYear(d.getFullYear() + 1);
+        return (
+          d.getFullYear() +
+          "-" +
+          ("0" + (d.getMonth() + 1)).slice(-2) +
+          "-" +
+          ("0" + d.getDate()).slice(-2)
+        );
+      }
+      if (regForm && regForm.renewalScheduledDay) {
+        regForm.renewalScheduledDay.addEventListener("change", function () {
+          var next = addOneYear(regForm.renewalScheduledDay.value);
+          if (next && regForm.nextRegRenewal) regForm.nextRegRenewal.value = next;
+        });
+      }
+
       document.getElementById("reg-form").addEventListener("submit", function (e) {
         e.preventDefault();
         var form = e.target;
+        syncVehicleContext();
+        if (!form.vehicleId.value) {
+          NS.ui.toast("Select a vehicle first.", "err");
+          return;
+        }
         try {
           NS.domain.saveVehicleReg(
             {
@@ -1481,6 +1599,11 @@
       document.getElementById("mnt-form").addEventListener("submit", function (e) {
         e.preventDefault();
         var form = e.target;
+        syncVehicleContext();
+        if (!form.vehicleId.value) {
+          NS.ui.toast("Select a vehicle first.", "err");
+          return;
+        }
         try {
           NS.domain.saveMaintenance(
             {
@@ -1493,6 +1616,7 @@
           );
           form.reset();
           NS.ui.bindCsrf(form);
+          syncVehicleContext();
           renderLists();
           NS.ui.toast("Maintenance scheduled.", "ok");
         } catch (err) {
@@ -1504,6 +1628,11 @@
       document.getElementById("fuel-form").addEventListener("submit", function (e) {
         e.preventDefault();
         var form = e.target;
+        syncVehicleContext();
+        if (!form.vehicleId.value) {
+          NS.ui.toast("Select a vehicle first.", "err");
+          return;
+        }
         try {
           NS.domain.saveFuelRecord(
             { vehicleId: form.vehicleId.value, fuelType: form.fuelType.value },
@@ -1586,16 +1715,32 @@
         : '<option value="">No open bookings</option>';
     }
 
+    function titleCase(value) {
+      return String(value || "")
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, function (ch) {
+          return ch.toUpperCase();
+        });
+    }
+
     function fillBrands() {
+      var isCash = form.method.value === "cash";
       var brands = NS.domain.PAYMENT_BRANDS[form.method.value] || [];
       form.brand.innerHTML = brands
         .map(function (b) {
           return "<option>" + esc(b) + "</option>";
         })
         .join("");
-      form.brand.disabled = form.method.value === "cash";
-      form.last4.disabled = form.method.value === "cash";
-      if (form.method.value === "cash") form.last4.value = "";
+      form.querySelectorAll("[data-cashless-only]").forEach(function (el) {
+        el.hidden = isCash;
+      });
+      form.brand.disabled = isCash;
+      form.brand.required = !isCash;
+      form.last4.disabled = isCash;
+      if (isCash) {
+        form.last4.value = "";
+        if (form.brand.options.length) form.brand.selectedIndex = 0;
+      }
     }
 
     /* Prefill the amount with the balance still owed on the selected booking. */
@@ -1611,44 +1756,75 @@
       var u = NS.auth.userById(b.userId);
       if (u && !form.holder.value) form.holder.value = u.firstName + " " + u.lastName;
       feeNote.innerHTML =
-        "Rental fee: " + NS.ui.peso(b.subtotal) + " (" + (b.days || 1) + " day" + (b.days === 1 ? "" : "s") + ")" +
+        "<span>Rental fee " +
+        NS.ui.peso(b.subtotal) +
+        " (" +
+        (b.days || 1) +
+        " day" +
+        (b.days === 1 ? "" : "s") +
+        ")" +
         (Number(b.extras) ? " + driver " + NS.ui.peso(b.extras) : "") +
-        " = <strong>" + NS.ui.peso(b.total) + "</strong> · recorded paid " + NS.ui.peso(paid) +
-        " · balance " + NS.ui.peso(balance);
+        "</span> = <strong>" +
+        NS.ui.peso(b.total) +
+        "</strong>" +
+        "<span class=\"pay-fee-split\">Recorded paid " +
+        NS.ui.peso(paid) +
+        " · Balance <strong>" +
+        NS.ui.peso(balance) +
+        "</strong></span>";
     }
 
     function render() {
       var list = NS.domain.allPayments();
       host.innerHTML = list.length
-        ? '<table class="table"><thead><tr><th>Ref</th><th>Booking</th><th>Amount</th><th>Method</th><th>Receipt</th><th>Payer</th><th>Date</th><th>Status</th></tr></thead><tbody>' +
+        ? '<div class="ops-table-wrap"><table class="ops-table pay-table"><thead><tr>' +
+          "<th>Ref</th><th>Booking</th><th class=\"num\">Amount</th><th>Method</th><th>Payer</th><th class=\"num\">Date</th><th>Status</th><th class=\"pay-action-head\">Action</th>" +
+          "</tr></thead><tbody>" +
           list
             .map(function (p) {
+              var status = p.paymentStatus || "paid";
+              var methodBits = [titleCase(p.paymentMethod || "")];
+              if (p.brand && p.brand !== "Cash") methodBits.push(p.brand);
+              if (p.last4 && /^\d{4}$/.test(p.last4)) methodBits.push("··" + p.last4);
+              var hasReceipt = !!NS.domain.cashlessReceipt({
+                id: p.bookingId,
+                payment: { method: p.paymentMethod, brand: p.brand, receipt: p.receipt }
+              });
+              var action = hasReceipt
+                ? '<button class="btn btn-ghost btn-sm pay-action-btn" type="button" data-pay-receipt="' +
+                  esc(p.bookingId) +
+                  '">View <span class="pay-action-chevron" aria-hidden="true">›</span></button>'
+                : '<span class="pay-action-muted">—</span>';
               return (
-                "<tr><td>" +
+                "<tr><td title=\"" +
                 esc(p.referenceNumber || p.id) +
-                "</td><td>" +
+                '">' +
+                esc(p.referenceNumber || p.id) +
+                '</td><td title="' +
                 esc(p.bookingRef || p.bookingId) +
-                "</td><td>" +
+                '">' +
+                esc(p.bookingRef || p.bookingId) +
+                '</td><td class="num">' +
                 NS.ui.peso(p.amount) +
-                "</td><td>" +
-                esc((p.paymentMethod || "") + (p.brand && p.brand !== "Cash" ? " · " + p.brand : "") + (p.last4 && /^\d{4}$/.test(p.last4) ? " ··" + p.last4 : "")) +
-                "</td><td>" +
-                (NS.domain.cashlessReceipt({ id: p.bookingId, payment: { method: p.paymentMethod, brand: p.brand, receipt: p.receipt } })
-                  ? '<button class="btn btn-ghost btn-sm" type="button" data-pay-receipt="' + esc(p.bookingId) + '">View receipt</button>'
-                  : "—") +
-                "</td><td>" +
+                '</td><td title="' +
+                esc(methodBits.filter(Boolean).join(" · ")) +
+                '">' +
+                esc(methodBits.filter(Boolean).join(" · ")) +
+                '</td><td title="' +
                 esc(p.holder || "") +
-                "</td><td>" +
+                '">' +
+                esc(p.holder || "") +
+                '</td><td class="num">' +
                 NS.ui.fmtDate(p.paymentDate) +
-                '</td><td><select class="form-select form-select-sm" data-pay-status="' + esc(p.id) + '" aria-label="Payment status">' +
-                NS.domain.PAYMENT_STATUSES.map(function (s) {
-                  return '<option value="' + s + '"' + ((p.paymentStatus || "paid") === s ? " selected" : "") + ">" + s + "</option>";
-                }).join("") +
-                "</select></td></tr>"
+                '</td><td class="pay-status-cell">' +
+                NS.ui.statusBadge(status) +
+                '</td><td class="pay-action-cell">' +
+                action +
+                "</td></tr>"
               );
             })
             .join("") +
-          "</tbody></table>"
+          "</tbody></table></div>"
         : "<p class='notice'>No payment records yet.</p>";
     }
 
@@ -1818,6 +1994,7 @@
         return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
       });
       if (summary) summary.textContent = returns.length + " waiting · newest first";
+      returnsHost.classList.toggle("is-empty", !returns.length);
       returnsHost.innerHTML = returns.length
         ? returns
             .map(function (b) {
@@ -1841,7 +2018,11 @@
               );
             })
             .join("")
-        : "<p class='notice'>No return requests waiting.</p>";
+        : '<div class="empty-state empty-state-compact" role="status">' +
+            '<span class="empty-state-mark" aria-hidden="true"></span>' +
+            "<p><strong>No returns waiting</strong></p>" +
+            "<p class=\"fineprint\">When a renter requests a return, it shows up here.</p>" +
+            "</div>";
     }
 
     function renderList() {

@@ -1582,11 +1582,7 @@
                 me &&
                 me.role === "customer" &&
                 (b.status === "confirmed" || b.status === "ongoing");
-              var returnBtn = canReturn
-                ? '<button class="btn btn-gold btn-sm" type="button" data-return="' +
-                  b.id +
-                  '">Return vehicle</button> '
-                : "";
+              var detailHref = NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(b.id));
               var waiting =
                 b.status === "return_requested"
                   ? "<p class='fineprint'>Waiting for desk to accept return</p>"
@@ -1597,23 +1593,33 @@
                 b.status === "completed" &&
                 !b.rating &&
                 !NS.domain.getRatingForBooking(b.id);
-              var rateBtn = canRate
-                ? '<a class="btn btn-gold btn-sm" href="' +
-                  NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(b.id)) +
-                  '">Rate car</a> '
-                : "";
               var ratedNote =
                 b.rating || NS.domain.getRatingForBooking(b.id)
                   ? "<p class='fineprint'>You rated this car</p>"
                   : "";
+              var actions = "";
+              if (canRate) {
+                actions +=
+                  '<a class="btn btn-ghost btn-sm" href="' + detailHref + '">Rate car</a>';
+              }
+              if (canReturn) {
+                actions +=
+                  '<a class="btn btn-ghost btn-sm" href="' + detailHref + '">Open</a>' +
+                  '<button class="btn btn-pay btn-sm" type="button" data-return="' +
+                  b.id +
+                  '">Return vehicle</button>';
+              } else {
+                actions +=
+                  '<a class="btn btn-pay btn-sm" href="' + detailHref + '">Open</a>';
+              }
               return (
-                '<article class="booking-card"><div><p class="eyebrow">' +
+                '<article class="booking-card my-booking-card"><div><p class="eyebrow">' +
                 NS.security.escapeHtml(b.ref) +
                 "</p><h3>" +
                 NS.security.escapeHtml(v ? v.name : "Vehicle") +
-                "</h3><p class='fineprint'>" +
+                "</h3><p class='fineprint booking-meta'>" +
                 NS.security.escapeHtml(NS.domain.bookingQueueText(b)) +
-                "</p><p>" +
+                "</p><p class='booking-dates'>" +
                 NS.ui.fmtDate(b.startDate) +
                 " → " +
                 NS.ui.fmtDate(b.endDate) +
@@ -1625,11 +1631,8 @@
                 "<p>" +
                 NS.ui.peso(b.total) +
                 '</p><div class="btn-row">' +
-                returnBtn +
-                rateBtn +
-                '<a class="btn btn-ghost btn-sm" href="' +
-                NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(b.id)) +
-                '">Open</a></div></div></article>'
+                actions +
+                "</div></div></article>"
               );
             })
             .join("")
