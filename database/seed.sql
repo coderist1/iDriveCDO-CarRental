@@ -62,97 +62,98 @@ INSERT INTO vehicles
   (code, name, brand, model, year_model, year_purchased, type, transmission, fuel,
    capacity, luggage, mileage, daily_rate, plate_number, image, description, status)
 VALUES
-  ('veh_vios', 'Toyota Vios 2024', 'Toyota', 'Vios', 2024, 2024, 'Sedan', 'Automatic', 'Gasoline',
-   5, 2, 12000, 1800, 'CDO-1001',
-   'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=1400&q=80',
-   'City-friendly sedan for downtown CDO, mall runs, and airport transfers.', 'available'),
-  ('veh_city', 'Honda City 2023', 'Honda', 'City', 2023, 2023, 'Sedan', 'Automatic', 'Gasoline',
-   5, 2, 13500, 1900, 'CDO-1002',
-   'https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=1400&q=80',
-   'Quiet cabin and strong air-conditioning for long CDO heat.', 'available'),
-  ('veh_mirage', 'Mitsubishi Mirage G4', 'Mitsubishi', 'Mirage G4', 2023, 2023, 'Sedan', 'Automatic', 'Gasoline',
-   5, 1, 15000, 1500, 'CDO-1003',
-   'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=1400&q=80',
-   'Light on fuel. Ideal for solo travelers and couples.', 'available'),
-  ('veh_fortuner', 'Toyota Fortuner', 'Toyota', 'Fortuner', 2024, 2024, 'SUV', 'Automatic', 'Diesel',
-   7, 4, 16500, 4500, 'CDO-2001',
-   'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1400&q=80',
-   'Family SUV for Bukidnon roads, Camiguin trips, and group tours.', 'available'),
-  ('veh_montero', 'Mitsubishi Montero Sport', 'Mitsubishi', 'Montero Sport', 2023, 2023, 'SUV', 'Automatic', 'Diesel',
-   7, 4, 18000, 4300, 'CDO-2002',
-   'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1400&q=80',
-   'High clearance for CDO rain days and mountain weekends.', 'available'),
-  ('veh_crv', 'Honda CR-V', 'Honda', 'CR-V', 2024, 2024, 'SUV', 'Automatic', 'Gasoline',
-   5, 3, 19500, 3800, 'CDO-2003',
-   'https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?auto=format&fit=crop&w=1400&q=80',
-   'Comfortable crossover for city hotels and uptown stays.', 'available'),
-  ('veh_everest', 'Ford Everest', 'Ford', 'Everest', 2023, 2023, 'SUV', 'Automatic', 'Diesel',
-   7, 4, 21000, 4200, 'CDO-2004',
-   'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=1400&q=80',
-   'Strong towing and highway presence for northbound trips.', 'available'),
-  ('veh_hiace', 'Toyota Hiace Commuter', 'Toyota', 'Hiace', 2023, 2023, 'Van', 'Manual', 'Diesel',
-   15, 8, 22500, 5000, 'CDO-3001',
-   'https://images.unsplash.com/photo-1527786356703-4b100091cd2c?auto=format&fit=crop&w=1400&q=80',
-   'Group van for company outings, church trips, and airport batches.', 'available'),
-  ('veh_alphard', 'Toyota Alphard', 'Toyota', 'Alphard', 2022, 2022, 'Van', 'Automatic', 'Gasoline',
-   7, 4, 24000, 8500, 'CDO-3002',
-   'https://images.unsplash.com/photo-1619767886558-efdc259cde1a?auto=format&fit=crop&w=1400&q=80',
-   'Executive van with captain seats for VIP airport arrivals.', 'available'),
-  ('veh_hilux', 'Toyota Hilux Conquest', 'Toyota', 'Hilux', 2024, 2024, 'Pickup', 'Automatic', 'Diesel',
-   5, 5, 25500, 3600, 'CDO-4001',
-   'https://images.unsplash.com/photo-1559416523-140ddc3d238c?auto=format&fit=crop&w=1400&q=80',
-   'Workhorse pickup for cargo, site visits, and rough farm roads.', 'available'),
-  ('veh_ranger', 'Ford Ranger Wildtrak', 'Ford', 'Ranger', 2024, 2024, 'Pickup', 'Automatic', 'Diesel',
-   5, 5, 27000, 3900, 'CDO-4002',
-   'https://images.unsplash.com/photo-1609521263047-f8f205293f24?auto=format&fit=crop&w=1400&q=80',
-   'Lifestyle pickup for beach gear and weekend camping.', 'available'),
-  ('veh_landcruiser', 'Toyota Land Cruiser Prado', 'Toyota', 'Prado', 2022, 2022, 'SUV', 'Automatic', 'Diesel',
-   7, 4, 28500, 7800, 'CDO-2005',
-   'https://images.unsplash.com/photo-1544636331-e26879cd4d9b?auto=format&fit=crop&w=1400&q=80',
-   'Flagship SUV for long north Mindanao itineraries.', 'available');
+  ('veh_mirage_g4', 'Mirage G4 GLX 2023', 'Mitsubishi', 'Mirage G4 GLX', 2023, 2023, 'Sedan', 'Automatic', 'Gasoline',
+   5, 2, 12000, 1500, 'CDO-1001',
+   '/shared/img/fleet/mirage-g4.jpg',
+   'Compact white sedan for downtown CDO, mall runs, and airport transfers.', 'available'),
+  ('veh_strada', 'Strada GLS 2.4D 2WD AT 2024', 'Mitsubishi', 'Strada GLS 2.4D', 2024, 2024, 'Pickup', 'Automatic', 'Diesel',
+   5, 5, 13500, 2800, 'CDO-4001',
+   '/shared/img/fleet/strada.jpg',
+   'White diesel pickup for cargo, site visits, and rough provincial roads.', 'available'),
+  ('veh_soluto_mt', 'Soluto 1.4 LX MT 2019', 'Kia', 'Soluto 1.4 LX', 2019, 2019, 'Sedan', 'Manual', 'Gasoline',
+   5, 2, 15000, 1200, 'CDO-1002',
+   '/shared/img/fleet/soluto-mt.jpg',
+   'Budget-friendly gray sedan for everyday city errands.', 'available'),
+  ('veh_stargazer', 'Stargazer 1.5 GLS IVT 2024', 'Hyundai', 'Stargazer 1.5 GLS', 2024, 2024, 'Van', 'Automatic', 'Gasoline',
+   7, 3, 16500, 2200, 'CDO-3001',
+   '/shared/img/fleet/stargazer.jpg',
+   'Family MPV with third-row seating for group trips around CDO.', 'available'),
+  ('veh_l300_i', 'L300-I FB MT 2023', 'Mitsubishi', 'L300 FB', 2023, 2023, 'Van', 'Manual', 'Diesel',
+   3, 8, 18000, 2500, 'CDO-3002',
+   '/shared/img/fleet/l300-i.jpg',
+   'White FB van for deliveries, bulk cargo, and commercial hauls.', 'available'),
+  ('veh_l300_ii', 'L300-II FB MT 2024', 'Mitsubishi', 'L300 FB', 2024, 2024, 'Van', 'Manual', 'Diesel',
+   3, 8, 19500, 2500, 'CDO-3003',
+   '/shared/img/fleet/l300-ii.jpg',
+   'Second L300 unit — white FB van for cargo and market runs.', 'available'),
+  ('veh_l300_iii', 'L300-III FB MT 2025', 'Mitsubishi', 'L300 FB', 2025, 2025, 'Van', 'Manual', 'Diesel',
+   3, 8, 21000, 2600, 'CDO-3004',
+   '/shared/img/fleet/l300-iii.jpg',
+   'Newer L300 FB van for heavier commercial bookings.', 'available'),
+  ('veh_l300_iv', 'L300-IV FB MT', 'Mitsubishi', 'L300 FB', 2024, 2024, 'Van', 'Manual', 'Diesel',
+   3, 8, 22500, 2500, 'CDO-3005',
+   '/shared/img/fleet/l300-iv.jpg',
+   'Gray-tone L300 FB van ready for warehouse and provincial cargo.', 'available'),
+  ('veh_l300_v', 'L300-V FB MT 2025', 'Mitsubishi', 'L300 FB', 2025, 2025, 'Van', 'Manual', 'Diesel',
+   3, 8, 24000, 2600, 'CDO-3006',
+   '/shared/img/fleet/l300-v.jpg',
+   'Fifth L300 unit — white FB van for fleet overflow bookings.', 'available'),
+  ('veh_ertiga', 'Suzuki Ertiga MT 2020', 'Suzuki', 'Ertiga', 2020, 2020, 'Van', 'Manual', 'Gasoline',
+   7, 3, 25500, 1800, 'CDO-3007',
+   '/shared/img/fleet/ertiga.jpg',
+   'Seven-seat MPV for family rides and hotel transfers.', 'available'),
+  ('veh_soluto_at', 'Kia Soluto AT 2019', 'Kia', 'Soluto', 2019, 2019, 'Sedan', 'Automatic', 'Gasoline',
+   5, 2, 27000, 1300, 'CDO-1003',
+   '/shared/img/fleet/soluto-at.jpg',
+   'Automatic Soluto sedan for easy city driving.', 'available'),
+  ('veh_mirage_hatch', 'Mirage Hatchback', 'Mitsubishi', 'Mirage Hatchback', 2022, 2022, 'Sedan', 'Automatic', 'Gasoline',
+   5, 1, 28500, 1400, 'CDO-1004',
+   '/shared/img/fleet/mirage-hatch.jpg',
+   'White hatchback for light travel and tight CDO parking.', 'available');
 
 INSERT INTO vehicle_features (vehicle_id, feature, sort_order)
 SELECT v.vehicle_id, f.feature, f.sort_order
 FROM vehicles v
 JOIN (
-  SELECT 'veh_vios' AS code, 'Bluetooth' AS feature, 1 AS sort_order UNION ALL
-  SELECT 'veh_vios', 'Backup camera', 2 UNION ALL
-  SELECT 'veh_vios', 'USB charging', 3 UNION ALL
-  SELECT 'veh_vios', 'Fuel efficient', 4 UNION ALL
-  SELECT 'veh_city', 'Cruise control', 1 UNION ALL
-  SELECT 'veh_city', 'Apple CarPlay', 2 UNION ALL
-  SELECT 'veh_city', 'Keyless entry', 3 UNION ALL
-  SELECT 'veh_mirage', 'Compact park', 1 UNION ALL
-  SELECT 'veh_mirage', 'Touchscreen', 2 UNION ALL
-  SELECT 'veh_mirage', 'Eco mode', 3 UNION ALL
-  SELECT 'veh_fortuner', '4x2', 1 UNION ALL
-  SELECT 'veh_fortuner', 'Third row', 2 UNION ALL
-  SELECT 'veh_fortuner', 'Hill assist', 3 UNION ALL
-  SELECT 'veh_fortuner', 'Rear AC', 4 UNION ALL
-  SELECT 'veh_montero', 'Leather seats', 1 UNION ALL
-  SELECT 'veh_montero', 'Paddle shift', 2 UNION ALL
-  SELECT 'veh_montero', 'Camera 360', 3 UNION ALL
-  SELECT 'veh_crv', 'Honda Sensing', 1 UNION ALL
-  SELECT 'veh_crv', 'Sunroof', 2 UNION ALL
-  SELECT 'veh_crv', 'Power tailgate', 3 UNION ALL
-  SELECT 'veh_everest', 'Terrain modes', 1 UNION ALL
-  SELECT 'veh_everest', 'SYNC infotainment', 2 UNION ALL
-  SELECT 'veh_everest', 'LED lights', 3 UNION ALL
-  SELECT 'veh_hiace', 'High roof', 1 UNION ALL
-  SELECT 'veh_hiace', 'Dual AC', 2 UNION ALL
-  SELECT 'veh_hiace', 'Wide sliding doors', 3 UNION ALL
-  SELECT 'veh_alphard', 'Captain seats', 1 UNION ALL
-  SELECT 'veh_alphard', 'Power sliding doors', 2 UNION ALL
-  SELECT 'veh_alphard', 'Premium audio', 3 UNION ALL
-  SELECT 'veh_hilux', '4x4', 1 UNION ALL
-  SELECT 'veh_hilux', 'Bed liner', 2 UNION ALL
-  SELECT 'veh_hilux', 'Tow hook', 3 UNION ALL
-  SELECT 'veh_ranger', 'Sports bar', 1 UNION ALL
-  SELECT 'veh_ranger', 'Leather-trimmed', 2 UNION ALL
-  SELECT 'veh_ranger', 'Off-road tires', 3 UNION ALL
-  SELECT 'veh_landcruiser', 'Crawl control', 1 UNION ALL
-  SELECT 'veh_landcruiser', 'Cool box', 2 UNION ALL
-  SELECT 'veh_landcruiser', 'Multi-terrain', 3
+  SELECT 'veh_mirage_g4' AS code, 'Bluetooth' AS feature, 1 AS sort_order UNION ALL
+  SELECT 'veh_mirage_g4', 'Touchscreen', 2 UNION ALL
+  SELECT 'veh_mirage_g4', 'Eco mode', 3 UNION ALL
+  SELECT 'veh_mirage_g4', 'Fuel efficient', 4 UNION ALL
+  SELECT 'veh_strada', '2WD', 1 UNION ALL
+  SELECT 'veh_strada', 'Bed liner', 2 UNION ALL
+  SELECT 'veh_strada', 'Tow hook', 3 UNION ALL
+  SELECT 'veh_strada', 'Diesel torque', 4 UNION ALL
+  SELECT 'veh_soluto_mt', 'Manual gearbox', 1 UNION ALL
+  SELECT 'veh_soluto_mt', 'Compact park', 2 UNION ALL
+  SELECT 'veh_soluto_mt', 'USB charging', 3 UNION ALL
+  SELECT 'veh_stargazer', 'IVT automatic', 1 UNION ALL
+  SELECT 'veh_stargazer', 'Third row', 2 UNION ALL
+  SELECT 'veh_stargazer', 'Rear AC', 3 UNION ALL
+  SELECT 'veh_stargazer', 'Sliding doors', 4 UNION ALL
+  SELECT 'veh_l300_i', 'Flatbed body', 1 UNION ALL
+  SELECT 'veh_l300_i', 'Diesel', 2 UNION ALL
+  SELECT 'veh_l300_i', 'High payload', 3 UNION ALL
+  SELECT 'veh_l300_ii', 'Flatbed body', 1 UNION ALL
+  SELECT 'veh_l300_ii', 'Diesel', 2 UNION ALL
+  SELECT 'veh_l300_ii', 'High payload', 3 UNION ALL
+  SELECT 'veh_l300_iii', 'Flatbed body', 1 UNION ALL
+  SELECT 'veh_l300_iii', 'Diesel', 2 UNION ALL
+  SELECT 'veh_l300_iii', 'High payload', 3 UNION ALL
+  SELECT 'veh_l300_iv', 'Flatbed body', 1 UNION ALL
+  SELECT 'veh_l300_iv', 'Diesel', 2 UNION ALL
+  SELECT 'veh_l300_iv', 'High payload', 3 UNION ALL
+  SELECT 'veh_l300_v', 'Flatbed body', 1 UNION ALL
+  SELECT 'veh_l300_v', 'Diesel', 2 UNION ALL
+  SELECT 'veh_l300_v', 'High payload', 3 UNION ALL
+  SELECT 'veh_ertiga', 'Third row', 1 UNION ALL
+  SELECT 'veh_ertiga', 'Manual gearbox', 2 UNION ALL
+  SELECT 'veh_ertiga', 'Fuel efficient', 3 UNION ALL
+  SELECT 'veh_soluto_at', 'Automatic', 1 UNION ALL
+  SELECT 'veh_soluto_at', 'Compact park', 2 UNION ALL
+  SELECT 'veh_soluto_at', 'Air-conditioning', 3 UNION ALL
+  SELECT 'veh_mirage_hatch', 'Hatch access', 1 UNION ALL
+  SELECT 'veh_mirage_hatch', 'Eco mode', 2 UNION ALL
+  SELECT 'veh_mirage_hatch', 'Compact park', 3
 ) f ON f.code = v.code;
 
 INSERT INTO drivers
@@ -171,7 +172,7 @@ FROM vehicles v;
 
 INSERT INTO maintenances (code, vehicle_id, maintenance_type, scheduled_date, finished, notes, created_by, created_at)
 VALUES
-  ('mnt_001', (SELECT vehicle_id FROM vehicles WHERE code = 'veh_vios'), 'Oil change', '2026-09-20', FALSE,
+  ('mnt_001', (SELECT vehicle_id FROM vehicles WHERE code = 'veh_mirage_g4'), 'Oil change', '2026-09-20', FALSE,
    'Routine service', (SELECT user_id FROM users WHERE code = 'usr_admin'), '2026-09-01 08:00:00');
 
 INSERT INTO fuel_records (code, vehicle_id, fuel_type, notes, recorded_at)
@@ -189,24 +190,24 @@ INSERT INTO bookings
 VALUES
   ('bkg_demo1', 'IDR-20260901-A1B',
    (SELECT user_id FROM users WHERE code = 'usr_customer'),
-   (SELECT vehicle_id FROM vehicles WHERE code = 'veh_vios'),
+   (SELECT vehicle_id FROM vehicles WHERE code = 'veh_mirage_g4'),
    NULL,
    (SELECT user_id FROM users WHERE code = 'usr_customer'),
    '2026-09-12', '2026-09-15', '09:00:00', '09:00:00', 3,
    (SELECT location_id FROM locations WHERE name = 'Laguindingan Airport (CGY)'),
    (SELECT location_id FROM locations WHERE name = 'Centrio Mall'),
-   1, 'self', 'Full', 5400, 600, 6000, 'confirmed', 'paid', 'card',
+   1, 'self', 'Full', 4500, 600, 5100, 'confirmed', 'paid', 'card',
    'Flight 3P 221, arriving 1:10 PM.',
    '2026-09-01 10:00:00', '2026-09-01 10:00:00', '2026-09-01 10:12:00'),
   ('bkg_driver1', 'IDR-20260918-C7D',
    (SELECT user_id FROM users WHERE code = 'usr_customer'),
-   (SELECT vehicle_id FROM vehicles WHERE code = 'veh_fortuner'),
+   (SELECT vehicle_id FROM vehicles WHERE code = 'veh_stargazer'),
    (SELECT driver_id FROM drivers WHERE code = 'drv_001'),
    (SELECT user_id FROM users WHERE code = 'usr_customer'),
    '2026-09-18', '2026-09-20', '13:00:00', '10:00:00', 2,
    (SELECT location_id FROM locations WHERE name = 'Laguindingan Airport (CGY)'),
    (SELECT location_id FROM locations WHERE name = 'Uptown Cagayan de Oro'),
-   4, 'chauffeur', 'Full', 9000, 3000, 12000, 'confirmed', 'paid', 'card',
+   4, 'chauffeur', 'Full', 4400, 3000, 7400, 'confirmed', 'paid', 'card',
    'VIP airport pickup, 4 passengers.',
    '2026-09-10 08:30:00', '2026-09-10 08:30:00', '2026-09-10 09:00:00');
 
@@ -219,9 +220,9 @@ INSERT INTO payments
   (code, booking_id, amount, payment_method, brand, account_last4, holder, reference_number,
    payment_status, payment_date, created_at)
 VALUES
-  ('pay_demo1', (SELECT booking_id FROM bookings WHERE code = 'bkg_demo1'), 6000, 'card', 'Visa', '4242',
+  ('pay_demo1', (SELECT booking_id FROM bookings WHERE code = 'bkg_demo1'), 5100, 'card', 'Visa', '4242',
    'Paolo Reyes', 'AUTH9C2', 'paid', '2026-09-01 10:12:00', '2026-09-01 10:12:00'),
-  ('pay_driver1', (SELECT booking_id FROM bookings WHERE code = 'bkg_driver1'), 12000, 'card', 'Visa', '4242',
+  ('pay_driver1', (SELECT booking_id FROM bookings WHERE code = 'bkg_driver1'), 7400, 'card', 'Visa', '4242',
    'Paolo Reyes', 'AUTHC7D', 'paid', '2026-09-10 09:00:00', '2026-09-10 09:00:00');
 
 INSERT INTO audit_logs (code, action, user_id, actor_label, detail)

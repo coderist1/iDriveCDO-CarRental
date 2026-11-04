@@ -229,13 +229,57 @@
     var qEnd = NS.ui.qs("end");
     var qPickup = NS.ui.qs("pickup");
 
+    function seatCount(v) {
+      var n = Number(v && v.seats);
+      return n > 0 ? n : 0;
+    }
+
+    function transmissionLabel(v) {
+      var t = String((v && v.transmission) || "").trim();
+      if (!t || t === "—") return "";
+      return t;
+    }
+
+    function carSpecsHtml(v) {
+      var bits = [];
+      var transmission = transmissionLabel(v);
+      var seats = seatCount(v);
+      if (transmission) {
+        bits.push(
+          '<span class="book-car-spec"><em>Transmission</em><strong>' +
+            NS.security.escapeHtml(transmission) +
+            "</strong></span>"
+        );
+      }
+      if (seats) {
+        bits.push(
+          '<span class="book-car-spec"><em>Seats</em><strong>' +
+            seats +
+            "</strong></span>"
+        );
+      }
+      return bits.length ? '<div class="book-car-specs" aria-label="Vehicle details">' + bits.join("") + "</div>" : "";
+    }
+
+    function carMetaSummary(v) {
+      var parts = [];
+      var transmission = transmissionLabel(v);
+      var seats = seatCount(v);
+      if (transmission) parts.push(transmission);
+      if (seats) parts.push(seats + "-seater");
+      return parts;
+    }
+
     function vehicleOptions(selected) {
       var opts = vehicles.map(function (v) {
-      return (
+        var meta = carMetaSummary(v);
+        return (
           '<option value="' + v.id + '"' + (v.id === selected ? " selected" : "") + ">" +
-          NS.security.escapeHtml(v.name) + " — " + NS.ui.peso(v.dailyRate) + "/day</option>"
-      );
-    }).join("");
+          NS.security.escapeHtml(v.name) +
+          (meta.length ? " · " + meta.join(" · ") : "") +
+          " — " + NS.ui.peso(v.dailyRate) + "/day</option>"
+        );
+      }).join("");
       if (!selected) {
         return '<option value="" selected disabled>Choose a car</option>' + opts;
       }
@@ -530,7 +574,11 @@
       return (
         "<h3>Trip estimate</h3>" +
         (warning ? '<p class="notice">' + NS.security.escapeHtml(warning) + "</p>" : "") +
-        "<p><strong>" + NS.security.escapeHtml(q.vehicle.name) + "</strong></p>" +
+        '<div class="estimate-vehicle">' +
+        '<p class="eyebrow">' + NS.security.escapeHtml(q.vehicle.type || "Vehicle") + "</p>" +
+        "<strong>" + NS.security.escapeHtml(q.vehicle.name) + "</strong>" +
+        carSpecsHtml(q.vehicle) +
+        "</div>" +
         "<p class='estimate-mode'>" + (mode === "chauffeur" ? "With chauffeur" : "Self-drive") + "</p>" +
         "<ul class='estimate-list'><li>" + q.days + " day(s) × " + NS.ui.peso(q.vehicle.dailyRate) + "</li>" +
         q.addons.map(function (a) {
@@ -1223,6 +1271,8 @@
         var v = selectedVehicle(form);
         var rows = [
           ["Car", v ? v.name : "Not chosen"],
+          ["Transmission", v ? transmissionLabel(v) : ""],
+          ["Seats", v && seatCount(v) ? String(seatCount(v)) : ""],
           ["Drive type", form.id === "chauffeur-form" ? "With chauffeur" : "Self-drive"],
           ["Pickup", NS.ui.fmtDate(form.startDate.value) + " · " + (form.pickupTime.value || "")],
           ["Return", NS.ui.fmtDate(form.endDate.value) + " · " + (form.returnTime.value || "")],
@@ -1258,10 +1308,15 @@
           return (
             '<button class="book-car-card' + (selected ? " is-selected" : "") + '" type="button" role="option" aria-selected="' +
             (selected ? "true" : "false") + '" data-pick-car="' + v.id + '">' +
-            '<img src="' + NS.security.escapeHtml(v.image || FALLBACK_IMAGE) + '" alt="">' +
-            "<div><p class='eyebrow'>" + NS.security.escapeHtml(v.type || "") + "</p>" +
+            '<span class="book-car-media"><img src="' + NS.security.escapeHtml(v.image || FALLBACK_IMAGE) + '" alt=""></span>' +
+            '<div class="book-car-body">' +
+            '<p class="eyebrow">' + NS.security.escapeHtml(v.type || "Vehicle") + "</p>" +
             "<strong>" + NS.security.escapeHtml(v.name) + "</strong>" +
-            "<p>" + NS.ui.peso(v.dailyRate) + "<span>/day</span></p>" +
+            carSpecsHtml(v) +
+            '<p class="book-car-rate">' + NS.ui.peso(v.dailyRate) + "<span>/day</span></p>" +
+            (v.description
+              ? '<p class="book-car-desc">' + NS.security.escapeHtml(v.description) + "</p>"
+              : "") +
             inUse +
             "</div></button>"
           );

@@ -2396,221 +2396,224 @@
   }
 
   function seedVehicles() {
+    var img = function (file) {
+      return "/shared/img/fleet/" + file;
+    };
     return [
       {
-        id: "veh_vios",
-        name: "Toyota Vios 2024",
-        brand: "Toyota",
-        model: "Vios",
-        year: 2024,
-        type: "Sedan",
-        transmission: "Automatic",
-        fuel: "Gasoline",
-        seats: 5,
-        luggage: 2,
-        dailyRate: 1800,
-        plate: "CDO-1001",
-        image: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=1400&q=80",
-        description: "City-friendly sedan for downtown CDO, mall runs, and airport transfers.",
-        features: ["Bluetooth", "Backup camera", "USB charging", "Fuel efficient"],
-        status: "available"
-      },
-      {
-        id: "veh_city",
-        name: "Honda City 2023",
-        brand: "Honda",
-        model: "City",
-        year: 2023,
-        type: "Sedan",
-        transmission: "Automatic",
-        fuel: "Gasoline",
-        seats: 5,
-        luggage: 2,
-        dailyRate: 1900,
-        plate: "CDO-1002",
-        image: "https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=1400&q=80",
-        description: "Quiet cabin and strong air-conditioning for long CDO heat.",
-        features: ["Cruise control", "Apple CarPlay", "Keyless entry"],
-        status: "available"
-      },
-      {
-        id: "veh_mirage",
-        name: "Mitsubishi Mirage G4",
+        id: "veh_mirage_g4",
+        name: "Mirage G4 GLX 2023",
         brand: "Mitsubishi",
-        model: "Mirage G4",
+        model: "Mirage G4 GLX",
         year: 2023,
+        type: "Sedan",
+        transmission: "Automatic",
+        fuel: "Gasoline",
+        seats: 5,
+        luggage: 2,
+        dailyRate: 1500,
+        plate: "CDO-1001",
+        image: img("mirage-g4.jpg"),
+        description: "Compact sedan for downtown CDO, mall runs, and airport transfers.",
+        features: ["Bluetooth", "Touchscreen", "Eco mode", "Fuel efficient"],
+        status: "available"
+      },
+      {
+        id: "veh_strada",
+        name: "Strada GLS 2.4D 2WD AT 2024",
+        brand: "Mitsubishi",
+        model: "Strada GLS 2.4D",
+        year: 2024,
+        type: "Pickup",
+        transmission: "Automatic",
+        fuel: "Diesel",
+        seats: 5,
+        luggage: 5,
+        dailyRate: 2800,
+        plate: "CDO-4001",
+        image: img("strada.jpg"),
+        description: "Diesel pickup for cargo, site visits, and rough provincial roads.",
+        features: ["2WD", "Bed liner", "Tow hook", "Diesel torque"],
+        status: "available"
+      },
+      {
+        id: "veh_soluto_mt",
+        name: "Soluto 1.4 LX MT 2019",
+        brand: "Kia",
+        model: "Soluto 1.4 LX",
+        year: 2019,
+        type: "Sedan",
+        transmission: "Manual",
+        fuel: "Gasoline",
+        seats: 5,
+        luggage: 2,
+        dailyRate: 1200,
+        plate: "CDO-1002",
+        image: img("soluto-mt.jpg"),
+        description: "Budget-friendly sedan for everyday city errands.",
+        features: ["Manual gearbox", "Compact park", "USB charging"],
+        status: "available"
+      },
+      {
+        id: "veh_stargazer",
+        name: "Stargazer 1.5 GLS IVT 2024",
+        brand: "Hyundai",
+        model: "Stargazer 1.5 GLS",
+        year: 2024,
+        type: "Van",
+        transmission: "Automatic",
+        fuel: "Gasoline",
+        seats: 7,
+        luggage: 3,
+        dailyRate: 2200,
+        plate: "CDO-3001",
+        image: img("stargazer.jpg"),
+        description: "Family MPV with third-row seating for group trips around CDO.",
+        features: ["IVT automatic", "Third row", "Rear AC", "Sliding doors"],
+        status: "available"
+      },
+      {
+        id: "veh_l300_i",
+        name: "L300-I FB MT 2023",
+        brand: "Mitsubishi",
+        model: "L300 FB",
+        year: 2023,
+        type: "Van",
+        transmission: "Manual",
+        fuel: "Diesel",
+        seats: 3,
+        luggage: 8,
+        dailyRate: 2500,
+        plate: "CDO-3002",
+        image: img("l300-i.jpg"),
+        description: "FB van for deliveries, bulk cargo, and commercial hauls.",
+        features: ["Flatbed body", "Diesel", "High payload"],
+        status: "available"
+      },
+      {
+        id: "veh_l300_ii",
+        name: "L300-II FB MT 2024",
+        brand: "Mitsubishi",
+        model: "L300 FB",
+        year: 2024,
+        type: "Van",
+        transmission: "Manual",
+        fuel: "Diesel",
+        seats: 3,
+        luggage: 8,
+        dailyRate: 2500,
+        plate: "CDO-3003",
+        image: img("l300-ii.jpg"),
+        description: "Second L300 unit for cargo and market runs.",
+        features: ["Flatbed body", "Diesel", "High payload"],
+        status: "available"
+      },
+      {
+        id: "veh_l300_iii",
+        name: "L300-III FB MT 2025",
+        brand: "Mitsubishi",
+        model: "L300 FB",
+        year: 2025,
+        type: "Van",
+        transmission: "Manual",
+        fuel: "Diesel",
+        seats: 3,
+        luggage: 8,
+        dailyRate: 2600,
+        plate: "CDO-3004",
+        image: img("l300-iii.jpg"),
+        description: "Newer L300 FB van for heavier commercial bookings.",
+        features: ["Flatbed body", "Diesel", "High payload"],
+        status: "available"
+      },
+      {
+        id: "veh_l300_iv",
+        name: "L300-IV FB MT",
+        brand: "Mitsubishi",
+        model: "L300 FB",
+        year: 2024,
+        type: "Van",
+        transmission: "Manual",
+        fuel: "Diesel",
+        seats: 3,
+        luggage: 8,
+        dailyRate: 2500,
+        plate: "CDO-3005",
+        image: img("l300-iv.jpg"),
+        description: "L300 FB van ready for warehouse and provincial cargo.",
+        features: ["Flatbed body", "Diesel", "High payload"],
+        status: "available"
+      },
+      {
+        id: "veh_l300_v",
+        name: "L300-V FB MT 2025",
+        brand: "Mitsubishi",
+        model: "L300 FB",
+        year: 2025,
+        type: "Van",
+        transmission: "Manual",
+        fuel: "Diesel",
+        seats: 3,
+        luggage: 8,
+        dailyRate: 2600,
+        plate: "CDO-3006",
+        image: img("l300-v.jpg"),
+        description: "Fifth L300 unit for fleet overflow bookings.",
+        features: ["Flatbed body", "Diesel", "High payload"],
+        status: "available"
+      },
+      {
+        id: "veh_ertiga",
+        name: "Suzuki Ertiga MT 2020",
+        brand: "Suzuki",
+        model: "Ertiga",
+        year: 2020,
+        type: "Van",
+        transmission: "Manual",
+        fuel: "Gasoline",
+        seats: 7,
+        luggage: 3,
+        dailyRate: 1800,
+        plate: "CDO-3007",
+        image: img("ertiga.jpg"),
+        description: "Seven-seat MPV for family rides and hotel transfers.",
+        features: ["Third row", "Manual gearbox", "Fuel efficient"],
+        status: "available"
+      },
+      {
+        id: "veh_soluto_at",
+        name: "Kia Soluto AT 2019",
+        brand: "Kia",
+        model: "Soluto",
+        year: 2019,
+        type: "Sedan",
+        transmission: "Automatic",
+        fuel: "Gasoline",
+        seats: 5,
+        luggage: 2,
+        dailyRate: 1300,
+        plate: "CDO-1003",
+        image: img("soluto-at.jpg"),
+        description: "Automatic Soluto sedan for easy city driving.",
+        features: ["Automatic", "Compact park", "Air-conditioning"],
+        status: "available"
+      },
+      {
+        id: "veh_mirage_hatch",
+        name: "Mirage Hatchback",
+        brand: "Mitsubishi",
+        model: "Mirage Hatchback",
+        year: 2022,
         type: "Sedan",
         transmission: "Automatic",
         fuel: "Gasoline",
         seats: 5,
         luggage: 1,
-        dailyRate: 1500,
-        plate: "CDO-1003",
-        image: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=1400&q=80",
-        description: "Light on fuel. Ideal for solo travelers and couples.",
-        features: ["Compact park", "Touchscreen", "Eco mode"],
-        status: "available"
-      },
-      {
-        id: "veh_fortuner",
-        name: "Toyota Fortuner",
-        brand: "Toyota",
-        model: "Fortuner",
-        year: 2024,
-        type: "SUV",
-        transmission: "Automatic",
-        fuel: "Diesel",
-        seats: 7,
-        luggage: 4,
-        dailyRate: 4500,
-        plate: "CDO-2001",
-        image: "https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1400&q=80",
-        description: "Family SUV for Bukidnon roads, Camiguin trips, and group tours.",
-        features: ["4x2", "Third row", "Hill assist", "Rear AC"],
-        status: "available"
-      },
-      {
-        id: "veh_montero",
-        name: "Mitsubishi Montero Sport",
-        brand: "Mitsubishi",
-        model: "Montero Sport",
-        year: 2023,
-        type: "SUV",
-        transmission: "Automatic",
-        fuel: "Diesel",
-        seats: 7,
-        luggage: 4,
-        dailyRate: 4300,
-        plate: "CDO-2002",
-        image: "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1400&q=80",
-        description: "High clearance for CDO rain days and mountain weekends.",
-        features: ["Leather seats", "Paddle shift", "Camera 360"],
-        status: "available"
-      },
-      {
-        id: "veh_crv",
-        name: "Honda CR-V",
-        brand: "Honda",
-        model: "CR-V",
-        year: 2024,
-        type: "SUV",
-        transmission: "Automatic",
-        fuel: "Gasoline",
-        seats: 5,
-        luggage: 3,
-        dailyRate: 3800,
-        plate: "CDO-2003",
-        image: "https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?auto=format&fit=crop&w=1400&q=80",
-        description: "Comfortable crossover for city hotels and uptown stays.",
-        features: ["Honda Sensing", "Sunroof", "Power tailgate"],
-        status: "available"
-      },
-      {
-        id: "veh_everest",
-        name: "Ford Everest",
-        brand: "Ford",
-        model: "Everest",
-        year: 2023,
-        type: "SUV",
-        transmission: "Automatic",
-        fuel: "Diesel",
-        seats: 7,
-        luggage: 4,
-        dailyRate: 4200,
-        plate: "CDO-2004",
-        image: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=1400&q=80",
-        description: "Strong towing and highway presence for northbound trips.",
-        features: ["Terrain modes", "SYNC infotainment", "LED lights"],
-        status: "available"
-      },
-      {
-        id: "veh_hiace",
-        name: "Toyota Hiace Commuter",
-        brand: "Toyota",
-        model: "Hiace",
-        year: 2023,
-        type: "Van",
-        transmission: "Manual",
-        fuel: "Diesel",
-        seats: 15,
-        luggage: 8,
-        dailyRate: 5000,
-        plate: "CDO-3001",
-        image: "https://images.unsplash.com/photo-1527786356703-4b100091cd2c?auto=format&fit=crop&w=1400&q=80",
-        description: "Group van for company outings, church trips, and airport batches.",
-        features: ["High roof", "Dual AC", "Wide sliding doors"],
-        status: "available"
-      },
-      {
-        id: "veh_alphard",
-        name: "Toyota Alphard",
-        brand: "Toyota",
-        model: "Alphard",
-        year: 2022,
-        type: "Van",
-        transmission: "Automatic",
-        fuel: "Gasoline",
-        seats: 7,
-        luggage: 4,
-        dailyRate: 8500,
-        plate: "CDO-3002",
-        image: "https://images.unsplash.com/photo-1619767886558-efdc259cde1a?auto=format&fit=crop&w=1400&q=80",
-        description: "Executive van with captain seats for VIP airport arrivals.",
-        features: ["Captain seats", "Power sliding doors", "Premium audio"],
-        status: "available"
-      },
-      {
-        id: "veh_hilux",
-        name: "Toyota Hilux Conquest",
-        brand: "Toyota",
-        model: "Hilux",
-        year: 2024,
-        type: "Pickup",
-        transmission: "Automatic",
-        fuel: "Diesel",
-        seats: 5,
-        luggage: 5,
-        dailyRate: 3600,
-        plate: "CDO-4001",
-        image: "https://images.unsplash.com/photo-1559416523-140ddc3d238c?auto=format&fit=crop&w=1400&q=80",
-        description: "Workhorse pickup for cargo, site visits, and rough farm roads.",
-        features: ["4x4", "Bed liner", "Tow hook"],
-        status: "available"
-      },
-      {
-        id: "veh_ranger",
-        name: "Ford Ranger Wildtrak",
-        brand: "Ford",
-        model: "Ranger",
-        year: 2024,
-        type: "Pickup",
-        transmission: "Automatic",
-        fuel: "Diesel",
-        seats: 5,
-        luggage: 5,
-        dailyRate: 3900,
-        plate: "CDO-4002",
-        image: "https://images.unsplash.com/photo-1609521263047-f8f205293f24?auto=format&fit=crop&w=1400&q=80",
-        description: "Lifestyle pickup for beach gear and weekend camping.",
-        features: ["Sports bar", "Leather-trimmed", "Off-road tires"],
-        status: "available"
-      },
-      {
-        id: "veh_landcruiser",
-        name: "Toyota Land Cruiser Prado",
-        brand: "Toyota",
-        model: "Prado",
-        year: 2022,
-        type: "SUV",
-        transmission: "Automatic",
-        fuel: "Diesel",
-        seats: 7,
-        luggage: 4,
-        dailyRate: 7800,
-        plate: "CDO-2005",
-        image: "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?auto=format&fit=crop&w=1400&q=80",
-        description: "Flagship SUV for long north Mindanao itineraries.",
-        features: ["Crawl control", "Cool box", "Multi-terrain"],
+        dailyRate: 1400,
+        plate: "CDO-1004",
+        image: img("mirage-hatch.jpg"),
+        description: "Hatchback for light travel and tight CDO parking.",
+        features: ["Hatch access", "Eco mode", "Compact park"],
         status: "available"
       }
     ];
@@ -2664,7 +2667,7 @@
     return [
       {
         id: "mnt_001",
-        vehicleId: "veh_vios",
+        vehicleId: "veh_mirage_g4",
         maintenanceType: "Oil change",
         scheduledDate: "2026-09-20",
         performedAt: "",
@@ -2795,6 +2798,20 @@
     NS.store.set(key, "fifo-20261013");
   }
 
+  /* Replace the demo fleet with the current seed list (white/gray Mirage–L300 lineup). */
+  function refreshFleetOnce() {
+    var key = "fleetReset";
+    if (NS.store.get(key) === "fleet-20261104b") return;
+    NS.store.set("vehicles", seedVehicles());
+    saveVehicleRegs(seedVehicleRegs());
+    saveFuelRecords(seedFuelRecords());
+    NS.store.set("maintenances", seedMaintenances());
+    NS.store.set("vehicleTelemetry", {});
+    NS.store.set("maintenancePredictions", {});
+    NS.store.set(key, "fleet-20261104b");
+    audit("seed", "system", "Fleet photos updated to real Mirage / Strada / Soluto / Stargazer / L300 / Ertiga units.");
+  }
+
   function seedIfNeeded() {
     if (!NS.store.get("seeded", false)) {
       NS.store.set("users", seedUsers());
@@ -2811,6 +2828,7 @@
       NS.store.set("vehicleTelemetry", {});
       NS.store.set("maintenancePredictions", {});
       NS.store.set("seeded", true);
+      NS.store.set("fleetReset", "fleet-20261104b");
       saveVehicleRegs(seedVehicleRegs());
       saveFuelRecords(seedFuelRecords());
       audit("seed", "system", "Initial fleet and demo accounts loaded.");
@@ -2820,6 +2838,7 @@
     migrateLegacyInbox();
     ensureErdSeed();
     clearStoredBookingsOnce();
+    refreshFleetOnce();
   }
 
   function migrateLegacyInbox() {
@@ -2872,7 +2891,7 @@
     var list = vehicles();
     var changed = false;
     for (var i = 0; i < list.length; i++) {
-      if (!list[i].image && byId[list[i].id]) {
+      if (byId[list[i].id] && list[i].image !== byId[list[i].id]) {
         list[i].image = byId[list[i].id];
         changed = true;
       }

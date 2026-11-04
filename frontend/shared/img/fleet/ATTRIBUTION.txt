@@ -1,0 +1,17 @@
+Fleet photos sourced from Wikimedia Commons (CC BY-SA / own-work uploads).
+Resized for web use in this capstone project.
+
+mirage-g4.jpg      Mitsubishi Mirage G4 1.2 GLS 2023
+strada.jpg         2024 Mitsubishi Triton / Strada 2.4 GLS 4x2 White Diamond
+soluto-mt.jpg      2019 Kia Soluto EX front
+stargazer.jpg      Hyundai Stargazer 1.5 GLS
+l300-i.jpg         Mitsubishi L300 FB 2023
+l300-ii.jpg        Mitsubishi L300 FB 2024
+l300-iii.jpg       2024 Mitsubishi L300 2.2 FB Exceed
+l300-iv.jpg        Mitsubishi L300 FB Van 2023
+l300-v.jpg         Mitsubishi L300 FB Van 2024
+ertiga.jpg         2021 Suzuki Ertiga 1.5 manual (white)
+soluto-at.jpg      Kia Soluto 1.4 EX AT Clear White
+mirage-hatch.jpg   2017 Mitsubishi Mirage ES Pearl White (front)
+
+See https://commons.wikimedia.org/ for author and license details per file.
