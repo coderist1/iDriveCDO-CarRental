@@ -182,7 +182,7 @@
         '<div class="shortcut-group"><p class="side-label">Desk</p><div class="shortcut-row">' +
         jump("index.html", "Open Desk", "This overview") +
         jump("bookings.html", "Bookings", "Confirm and complete trips") +
-        jump("inbox.html", "Inbox", "Messages and returns") +
+        jump("inbox.html", "Inbox", "Returns and incoming bookings") +
         jump("payments.html", "Payments", "Cash and cashless records") +
         "</div></div>" +
         '<div class="shortcut-group"><p class="side-label">People</p><div class="shortcut-row">' +
@@ -638,7 +638,7 @@
     var photos = modal.querySelector(".id-check-photos");
     if (!shots.length) {
       photos.innerHTML =
-        '<p class="fineprint">No ID photo is on file for this booking. If the customer just uploaded one, wait for the booking to finish saving, then open View ID again. Otherwise message the customer or check the physical ID at pick-up.</p>';
+        '<p class="fineprint">No ID photo is on file for this booking. If the customer just uploaded one, wait for the booking to finish saving, then open View ID again. Otherwise check the physical ID at pick-up.</p>';
     } else {
       shots.forEach(function (shot) {
         var fig = document.createElement("figure");
@@ -764,10 +764,6 @@
             '<button class="btn btn-ghost" type="button" data-id-photo="' +
             b.id +
             '">View ID</button>';
-          secondary +=
-            '<button class="btn btn-ghost" type="button" data-msg="' +
-            b.id +
-            '">Message</button>';
           if (NS.domain.cashlessReceipt && NS.domain.cashlessReceipt(b)) {
             secondary +=
               '<button class="btn btn-ghost" type="button" data-pay-receipt="' +
@@ -865,16 +861,6 @@
           return;
         }
         showBookingId(booking);
-        return;
-      }
-      var msgId = e.target.getAttribute("data-msg");
-      if (msgId) {
-        try {
-          var thread = NS.domain.ensureBookingThread(msgId);
-          location.href = "inbox.html?id=" + encodeURIComponent(thread.id);
-        } catch (err) {
-          NS.ui.toast(err.message, "err");
-        }
         return;
       }
       var acceptId = e.target.getAttribute("data-accept-return");
@@ -1905,34 +1891,10 @@
     render();
   }
 
-  function threadMessagesHtml(thread, hideBookingNotice) {
-    return (thread.messages || [])
-      .filter(function (m) {
-        return !(hideBookingNotice && /^New booking \S+ received\./.test(m.body || ""));
-      })
-      .map(function (m) {
-        return (
-          '<div class="chat-line chat-' +
-          NS.security.escapeHtml(m.fromRole || "customer") +
-          '"><strong>' +
-          NS.security.escapeHtml(m.fromName || m.fromRole) +
-          "</strong><span>" +
-          NS.ui.fmtDate(m.at) +
-          "</span>" +
-          (NS.ui.chatMessageBodyHtml ? NS.ui.chatMessageBodyHtml(m.body, thread) : "<p>" + NS.security.escapeHtml(m.body) + "</p>") +
-          "</div>"
-        );
-      })
-      .join("");
-  }
-
   function adminInbox() {
     mountAdminNav();
     var incomingHost = document.getElementById("incoming-bookings");
     var returnsHost = document.getElementById("pending-returns");
-    var listHost = document.getElementById("thread-list");
-    var viewHost = document.getElementById("thread-view");
-    var selectedId = NS.ui.qs("id") || "";
     if (document.body.getAttribute("data-inbox-bound") === "1") {
       if (NS.pages._inboxRefresh) NS.pages._inboxRefresh();
       return;
@@ -1976,9 +1938,6 @@
                 NS.ui.statusBadge(b.paymentStatus) +
                 '</div><div class="card-actions">' +
                 '<div class="card-actions-primary">' +
-                '<button class="btn btn-ghost" type="button" data-open="' +
-                b.id +
-                '">Message customer</button>' +
                 '<a class="btn btn-pay" href="bookings.html">Open desk</a>' +
                 "</div></div></article>"
               );
@@ -2009,9 +1968,7 @@
                 bookingDetailList(b) +
                 '</div><div class="card-badges">' +
                 NS.ui.statusBadge(b.status) +
-                '</div><div class="card-actions"><button class="btn btn-ghost btn-sm" data-open="' +
-                b.id +
-                '">Message</button>' +
+                '</div><div class="card-actions">' +
                 '<button class="btn btn-gold btn-sm" data-accept-return="' +
                 b.id +
                 '">Accept return</button></div></article>'
@@ -2023,137 +1980,6 @@
             "<p><strong>No returns waiting</strong></p>" +
             "<p class=\"fineprint\">When a renter requests a return, it shows up here.</p>" +
             "</div>";
-    }
-
-    function renderList() {
-      var filterEl = document.getElementById("thread-filter");
-      var summary = document.getElementById("thread-summary");
-      var list = NS.domain.staffThreads().slice().sort(function (a, b) {
-        var am = (a.messages && a.messages[a.messages.length - 1] && a.messages[a.messages.length - 1].at) || a.updatedAt || "";
-        var bm = (b.messages && b.messages[b.messages.length - 1] && b.messages[b.messages.length - 1].at) || b.updatedAt || "";
-        return String(bm).localeCompare(String(am));
-      });
-      var unread = list.filter(function (t) { return t.unreadStaff; }).length;
-      if (summary) summary.textContent = list.length + " conversations · " + unread + " unread · newest first";
-      if (filterEl && filterEl.value === "unread") list = list.filter(function (t) { return t.unreadStaff; });
-      listHost.innerHTML = list.length
-        ? list
-            .map(function (t) {
-              return (
-                '<button type="button" class="thread-item' +
-                (t.id === selectedId ? " active" : "") +
-                (t.unreadStaff ? " unread" : "") +
-                '" data-thread="' +
-                t.id +
-                '"><strong>' +
-                NS.security.escapeHtml(t.topic) +
-                "</strong><span>" +
-                NS.security.escapeHtml(t.customerName || "Guest") +
-                (t.kind === "return" ? " · return" : t.kind === "notice" ? " · notice" : "") +
-                (t.unreadStaff ? " · new" : "") +
-                "</span></button>"
-              );
-            })
-            .join("")
-        : "<p class='notice'>No conversations yet.</p>";
-    }
-
-    function kindLabel(kind) {
-      if (kind === "return") return "Vehicle return";
-      if (kind === "notice") return "Account notice";
-      if (kind === "booking") return "Booking received";
-      return "Customer message";
-    }
-
-    function renderThread() {
-      if (!selectedId) {
-        viewHost.innerHTML = "<p class='notice'>Select a conversation to reply.</p>";
-        return;
-      }
-      var thread = NS.domain.getThread(selectedId);
-      if (!thread) {
-        viewHost.innerHTML = "<p class='notice'>Conversation not found.</p>";
-        return;
-      }
-      NS.domain.markThreadRead(thread.id);
-      var booking = thread.bookingId ? NS.domain.getBooking(thread.bookingId) : null;
-      var acceptBlock =
-        booking && booking.status === "return_requested"
-          ? '<div class="btn-row" style="margin-bottom:1rem"><button class="btn btn-gold" type="button" id="thread-accept-return" data-accept-return="' +
-            booking.id +
-            '">Accept return</button></div>'
-          : "";
-      viewHost.innerHTML =
-        "<p class='eyebrow'>" +
-        NS.security.escapeHtml(kindLabel(thread.kind)) +
-        "</p><h3>" +
-        NS.security.escapeHtml(thread.topic) +
-        "</h3>" +
-        (booking
-          ? '<div class="thread-booking">' +
-            NS.ui.statusBadge(booking.status) +
-            " " +
-            NS.ui.statusBadge(booking.paymentStatus) +
-            bookingDetailList(booking) +
-            "</div>"
-          : thread.bookingId
-          ? '<div class="thread-booking">' + missingBookingDetailList(thread) + "</div>"
-          : "<p>" +
-            NS.security.escapeHtml(thread.customerName || "") +
-            " · " +
-            NS.security.escapeHtml(thread.customerEmail || "") +
-            " · " +
-            NS.security.escapeHtml(thread.customerPhone || "") +
-            "</p>") +
-        acceptBlock +
-        '<div class="chat-log">' +
-        threadMessagesHtml(thread, !!booking || !!thread.bookingId) +
-        "</div>" +
-        '<form id="staff-reply" class="reply-form">' +
-        '<label class="field">Reply to customer<textarea class="form-control" name="body" maxlength="500" required></textarea></label>' +
-        '<button class="btn btn-gold" type="submit">Send reply</button></form>';
-      var form = document.getElementById("staff-reply");
-      NS.ui.bindCsrf(form);
-      form.addEventListener("submit", function (e) {
-        e.preventDefault();
-        NS.ui.askYesNo("Send this reply to the customer?", { title: "Save edit" }).then(function (ok) {
-          if (!ok) return;
-          try {
-            NS.domain.replyToThread(thread.id, form.body.value, form.csrf ? form.csrf.value : "");
-            NS.ui.toast("Reply sent to customer.", "ok");
-            renderList();
-            renderThread();
-            mountAdminNav();
-          } catch (err) {
-            NS.ui.toast(err.message, "err");
-          }
-        });
-      });
-      var acceptBtn = document.getElementById("thread-accept-return");
-      if (acceptBtn) {
-        acceptBtn.addEventListener("click", function () {
-          var id = acceptBtn.getAttribute("data-accept-return");
-          NS.ui
-            .askYesNo("Accept this vehicle return and complete the trip?", {
-              title: "Accept return",
-              yes: "Yes",
-              no: "No"
-            })
-            .then(function (ok) {
-              if (!ok) return;
-              try {
-                NS.domain.acceptVehicleReturn(id, NS.security.getCsrf());
-                NS.ui.toast("Return accepted. Trip completed.", "ok");
-                renderReturns();
-                renderList();
-                renderThread();
-                mountAdminNav();
-              } catch (err) {
-                NS.ui.toast(err.message, "err");
-              }
-            });
-        });
-      }
     }
 
     function acceptReturn(id) {
@@ -2169,8 +1995,6 @@
             NS.domain.acceptVehicleReturn(id, NS.security.getCsrf());
             NS.ui.toast("Return accepted. Trip completed.", "ok");
             renderReturns();
-            renderList();
-            renderThread();
             mountAdminNav();
           } catch (err) {
             NS.ui.toast(err.message, "err");
@@ -2178,68 +2002,24 @@
         });
     }
 
-    function openBookingConversation(bookingId) {
-      var thread = NS.domain.ensureBookingThread(bookingId);
-      selectedId = thread.id;
-      renderList();
-      renderThread();
-      viewHost.scrollIntoView({ behavior: "smooth", block: "start" });
-      var reply = viewHost.querySelector('textarea[name="body"]');
-      if (reply) reply.focus({ preventScroll: true });
-    }
-
-    incomingHost.addEventListener("click", function (e) {
-      var id = e.target.getAttribute("data-open");
-      if (!id) return;
-      try {
-        openBookingConversation(id);
-      } catch (err) {
-        NS.ui.toast(err.message, "err");
-      }
-    });
-
     if (returnsHost) {
       returnsHost.addEventListener("click", function (e) {
         var acceptId = e.target.getAttribute("data-accept-return");
-        if (acceptId) {
-          acceptReturn(acceptId);
-          return;
-        }
-        var id = e.target.getAttribute("data-open");
-        if (!id) return;
-        try {
-          openBookingConversation(id);
-        } catch (err) {
-          NS.ui.toast(err.message, "err");
-        }
+        if (acceptId) acceptReturn(acceptId);
       });
     }
 
-    listHost.addEventListener("click", function (e) {
-      var btn = e.target.closest("[data-thread]");
-      if (!btn) return;
-      selectedId = btn.getAttribute("data-thread");
-      renderList();
-      renderThread();
-    });
-
     var incomingFilter = document.getElementById("incoming-filter");
-    var threadFilter = document.getElementById("thread-filter");
     if (incomingFilter) incomingFilter.addEventListener("change", renderIncoming);
-    if (threadFilter) threadFilter.addEventListener("change", renderList);
 
     function refreshInbox() {
       mountAdminNav();
       renderIncoming();
       renderReturns();
-      renderList();
-      renderThread();
     }
 
     renderIncoming();
     renderReturns();
-    renderList();
-    renderThread();
     NS.pages._inboxRefresh = refreshInbox;
     NS.pages.onSynced = refreshInbox;
   }
