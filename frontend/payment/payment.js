@@ -6,9 +6,18 @@
 
   function showPaidReceipt(form, box, booking) {
     var v = NS.domain.getVehicle(booking.vehicleId);
+    var reserved = NS.domain.isReservationBooking && NS.domain.isReservationBooking(booking);
+    var paidAmount =
+      (booking.payment && booking.payment.amount != null
+        ? booking.payment.amount
+        : reserved && NS.domain.amountDueForBooking
+          ? NS.domain.RESERVATION_DOWNPAYMENT
+          : booking.total);
     form.hidden = true;
     box.innerHTML =
-      "<p class='eyebrow'>Payment complete</p>" +
+      "<p class='eyebrow'>" +
+      (reserved ? "Downpayment received" : "Payment complete") +
+      "</p>" +
       "<h1>Receipt ready</h1>" +
       "<p>" +
       NS.security.escapeHtml(booking.ref) +
@@ -16,9 +25,15 @@
       NS.security.escapeHtml(v ? v.name : "Vehicle") +
       "</p>" +
       "<p class='total'>" +
-      NS.ui.peso(booking.total) +
+      NS.ui.peso(paidAmount) +
       "</p>" +
-      "<p class='notice'>Your payment was recorded.</p>" +
+      "<p class='notice'>" +
+      (reserved
+        ? "Reservation downpayment recorded. Trip total remains " +
+          NS.ui.peso(booking.total) +
+          ". Staff can approve after this payment."
+        : "Your payment was recorded.") +
+      "</p>" +
       '<div class="btn-row">' +
       '<a class="btn btn-ghost" href="' +
       NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(booking.id)) +
@@ -49,6 +64,9 @@
     }
 
     var v = NS.domain.getVehicle(booking.vehicleId);
+    var reserved = NS.domain.isReservationBooking && NS.domain.isReservationBooking(booking);
+    var due =
+      NS.domain.amountDueForBooking ? NS.domain.amountDueForBooking(booking) : booking.total;
 
     box.innerHTML =
       "<h1>Pay " +
@@ -57,9 +75,18 @@
       NS.security.escapeHtml(v ? v.name : "") +
       " · " +
       booking.days +
-      " day(s)</p><p class='total'>" +
-      NS.ui.peso(booking.total) +
-      "</p>";
+      " day(s)" +
+      (reserved ? " · reservation" : "") +
+      "</p><p class='total'>" +
+      NS.ui.peso(due) +
+      "</p>" +
+      (reserved
+        ? "<p class='notice'>Pay the " +
+          NS.ui.peso(due) +
+          " downpayment now. Full trip total is " +
+          NS.ui.peso(booking.total) +
+          ".</p>"
+        : "");
 
     function payMethod() {
       var chosen = form.querySelector('input[name="payMethod"]:checked');

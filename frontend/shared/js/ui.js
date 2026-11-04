@@ -639,7 +639,14 @@
       (v.dailyRate ? peso(v.dailyRate) + "<span>/day</span>" : "Rate on request") +
       "</strong>" +
       (free && v.dailyRate
-        ? '<a class="btn btn-gold" href="' + bookLink + '">Book Now</a>'
+        ? '<span class="vehicle-cta-actions">' +
+          '<a class="btn btn-ghost" href="' +
+          bookLink +
+          (bookLink.indexOf("?") >= 0 ? "&" : "?") +
+          'reserve=1">Reserve</a>' +
+          '<a class="btn btn-gold" href="' +
+          bookLink +
+          '">Book Now</a></span>'
         : '<a class="btn btn-ghost" href="' + link + '">View</a>') +
       "</div></div></article>"
     );

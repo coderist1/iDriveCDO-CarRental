@@ -91,9 +91,13 @@
             "<p>Rate: <strong>from " +
             NS.ui.peso(v.dailyRate) +
             " / day</strong></p>" +
+            '<div class="hp-car-actions">' +
+            '<a class="btn btn-ghost" href="' +
+            NS.routes.href("book", "?vehicle=" + encodeURIComponent(v.id) + "&reserve=1") +
+            '">Reserve</a>' +
             '<a class="btn btn-gold" href="' +
             NS.routes.href("book", "?vehicle=" + encodeURIComponent(v.id)) +
-            '">Book Now</a>' +
+            '">Book Now</a></div>' +
             "</article>"
           );
         })

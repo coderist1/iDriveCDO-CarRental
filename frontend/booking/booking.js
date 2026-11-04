@@ -223,11 +223,18 @@
     };
 
     var today = new Date();
+    var leadDays = NS.domain.RESERVATION_LEAD_DAYS || 3;
+    var downpayment = NS.domain.RESERVATION_DOWNPAYMENT || 2000;
     var startDefault = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
     var endDefault = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 4);
     var qStart = NS.ui.qs("start");
     var qEnd = NS.ui.qs("end");
     var qPickup = NS.ui.qs("pickup");
+    var bookingIntent = NS.ui.qs("reserve") === "1" ? "reserve" : "book";
+
+    function isReservation() {
+      return bookingIntent === "reserve";
+    }
 
     function seatCount(v) {
       var n = Number(v && v.seats);
@@ -1130,7 +1137,8 @@
               driveMode: mode,
               driverInfo: driverInfo,
               addons: mode === "chauffeur" ? ["driver"] : [],
-              notes: notes
+              notes: notes,
+              isReservation: isReservation()
             }, csrfInput ? csrfInput.value : "");
         } catch (err) {
           fail(err);
@@ -1202,8 +1210,45 @@
         return Math.round((start - now) / 86400000);
       }
 
-      function isReservation() {
-        return daysAhead(wizStart && wizStart.value) >= 3;
+      function reserveMinDate() {
+        var d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + leadDays);
+        return localISO(d);
+      }
+
+      function applyIntentDates() {
+        if (!wizStart) return;
+        var min = isReservation() ? reserveMinDate() : localISO(today);
+        wizStart.min = min;
+        if (!wizStart.value || wizStart.value < min) wizStart.value = min;
+        if (wizEnd) {
+          wizEnd.min = wizStart.value;
+          if (!wizEnd.value || wizEnd.value <= wizStart.value) {
+            var end = new Date(wizStart.value + "T00:00:00");
+            end.setDate(end.getDate() + 3);
+            wizEnd.value = localISO(end);
+          }
+        }
+      }
+
+      function paintIntentCards() {
+        search.querySelectorAll("[data-book-intent]").forEach(function (card) {
+          var selected = card.getAttribute("data-book-intent") === bookingIntent;
+          card.classList.toggle("is-selected", selected);
+          card.setAttribute("aria-pressed", selected ? "true" : "false");
+        });
+        var nextBtn = search.querySelector("[data-wizard-next]");
+        if (nextBtn) nextBtn.textContent = isReservation() ? "Show cars to reserve" : "Show available cars";
+      }
+
+      function setBookingIntent(next) {
+        bookingIntent = next === "reserve" ? "reserve" : "book";
+        applyIntentDates();
+        paintIntentCards();
+        paintReserveHint();
+        paintPayLabels();
+        syncMirrors();
+        if (stepName === "car") paintCars();
+        else refresh();
       }
 
       function syncMirrors() {
@@ -1223,16 +1268,21 @@
         var hint = search.querySelector("[data-reserve-hint]");
         if (!hint) return;
         if (isReservation()) {
-          hint.textContent = "Pickup is 3 or more days away. This will be a reservation. A downpayment is needed before staff can approve it.";
+          hint.textContent =
+            "Reservation selected. Pickup must be at least " +
+            leadDays +
+            " days away. You will pay a " +
+            NS.ui.peso(downpayment) +
+            " downpayment before staff can approve it.";
         } else {
-          hint.textContent = "Pickup is soon. After review you continue to payment.";
+          hint.textContent = "Booking selected. After review you continue to full payment.";
         }
       }
 
       function paintPayLabels() {
         var reserve = isReservation();
         document.querySelectorAll("[data-pay-label]").forEach(function (btn) {
-          var label = reserve ? "Pay downpayment" : "Continue to payment";
+          var label = reserve ? "Pay " + NS.ui.peso(downpayment) + " downpayment" : "Continue to payment";
           btn.textContent = label;
           btn.setAttribute("data-pay-ready", label);
         });
@@ -1241,7 +1291,10 @@
           if (!note) return;
           if (reserve) {
             note.hidden = false;
-            note.textContent = "This is a reservation. Pay the downpayment next. Staff approve the booking only after that payment is recorded. You will also get a reservation confirmation email.";
+            note.textContent =
+              "This is a reservation. Pay the " +
+              NS.ui.peso(downpayment) +
+              " downpayment next. Staff approve only after that payment is recorded.";
           } else {
             note.hidden = true;
             note.textContent = "";
@@ -1273,6 +1326,7 @@
           ["Car", v ? v.name : "Not chosen"],
           ["Transmission", v ? transmissionLabel(v) : ""],
           ["Seats", v && seatCount(v) ? String(seatCount(v)) : ""],
+          ["Type", isReservation() ? "Reservation · " + NS.ui.peso(downpayment) + " downpayment" : "Book now · full payment"],
           ["Drive type", form.id === "chauffeur-form" ? "With chauffeur" : "Self-drive"],
           ["Pickup", NS.ui.fmtDate(form.startDate.value) + " · " + (form.pickupTime.value || "")],
           ["Return", NS.ui.fmtDate(form.endDate.value) + " · " + (form.returnTime.value || "")],
@@ -1402,6 +1456,14 @@
             showAlert(search, "Return date must be after the pickup date.", "err");
             return false;
           }
+          if (isReservation() && daysAhead(wizStart.value) < leadDays) {
+            showAlert(
+              search,
+              "Reservations need pickup at least " + leadDays + " days from today. Pick a later date or switch to Book now.",
+              "err"
+            );
+            return false;
+          }
           showAlert(search, "", "ok");
           return true;
         }
@@ -1503,11 +1565,11 @@
       }
 
       if (wizStart) {
-        wizStart.min = localISO(today);
-        wizStart.value = qStart || localISO(startDefault);
-        wizEnd.min = wizStart.value;
+        wizStart.value = qStart || localISO(isReservation() ? new Date(today.getFullYear(), today.getMonth(), today.getDate() + leadDays) : startDefault);
         wizEnd.value = qEnd || localISO(endDefault);
+        applyIntentDates();
       }
+      paintIntentCards();
       [wizStart, wizEnd, wizPickupTime, wizReturnTime].forEach(function (el) {
         if (!el) return;
         el.addEventListener("change", function () {
@@ -1517,6 +1579,11 @@
           paintPayLabels();
           if (stepName === "car") paintCars();
           else refresh();
+        });
+      });
+      search.querySelectorAll("[data-book-intent]").forEach(function (card) {
+        card.addEventListener("click", function () {
+          setBookingIntent(card.getAttribute("data-book-intent") || "book");
         });
       });
       if (carGrid) {

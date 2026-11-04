@@ -277,9 +277,13 @@
       (!v.dailyRate
         ? '<a class="btn btn-gold btn-block" href="' + NS.routes.href("contact") + '">Contact us</a>'
         : free
-        ? '<a class="btn btn-gold btn-block" href="' +
+        ? '<div class="rate-box-actions">' +
+          '<a class="btn btn-ghost btn-block" href="' +
+          NS.routes.href("book", bookQuery + (bookQuery.indexOf("?") >= 0 ? "&" : "?") + "reserve=1") +
+          '">Reserve this car</a>' +
+          '<a class="btn btn-gold btn-block" href="' +
           NS.routes.href("book", bookQuery) +
-          '">Book Now</a>'
+          '">Book Now</a></div>'
         : '<p class="notice">' +
           (state === "maintenance"
             ? "This car is under maintenance and cannot be booked right now."

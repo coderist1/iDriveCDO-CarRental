@@ -264,6 +264,22 @@
   }
 
   var AVAILABILITY_LABELS = { available: "Available", reserved: "Reserved", maintenance: "Under maintenance" };
+  var RESERVATION_DOWNPAYMENT = 2000;
+  var RESERVATION_LEAD_DAYS = 3;
+
+  function isReservationBooking(booking) {
+    return !!(booking && (booking.isReservation || booking.kind === "reservation"));
+  }
+
+  function amountDueForBooking(booking) {
+    if (!booking) return 0;
+    if (booking.paymentStatus === "paid") return 0;
+    var total = Number(booking.total) || 0;
+    if (isReservationBooking(booking)) {
+      return Math.min(RESERVATION_DOWNPAYMENT, total > 0 ? total : RESERVATION_DOWNPAYMENT);
+    }
+    return total;
+  }
 
   /* Latest end date of active bookings overlapping the dates (today when none given); "" when free. */
   function reservedUntil(vehicleId, start, end) {
@@ -488,6 +504,8 @@
       subtotal: q.subtotal,
       extras: q.extras,
       total: q.total,
+      isReservation: !!payload.isReservation,
+      kind: payload.isReservation ? "reservation" : "booking",
       status: "pending",
       paymentStatus: "unpaid",
       paymentMethod: "",
@@ -1218,6 +1236,8 @@
       audit("payment", me.id, booking.ref + " cash at desk");
     }
 
+    var dueAmount = amountDueForBooking(booking);
+    payment.amount = dueAmount;
     booking.payment = payment;
     booking.paymentMethod = method;
     booking.paymentStatus = "paid";
@@ -1230,7 +1250,7 @@
       id: "pay_" + NS.security.randomHex(6),
       bookingId: booking.id,
       bookingRef: booking.ref,
-      amount: booking.total,
+      amount: dueAmount,
       paymentMethod: method,
       referenceNumber: payment.authCode,
       paymentDate: payment.paidAt,
@@ -1245,7 +1265,7 @@
     if (booking.apiId != null) {
       pushToApi("payments", "payments", paymentRow, {
         booking_id: booking.apiId,
-        amount: booking.total,
+        amount: dueAmount,
         payment_method: method === "cashless" ? "cashless" : "cash",
         brand: method === "cashless" ? payment.brand : "Cash",
         account_last4: /^\d{4}$/.test(payment.last4 || "") ? payment.last4 : null,
@@ -3819,6 +3839,10 @@
     vehicleAvailability: vehicleAvailability,
     reservedUntil: reservedUntil,
     quote: quote,
+    RESERVATION_DOWNPAYMENT: RESERVATION_DOWNPAYMENT,
+    RESERVATION_LEAD_DAYS: RESERVATION_LEAD_DAYS,
+    isReservationBooking: isReservationBooking,
+    amountDueForBooking: amountDueForBooking,
     createBooking: createBooking,
     pushBookingToApi: pushBookingToApi,
     apiErrorMessage: apiErrorMessage,
