@@ -4396,13 +4396,12 @@ body.site-mode .site-footer {
 .layout.layout-narrow.layout-narrow-wide { grid-template-columns: minmax(0, 560px); }
 
 .auth-actions {
-  --auth-btn-w: 168px;
-  --auth-btn-h: 40px;
+  --auth-btn-h: 42px;
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
+  flex-wrap: nowrap;
+  justify-content: stretch;
+  align-items: stretch;
   gap: 0.55rem;
   margin: 0.7rem 0 0.15rem;
   width: 100%;
@@ -4415,33 +4414,36 @@ body.site-mode .site-footer {
 .auth-dialog .auth-actions > .btn,
 .auth-actions > .btn[type="submit"] {
   display: inline-flex !important;
-  width: var(--auth-btn-w) !important;
-  min-width: var(--auth-btn-w) !important;
-  max-width: var(--auth-btn-w) !important;
+  flex: 1 1 0 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
   height: var(--auth-btn-h) !important;
   min-height: var(--auth-btn-h) !important;
   margin: 0 !important;
-  padding: 0 0.8rem !important;
+  padding: 0 0.7rem !important;
   font-size: 0.84rem !important;
   border-radius: 8px !important;
-  flex: none !important;
-  align-self: center !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: stretch !important;
 }
 
 .google-signin-slot {
   position: relative;
-  width: var(--auth-btn-w);
+  flex: 1 1 0;
+  min-width: 0;
   height: var(--auth-btn-h);
-  flex: none;
-  align-self: center;
+  align-self: stretch;
 }
 .google-signin-slot .btn.google-custom {
   width: 100% !important;
-  min-width: 100% !important;
-  max-width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
   height: 100% !important;
   min-height: 100% !important;
   margin: 0 !important;
+  padding: 0 0.55rem !important;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -4451,7 +4453,7 @@ body.site-mode .site-footer {
   color: #141414 !important;
   font-family: var(--display);
   font-weight: 600;
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   border-radius: 8px !important;
   box-shadow: none !important;
   pointer-events: none;
@@ -4479,12 +4481,13 @@ body.site-mode .site-footer {
 
 body .auth-actions .btn.google-fallback,
 .google-signin-slot > .btn.google-fallback {
-  width: var(--auth-btn-w) !important;
-  min-width: var(--auth-btn-w) !important;
-  max-width: var(--auth-btn-w) !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
   height: var(--auth-btn-h) !important;
   min-height: var(--auth-btn-h) !important;
   margin: 0 !important;
+  padding: 0 0.55rem !important;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -4494,12 +4497,33 @@ body .auth-actions .btn.google-fallback,
   color: #141414 !important;
   font-family: var(--display);
   font-weight: 600;
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   border-radius: 8px !important;
   opacity: 1;
   cursor: not-allowed;
 }
-.google-g { font-weight: 800; color: #4285f4; }
+.google-g {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  display: block;
+}
+.google-label {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 420px) {
+  .auth-actions {
+    flex-wrap: wrap;
+  }
+  .auth-actions > .btn[type="submit"],
+  .google-signin-slot {
+    flex: 1 1 100% !important;
+  }
+}
 
 .forgot-row { display: flex; justify-content: flex-end; margin: -0.35rem 0 0.85rem; }
 .forgot-row a { font-size: 0.88rem; font-weight: 700; }
