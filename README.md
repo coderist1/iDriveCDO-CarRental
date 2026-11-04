@@ -29,6 +29,10 @@ frontend/
 
 Each feature folder owns its HTML and page script. Shared utilities stay under `shared/`.
 
+The **Machine Learning API** (FastAPI + joblib models) lives with the Laravel backend:
+
+`C:\Users\Acer\OneDrive\Desktop\B\iDriveCDO-CarRental-Backend\ml` — run `start-ml-api.bat` (port 8001).
+
 ## Demo accounts
 
 | Role | Email | Password |

@@ -3224,21 +3224,21 @@ textarea { min-height: 120px; resize: vertical; }
   vertical-align: middle;
 }
 .pay-table th:nth-child(1),
-.pay-table td:nth-child(1) { width: 9%; } /* Ref */
+.pay-table td:nth-child(1) { width: 8%; } /* Ref — short */
 .pay-table th:nth-child(2),
 .pay-table td:nth-child(2) { width: 18%; } /* Booking */
 .pay-table th:nth-child(3),
 .pay-table td:nth-child(3) { width: 12%; } /* Amount */
 .pay-table th:nth-child(4),
-.pay-table td:nth-child(4) { width: 12%; } /* Method */
+.pay-table td:nth-child(4) { width: 10%; } /* Method — short */
 .pay-table th:nth-child(5),
 .pay-table td:nth-child(5) { width: 18%; } /* Payer */
 .pay-table th:nth-child(6),
-.pay-table td:nth-child(6) { width: 11%; } /* Date */
+.pay-table td:nth-child(6) { width: 12%; } /* Date */
 .pay-table th:nth-child(7),
 .pay-table td:nth-child(7) { width: 10%; } /* Status */
 .pay-table th:nth-child(8),
-.pay-table td:nth-child(8) { width: 10%; } /* Action */
+.pay-table td:nth-child(8) { width: 12%; } /* Action */
 .pay-table th.num,
 .pay-table td.num {
   text-align: right;
@@ -3271,13 +3271,15 @@ textarea { min-height: 120px; resize: vertical; }
 }
 #payments-list.panel {
   overflow-x: hidden;
-  padding: 0.85rem 1rem;
+  padding: 1rem 1.15rem;
   box-sizing: border-box;
 }
 #payments-list .ops-table-wrap {
   overflow-x: hidden;
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
+  padding: 0;
 }
 @media (max-width: 900px) {
   .pay-span-3,

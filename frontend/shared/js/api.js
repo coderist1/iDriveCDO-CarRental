@@ -9,8 +9,8 @@
 
   var API_URLS = {
     local: "http://127.0.0.1:8000/api",
-    /* Replace with the deployed Laravel backend (must be https). */
-    production: "https://YOUR-BACKEND-DOMAIN/api"
+    /* Deployed Laravel API on Vercel (FrankenPHP container). */
+    production: "https://idrive-cdo-api.vercel.app/api"
   };  
 
   function isLocalHost() {

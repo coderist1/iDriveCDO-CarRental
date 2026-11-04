@@ -1432,7 +1432,7 @@
         paintReserveHint();
         paintPayLabels();
         syncMirrors();
-        refresh();
+    refresh();
         var shown = !selfForm.hidden ? selfForm : !chauffeurForm.hidden ? chauffeurForm : stepName === "car" ? cars : search;
         var heading = shown && shown.querySelector("h1");
         if (heading && heading.focus) heading.focus();

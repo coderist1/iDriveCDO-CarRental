@@ -21,7 +21,8 @@ services:
   ml:
     image: ${IDRIVE_ML_IMAGE:-horvedock/idrive-cdo-ml-api:latest}
     build:
-      context: ./frontend/ml-api
+      # ML service lives with the Laravel backend under ml/
+      context: ${IDRIVE_ML_DIR:-../OneDrive/Desktop/B/iDriveCDO-CarRental-Backend/ml}
       dockerfile: Dockerfile
     ports:
       - "8001:8001"
