@@ -2,7 +2,19 @@
   "use strict";
 
   var NS = (global.iDrive = global.iDrive || {});
-  var API_BASE = global.IDRIVE_ML_BASE_URL || "http://127.0.0.1:8001";
+
+  /* Same host split as api.js: local ML on :8001, production on Vercel. */
+  function isLocalHost() {
+    var host = global.location ? global.location.hostname : "";
+    return !host || host === "localhost" || host === "127.0.0.1" || /^192\.168\./.test(host) || /^10\./.test(host);
+  }
+
+  var ML_URLS = {
+    local: "http://127.0.0.1:8001",
+    production: "https://idrive-cdo-ml.vercel.app"
+  };
+
+  var API_BASE = global.IDRIVE_ML_BASE_URL || ML_URLS[isLocalHost() ? "local" : "production"];
   var KNOWN_BRANDS = [
     "Audi", "BMW", "Chevrolet", "Ford", "Honda",
     "Hyundai", "Kia", "Mercedes-Benz", "Nissan", "Toyota"
