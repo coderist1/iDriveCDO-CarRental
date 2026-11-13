@@ -38,6 +38,218 @@
     document.body.appendChild(modal);
   }
 
+  /* Desk actions for one booking (Approve / Reject / Start / Complete / payment). */
+  function bookingDeskPrimaryActions(b) {
+    var primary = "";
+    var unpaid =
+      b.paymentStatus !== "paid" && b.status !== "cancelled" && b.status !== "rejected";
+    if (b.status === "pending") {
+      primary +=
+        '<button class="btn btn-reject" type="button" data-act="rejected" data-id="' +
+        b.id +
+        '">Reject</button>';
+      if (unpaid) {
+        primary +=
+          '<a class="btn btn-pay" href="payments.html?booking=' +
+          encodeURIComponent(b.id) +
+          '">Record payment</a>';
+        primary +=
+          '<button class="btn btn-approve" type="button" data-act="confirmed" data-id="' +
+          b.id +
+          '" disabled aria-disabled="true" title="Record payment before approving">Approve</button>';
+      } else {
+        primary +=
+          '<button class="btn btn-approve" type="button" data-act="confirmed" data-id="' +
+          b.id +
+          '">Approve</button>';
+      }
+    } else if (unpaid) {
+      primary +=
+        '<a class="btn btn-pay" href="payments.html?booking=' +
+        encodeURIComponent(b.id) +
+        '">Record payment</a>';
+    }
+    if (b.status === "confirmed") {
+      primary +=
+        '<button class="btn btn-approve" type="button" data-act="ongoing" data-id="' +
+        b.id +
+        '">Start trip</button>';
+    }
+    if (b.status === "ongoing") {
+      primary +=
+        '<button class="btn btn-approve" type="button" data-act="completed" data-id="' +
+        b.id +
+        '">Complete</button>';
+    }
+    if (b.status === "return_requested") {
+      primary +=
+        '<button class="btn btn-approve" type="button" data-accept-return="' +
+        b.id +
+        '">Accept return</button>';
+    }
+    return primary;
+  }
+
+  /* Floating desk for a single booking — used from Inbox "Open desk". */
+  function openBookingDeskModal(bookingId, onChanged) {
+    var booking = NS.domain.getBooking(bookingId);
+    if (!booking) {
+      NS.ui.toast("Booking not found.", "err");
+      return;
+    }
+    var old = document.getElementById("booking-desk-modal");
+    if (old) old.remove();
+
+    function paint() {
+      booking = NS.domain.getBooking(bookingId);
+      if (!booking) {
+        modal.remove();
+        NS.ui.toast("Booking not found.", "err");
+        if (onChanged) onChanged();
+        return;
+      }
+      var v = NS.domain.getVehicle(booking.vehicleId);
+      var secondary =
+        '<button class="btn btn-ghost" type="button" data-id-photo="' +
+        booking.id +
+        '">View ID</button>';
+      if (NS.domain.cashlessReceipt && NS.domain.cashlessReceipt(booking)) {
+        secondary +=
+          '<button class="btn btn-ghost" type="button" data-pay-receipt="' +
+          booking.id +
+          '">View receipt</button>';
+      }
+      var primary = bookingDeskPrimaryActions(booking);
+      dialog.innerHTML =
+        '<div class="password-dialog-head">' +
+        '<div><p class="eyebrow">Desk · Booking ' +
+        NS.security.escapeHtml(booking.ref) +
+        "</p><h2 id=\"booking-desk-title\">" +
+        NS.security.escapeHtml(v ? v.name : "Booking") +
+        "</h2></div>" +
+        '<button class="btn btn-ghost btn-sm" type="button" data-desk-close aria-label="Close">Close</button>' +
+        "</div>" +
+        '<div class="card-badges" style="margin:0 0 0.75rem">' +
+        checkFirstBadge(booking) +
+        NS.ui.statusBadge(booking.status) +
+        NS.ui.statusBadge(booking.paymentStatus) +
+        "</div>" +
+        bookingDetailList(booking) +
+        '<div class="card-actions" style="margin-top:1rem">' +
+        '<div class="card-actions-secondary">' +
+        secondary +
+        "</div>" +
+        (primary ? '<div class="card-actions-primary">' + primary + "</div>" : "") +
+        "</div>";
+    }
+
+    var modal = document.createElement("div");
+    modal.id = "booking-desk-modal";
+    modal.className = "password-modal";
+    var dialog = document.createElement("article");
+    dialog.className = "password-dialog booking-desk-dialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "booking-desk-title");
+    modal.appendChild(dialog);
+    paint();
+
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal || e.target.closest("[data-desk-close]")) {
+        modal.remove();
+        return;
+      }
+      var receiptId = e.target.getAttribute("data-pay-receipt");
+      if (receiptId) {
+        var paid = NS.domain.getBooking(receiptId);
+        var shot = paid && NS.domain.cashlessReceipt(paid);
+        if (!shot) {
+          NS.ui.toast("No cashless receipt is on file for this booking.", "err");
+          return;
+        }
+        openPaymentReceipt(shot, paid.ref);
+        return;
+      }
+      var idPhoto = e.target.getAttribute("data-id-photo");
+      if (idPhoto) {
+        var idBooking = NS.domain.getBooking(idPhoto);
+        if (!idBooking) {
+          NS.ui.toast("Booking not found.", "err");
+          return;
+        }
+        showBookingId(idBooking);
+        return;
+      }
+      var acceptId = e.target.getAttribute("data-accept-return");
+      if (acceptId) {
+        NS.ui
+          .askYesNo("Accept this vehicle return and complete the trip?", {
+            title: "Accept return",
+            yes: "Yes",
+            no: "No"
+          })
+          .then(function (ok) {
+            if (!ok) return;
+            try {
+              NS.domain.acceptVehicleReturn(acceptId, NS.security.getCsrf());
+              NS.ui.toast("Return accepted. Trip completed.", "ok");
+              paint();
+              if (onChanged) onChanged();
+            } catch (err) {
+              NS.ui.toast(err.message, "err");
+            }
+          });
+        return;
+      }
+      var act = e.target.getAttribute("data-act");
+      var id = e.target.getAttribute("data-id");
+      if (!act || !id) return;
+      if (e.target.disabled || e.target.getAttribute("aria-disabled") === "true") {
+        NS.ui.toast("Record payment before approving this booking.", "err");
+        return;
+      }
+      var target = NS.domain.getBooking(id);
+      var occupantNow =
+        target && NS.domain.ongoingBookingForVehicle
+          ? NS.domain.ongoingBookingForVehicle(target.vehicleId, target.id)
+          : null;
+      var labels = {
+        confirmed: occupantNow
+          ? "This car is currently in use. Approve only if both renters have a valid ID on file? A confirmation email will be sent."
+          : "Approve this booking? A confirmation email will be sent to the renter.",
+        rejected: "Reject this booking? Keep this away from Approve — this cannot be undone from this screen.",
+        ongoing: "Start this trip?",
+        completed: "Mark this trip complete?"
+      };
+      NS.ui
+        .askYesNo(labels[act] || "Save this booking edit?", {
+          title: act === "rejected" ? "Reject booking" : "Save edit",
+          yes: act === "rejected" ? "Reject" : "Yes",
+          no: "Cancel"
+        })
+        .then(function (ok) {
+          if (!ok) return;
+          try {
+            NS.domain.setBookingStatus(id, act, NS.security.getCsrf());
+            NS.ui.toast(
+              act === "confirmed"
+                ? "Booking approved. A confirmation email was sent to the renter."
+                : act === "rejected"
+                  ? "Booking rejected."
+                  : "Booking updated.",
+              "ok"
+            );
+            paint();
+            if (onChanged) onChanged();
+          } catch (err) {
+            NS.ui.toast(err.message, "err");
+          }
+        });
+    });
+
+    document.body.appendChild(modal);
+  }
+
   /* Booking threads whose booking record is gone: rebuild what we can from the desk notice text. */
   function missingBookingDetailList(thread) {
     var esc = NS.security.escapeHtml;
@@ -169,7 +381,7 @@
       "</span>returns</div>" +
       '<div class="stat"><span>' +
       unread +
-      "</span>unread</div>" +
+      "</span>inbox</div>" +
       '<div class="stat"><span>' +
       NS.ui.peso(r.revenue) +
       "</span>paid revenue</div>";
@@ -770,52 +982,7 @@
               b.id +
               '">View receipt</button>';
           }
-          var unpaid =
-            b.paymentStatus !== "paid" && b.status !== "cancelled" && b.status !== "rejected";
-          if (b.status === "pending") {
-            primary +=
-              '<button class="btn btn-reject" type="button" data-act="rejected" data-id="' +
-              b.id +
-              '">Reject</button>';
-            if (unpaid) {
-              primary +=
-                '<a class="btn btn-pay" href="payments.html?booking=' +
-                encodeURIComponent(b.id) +
-                '">Record payment</a>';
-              primary +=
-                '<button class="btn btn-approve" type="button" data-act="confirmed" data-id="' +
-                b.id +
-                '" disabled aria-disabled="true" title="Record payment before approving">Approve</button>';
-            } else {
-              primary +=
-                '<button class="btn btn-approve" type="button" data-act="confirmed" data-id="' +
-                b.id +
-                '">Approve</button>';
-            }
-          } else if (unpaid) {
-            primary +=
-              '<a class="btn btn-pay" href="payments.html?booking=' +
-              encodeURIComponent(b.id) +
-              '">Record payment</a>';
-          }
-          if (b.status === "confirmed") {
-            primary +=
-              '<button class="btn btn-approve" type="button" data-act="ongoing" data-id="' +
-              b.id +
-              '">Start trip</button>';
-          }
-          if (b.status === "ongoing") {
-            primary +=
-              '<button class="btn btn-approve" type="button" data-act="completed" data-id="' +
-              b.id +
-              '">Complete</button>';
-          }
-          if (b.status === "return_requested") {
-            primary +=
-              '<button class="btn btn-approve" type="button" data-accept-return="' +
-              b.id +
-              '">Accept return</button>';
-          }
+          primary = bookingDeskPrimaryActions(b);
           return (
             '<article class="booking-card booking-card-stacked"><div><p class="eyebrow">Booking ' +
             NS.security.escapeHtml(b.ref) +
@@ -1938,7 +2105,9 @@
                 NS.ui.statusBadge(b.paymentStatus) +
                 '</div><div class="card-actions">' +
                 '<div class="card-actions-primary">' +
-                '<a class="btn btn-pay" href="bookings.html">Open desk</a>' +
+                '<button class="btn btn-pay" type="button" data-open-desk="' +
+                b.id +
+                '">Open desk</button>' +
                 "</div></div></article>"
               );
             })
@@ -2006,6 +2175,16 @@
       returnsHost.addEventListener("click", function (e) {
         var acceptId = e.target.getAttribute("data-accept-return");
         if (acceptId) acceptReturn(acceptId);
+      });
+    }
+
+    if (incomingHost) {
+      incomingHost.addEventListener("click", function (e) {
+        var deskId = e.target.getAttribute("data-open-desk");
+        if (!deskId) return;
+        openBookingDeskModal(deskId, function () {
+          refreshInbox();
+        });
       });
     }
 

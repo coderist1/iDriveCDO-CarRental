@@ -740,9 +740,20 @@
 
   function staffUnreadCount() {
     if (!NS.auth.hasRole("staff")) return 0;
-    return threads().filter(function (t) {
-      return t.unreadStaff;
-    }).length;
+    /* Inbox badge = actionable desk work (matches inbox.html), not ghost threads. */
+    var pending = 0;
+    try {
+      pending = incomingBookings().length;
+    } catch (e) {
+      pending = 0;
+    }
+    var returns = 0;
+    try {
+      returns = pendingReturns().length;
+    } catch (e2) {
+      returns = 0;
+    }
+    return pending + returns;
   }
 
   function incomingBookings() {
@@ -3405,11 +3416,26 @@
   }
 
   function syncThreadsFromApi(rows) {
-    if (!Array.isArray(rows) || !rows.length) return;
+    if (!Array.isArray(rows)) return;
+    var liveBookings = bookings();
+    var bookingById = {};
     var bookingByApi = {};
-    bookings().forEach(function (b) {
+    liveBookings.forEach(function (b) {
+      bookingById[b.id] = b;
       if (b.apiId != null) bookingByApi[b.apiId] = b;
     });
+    /* Server emptied the inbox — drop local ghosts so the badge cannot stay stuck. */
+    if (!rows.length) {
+      saveThreads(
+        threads().filter(function (t) {
+          if (t.apiId != null) return false;
+          if (t.bookingId && !bookingById[t.bookingId]) return false;
+          var created = Date.parse(t.createdAt || t.updatedAt || 0);
+          return !isNaN(created) && Date.now() - created < 5 * 60 * 1000;
+        })
+      );
+      return;
+    }
     var userByApi = {};
     NS.store.get("users", []).forEach(function (u) {
       if (u.apiId != null) userByApi[u.apiId] = u;
@@ -3473,6 +3499,7 @@
     });
     local.forEach(function (t) {
       if (t.apiId != null || seen[t.id]) return;
+      if (t.bookingId && !bookingById[t.bookingId]) return;
       if (t.bookingId && byBooking[t.bookingId] && byBooking[t.bookingId].apiId != null) return;
       seen[t.id] = 1;
       merged.push(t);

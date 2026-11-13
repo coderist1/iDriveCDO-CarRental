@@ -96,15 +96,8 @@
      * If the API is unreachable we fall back to local storage. Writes still mirror to the API per action.
      */
     var SYNC_KEY = "idrive_lastSync";
-    var FIRST_SYNC_WAIT_MS = 4000;
-
-    function lastSyncAt() {
-      try {
-        return Number(sessionStorage.getItem(SYNC_KEY)) || 0;
-      } catch (e) {
-        return 0;
-      }
-    }
+    /* Don't trap the screen if the API never answers. */
+    var SYNC_WAIT_MS = 20000;
 
     function markSynced() {
       try {
@@ -112,6 +105,41 @@
       } catch (e) {
         /* sync still applied for this page */
       }
+    }
+
+    function ensureLoadingStyle() {
+      if (document.getElementById("app-loading-style")) return;
+      var style = document.createElement("style");
+      style.id = "app-loading-style";
+      style.textContent =
+        ".app-loading{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;background:#f6f6f4;color:#141414;font-family:Inter,Segoe UI,sans-serif}" +
+        ".app-loading.is-done{opacity:0;transition:opacity .18s ease}" +
+        ".app-loading-card{display:flex;flex-direction:column;align-items:center;gap:14px}" +
+        ".app-loading-mark{width:42px;height:42px;border-radius:50%;border:3px solid rgba(196,80,75,.2);border-top-color:#c4504b;animation:app-loading-spin .7s linear infinite}" +
+        ".app-loading p{margin:0;font-size:.95rem;font-weight:700;letter-spacing:.04em}" +
+        "@keyframes app-loading-spin{to{transform:rotate(360deg)}}";
+      document.head.appendChild(style);
+    }
+
+    function showLoading() {
+      ensureLoadingStyle();
+      if (document.getElementById("app-loading")) return;
+      var el = document.createElement("div");
+      el.id = "app-loading";
+      el.className = "app-loading";
+      el.setAttribute("role", "status");
+      el.setAttribute("aria-live", "polite");
+      el.innerHTML = '<div class="app-loading-card"><span class="app-loading-mark" aria-hidden="true"></span><p>Loading</p></div>';
+      document.body.appendChild(el);
+    }
+
+    function hideLoading() {
+      var el = document.getElementById("app-loading");
+      if (!el) return;
+      el.classList.add("is-done");
+      setTimeout(function () {
+        if (el.parentNode) el.remove();
+      }, 200);
     }
 
     function startWithSync() {
@@ -124,35 +152,28 @@
         runPage();
         return;
       }
+      showLoading();
       var started = false;
       function startOnce() {
         if (started) return;
         started = true;
         runPage();
+        /* Let the page paint under the screen, then reveal it. */
+        requestAnimationFrame(function () {
+          requestAnimationFrame(hideLoading);
+        });
       }
       var sync = NS.domain.syncAllFromApi().then(
         function (applied) {
           if (applied) markSynced();
           if (NS.auth && NS.auth.current) NS.auth.current();
-          /* Desk pages often paint from a previous sync; refresh once new server data lands. */
-          if (applied && started && NS.pages && typeof NS.pages.onSynced === "function") {
-            try {
-              NS.pages.onSynced();
-            } catch (refreshErr) {
-              console.warn("iDrive: page refresh after sync failed.", refreshErr);
-            }
-          }
         },
         function (e) {
           console.warn("iDrive: could not sync from the backend; showing local data.", e);
         }
       );
-      if (lastSyncAt()) {
-        startOnce();
-        return;
-      }
-      setTimeout(startOnce, FIRST_SYNC_WAIT_MS);
-      sync.then(startOnce);
+      setTimeout(startOnce, SYNC_WAIT_MS);
+      sync.then(startOnce, startOnce);
     }
 
     if (NS.ui && NS.ui.bindPasswordToggles) NS.ui.bindPasswordToggles(document);

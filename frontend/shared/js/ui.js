@@ -526,9 +526,19 @@
           break;
         }
       }
-      if (text) label.insertBefore(star, text.nextSibling);
-      else if (label.querySelector("span")) label.querySelector("span").appendChild(star);
-      else label.insertBefore(star, label.firstChild);
+      if (text) {
+        /* One inline row so a column-flex label cannot drop the * onto the next line. */
+        var wrap = document.createElement("span");
+        wrap.className = "req-label";
+        wrap.appendChild(document.createTextNode(String(text.textContent || "").trim()));
+        wrap.appendChild(star);
+        label.insertBefore(wrap, text);
+        text.remove();
+      } else if (label.querySelector("span")) {
+        label.querySelector("span").appendChild(star);
+      } else {
+        label.insertBefore(star, label.firstChild);
+      }
     });
   }
 
@@ -1238,11 +1248,10 @@
       '<label class="field">Last name <input class="form-control" name="lastName" maxlength="40" autocomplete="family-name" required></label>' +
       '<label class="field">Mobile <input class="form-control" name="phone" inputmode="tel" autocomplete="tel" placeholder="09XXXXXXXXX" maxlength="24" required></label>' +
       '<label class="field">Email <input class="form-control" name="email" type="email" autocomplete="email" required></label>' +
-      '<label class="field">Password <input class="form-control" name="password" type="password" autocomplete="new-password" required></label>' +
+      '<label class="field">Password <input class="form-control" name="password" type="password" autocomplete="new-password" required><span class="field-hint">8+ characters with upper, lower, number, and a symbol.</span></label>' +
       '<label class="field">Confirm password <input class="form-control" name="confirmPassword" type="password" autocomplete="new-password" required></label>' +
-      '<label class="field">Birth date <input class="form-control" name="birthdate" type="date" required></label>' +
+      '<label class="field field-span-2">Birth date <input class="form-control" name="birthdate" type="date" required></label>' +
       "</div>" +
-      '<p class="fineprint">Password: 8+ characters with upper, lower, number, and a symbol.</p>' +
       '<div class="terms-row"><label class="check-min"><input type="checkbox" name="privacy" value="1"> <span>I have read the Data Privacy notice and I consent (RA 10173). <button type="button" class="terms-read" data-privacy-open>Read the notice</button></span></label></div>' +
       '<div class="terms-row"><label class="check-min"><input type="checkbox" name="terms" value="1"> <span>I accept the rental terms <button type="button" class="terms-read" data-terms-open="account">Read the terms</button></span></label></div>' +
       '<div class="auth-actions">' +
@@ -1250,7 +1259,7 @@
       '<button type="button" class="btn google-custom" tabindex="-1" aria-hidden="true">' + GOOGLE_BTN_LABEL + "</button>" +
       '<div id="auth-modal-google-signup" class="google-signin" aria-live="polite"></div>' +
       "</div>" +
-      '<button class="btn btn-gold" type="submit">Create account</button>' +
+      '<button class="btn btn-dark register-submit" type="submit">Create account</button>' +
       "</div>" +
       '<p class="fineprint google-signin-note">With Google, we\'ll ask for your mobile number right after you sign in.</p>' +
       '<p class="form-foot">Already registered? <button type="button" class="auth-switch" data-auth-panel="login">Sign in</button></p>' +
@@ -1402,9 +1411,8 @@
     function paintGoogleButton(host) {
       if (!host || !googleClientId || !window.google || !window.google.accounts) return;
       host.innerHTML = "";
-      var row = host.closest(".auth-actions");
-      var cssW = row && window.getComputedStyle(row).getPropertyValue("--auth-btn-w").trim();
-      var btnWidth = parseInt(cssW, 10);
+      var slot = host.closest(".google-signin-slot");
+      var btnWidth = slot ? Math.floor(slot.getBoundingClientRect().width) : 0;
       if (!btnWidth || btnWidth < 160) btnWidth = 200;
       window.google.accounts.id.renderButton(host, {
         type: "standard",

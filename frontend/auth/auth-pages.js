@@ -290,9 +290,8 @@
           }
         });
         host.innerHTML = "";
-        var row = host.closest(".auth-actions");
-        var cssW = row && window.getComputedStyle(row).getPropertyValue("--auth-btn-w").trim();
-        var btnWidth = parseInt(cssW, 10);
+        var slot = host.closest(".google-signin-slot");
+        var btnWidth = slot ? Math.floor(slot.getBoundingClientRect().width) : 0;
         if (!btnWidth || btnWidth < 160) btnWidth = 200;
         // Invisible Google control sits on top of our matching "Google" button.
         global.google.accounts.id.renderButton(host, {
