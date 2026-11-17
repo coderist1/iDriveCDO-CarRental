@@ -35,12 +35,16 @@ The **Machine Learning API** (FastAPI + joblib models) lives with the Laravel ba
 
 ## Demo accounts
 
+These accounts are already in the local database. Sign-in goes through the Laravel API on port 8000, so that API has to be running.
+
 | Role | Email | Password |
 | --- | --- | --- |
 | Admin | admin@idrivecdo.ph | Drive@Admin1 |
 | Staff | staff@idrivecdo.ph | Drive@Staff1 |
 | Customer | guest@idrivecdo.ph | Drive@Guest1 |
 | Driver | driver@idrivecdo.ph | Drive@Driver1 |
+
+Admin, staff and driver accounts cannot be created on the website. Make extra ones with `php artisan idrive:create-user`.
 
 Test card: `4242 4242 4242 4242`, any future MM/YY, any 3-digit CVV.
 

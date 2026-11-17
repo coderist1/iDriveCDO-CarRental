@@ -1,5 +1,6 @@
 -- Demo and reference data matching the frontend's built-in seed.
 -- PostgreSQL. Run database/schema.sql first, connected to the target database.
+-- Local demo data only. Never run this against the live database.
 -- Demo passwords: admin Drive@Admin1, staff Drive@Staff1, customer Drive@Guest1, driver Drive@Driver1
 
 -- ---------------------------------------------------------------------------
