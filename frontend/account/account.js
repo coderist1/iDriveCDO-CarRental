@@ -357,6 +357,20 @@
         NS.ui.toast((err && err.message) || "Your account has been disabled. Please contact the admin.", "err");
       });
     });
+    /* An account that signs in with Google and never chose a password has no current one to type. */
+    function needsCurrentPassword() {
+      return !me || me.passwordSet !== false;
+    }
+    function applyPasswordMode() {
+      if (!pw || !pw.currentPassword) return;
+      var needed = needsCurrentPassword();
+      var label = pw.currentPassword.closest("label");
+      if (label) label.hidden = !needed;
+      pw.currentPassword.required = needed;
+      if (!needed) pw.currentPassword.value = "";
+    }
+    applyPasswordMode();
+
     var passwordToggle = document.getElementById("password-toggle");
     var passwordModal = document.getElementById("password-modal");
     var passwordClose = document.getElementById("password-close");
@@ -391,23 +405,32 @@
         e.preventDefault();
         var gate = NS.auth.assertActive ? NS.auth.assertActive() : Promise.resolve();
         gate.then(function () {
-          if (!pw.currentPassword.value) throw new Error("Current password is required.");
+          if (needsCurrentPassword() && !pw.currentPassword.value) throw new Error("Current password is required.");
           if (pw.nextPassword.value !== pw.confirmPassword.value) throw new Error("New passwords do not match.");
           var issues = NS.security.passwordIssues(pw.nextPassword.value, me.email);
           if (issues.length) throw new Error("New password: " + issues.join(" "));
           return NS.ui.askYesNo("Update password?", { title: "Save edit", yes: "Yes", no: "No" });
         }).then(function (ok) {
           if (!ok) return;
-          try {
-            NS.ui.bindCsrf(pw);
-            NS.auth.changePassword(pw.currentPassword.value, pw.nextPassword.value, pw.csrf ? pw.csrf.value : "");
-            setPasswordOpen(false);
-            me = NS.auth.current() || me;
-            NS.ui.toast("Password updated.", "ok");
-          } catch (err) {
-            NS.ui.bindCsrf(pw);
-            NS.ui.toast(err.message, "err");
-          }
+          NS.ui.bindCsrf(pw);
+          /* The server checks the current password and signs this account out everywhere else. */
+          return NS.auth
+            .changePassword(
+              needsCurrentPassword() ? pw.currentPassword.value : "",
+              pw.nextPassword.value,
+              pw.csrf ? pw.csrf.value : "",
+              pw.confirmPassword.value
+            )
+            .then(function () {
+              setPasswordOpen(false);
+              me = NS.auth.current() || me;
+              applyPasswordMode();
+              NS.ui.toast("Password updated.", "ok");
+            })
+            .catch(function (err) {
+              NS.ui.bindCsrf(pw);
+              NS.ui.toast(err.message, "err");
+            });
         }).catch(function (err) {
           NS.ui.toast((err && err.message) || "Your account has been disabled. Please contact the admin.", "err");
         });

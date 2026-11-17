@@ -19,9 +19,9 @@
       <div id="form-alert" class="notice" hidden></div>
 
       <form id="forgot-email-form" class="forgot-form" novalidate>
-        <p class="fineprint">Enter the email you use to sign in. We'll show the right way to reset your password.</p>
+        <p class="fineprint">Enter the email you use to sign in. We'll email you a 6-digit code so you can set a new password.</p>
         <label class="field">Email <input class="form-control" name="email" type="email" autocomplete="username" required></label>
-        <button class="btn btn-gold" type="submit">Continue</button>
+        <button class="btn btn-gold" type="submit">Send code</button>
       </form>
 
       <p class="forgot-account" id="forgot-account" hidden>
@@ -30,23 +30,14 @@
       </p>
 
       <form id="forgot-code-form" class="forgot-form" novalidate hidden>
-        <p class="fineprint">This account signs in with Google. We'll email a 6-digit code to your Gmail. Confirm the code, then you'll set a new password on the next page.</p>
+        <p class="fineprint">If that email has an account, a 6-digit code is on its way. It can take a minute and expires in 10 minutes. Confirm the code, then you'll set a new password on the next page.</p>
         <label class="field">Code
           <span class="forgot-email-row">
             <input class="form-control" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" required>
-            <button class="btn btn-ghost btn-sm" type="button" id="send-code-btn">Send code</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="send-code-btn">Resend code</button>
           </span>
         </label>
         <button class="btn btn-gold" type="submit">Confirm code</button>
-      </form>
-
-      <form id="forgot-old-form" class="forgot-form" novalidate hidden>
-        <p class="fineprint">Enter your old password, then choose a new one.</p>
-        <label class="field">Old password <input class="form-control" name="currentPassword" type="password" autocomplete="current-password" required></label>
-        <label class="field">New password <input class="form-control" name="password" type="password" autocomplete="new-password" required></label>
-        <label class="field">Confirm new password <input class="form-control" name="confirmPassword" type="password" autocomplete="new-password" required></label>
-        <p class="fineprint">8+ characters with an uppercase letter, a lowercase letter, a number, and a symbol.</p>
-        <button class="btn btn-gold" type="submit">Change password</button>
       </form>
 
       <p class="form-foot"><a href="./login.html">Back to sign in</a></p>
@@ -54,16 +45,16 @@
   </section>
   <div id="app-footer"></div>
   <div id="toast-host"></div>
-  <script src="../shared/js/security.js?v=20261005a"></script>
+  <script src="../shared/js/security.js?v=20261114a"></script>
   <script src="../shared/js/store.js?v=20261008h"></script>
   <script src="../shared/js/runtime-config.js?v=20261011a"></script>
-  <script src="../shared/js/api.js?v=20261009g"></script>
+  <script src="../shared/js/api.js?v=20261114a"></script>
   <script src="../shared/js/validation.js?v=20261028e"></script>
   <script src="../shared/js/routes.js?v=20261011a"></script>
-  <script src="../shared/js/domain.js?v=20261104b"></script>
-  <script src="../auth/auth.js?v=20261024a"></script>
-  <script src="../shared/js/ui.js?v=20261113c"></script>
-  <script src="./auth-pages.js?v=20261028h"></script>
+  <script src="../shared/js/domain.js?v=20261114a"></script>
+  <script src="../auth/auth.js?v=20261114a"></script>
+  <script src="../shared/js/ui.js?v=20261114a"></script>
+  <script src="./auth-pages.js?v=20261114a"></script>
   <script src="../shared/js/app.js?v=20261113b"></script>
 </body>
 </html>

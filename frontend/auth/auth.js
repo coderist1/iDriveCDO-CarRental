@@ -1,5 +1,10 @@
 /**
  * Authentication, sessions, and role-based page guards.
+ *
+ * No password is ever checked, hashed or stored in this browser. Signing in, signing up, changing a
+ * password and resetting one all go to the API (AuthController), which answers with a random token.
+ * The token travels with every API request and the server decides who the caller is and what they
+ * may read or change. Everything below only mirrors that answer so the pages can draw themselves.
  */
 (function (global) {
   "use strict";
@@ -8,7 +13,13 @@
   var SESSION_MS = 30 * 60 * 1000;
   var ROLES = { driver: 1, customer: 1, staff: 2, admin: 3 };
   var DISABLED_MSG = "Your account has been disabled. Please contact the admin.";
+  var ENDED_MSG = "Your session has ended. Please sign in again.";
+  var IDLE_MSG = "You were signed out after 30 minutes of inactivity. Please sign in again.";
+  var UPGRADE_MSG =
+    "Sign-in now works through our server. Please sign in again. If you signed up before this change, use Forgot password once to set a new password.";
   var NOTICE_KEY = "idrive_authNotice";
+  /* Cached copies of other people's records must not outlive the session that was allowed to read them. */
+  var PERSONAL_KEYS = ["users", "bookings", "payments"];
 
   function users() {
     return NS.store.get("users", []);
@@ -16,15 +27,6 @@
 
   function saveUsers(list) {
     NS.store.set("users", list);
-  }
-
-  function findUser(email) {
-    email = NS.security.sanitizeEmail(email);
-    var list = users();
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].email === email) return list[i];
-    }
-    return null;
   }
 
   var PHONE_TAKEN = "This mobile number is already registered.";
@@ -42,17 +44,30 @@
   }
 
   /** Laravel validation text, or the fetch error — never a generic "try again". */
-  function phoneCheckError(err) {
+  function serverMessage(err, fallback) {
     var errors = err && err.data && err.data.errors;
     if (errors) {
-      if (errors.phone && errors.phone.length) return errors.phone.join(" ");
-      return Object.keys(errors)
-        .map(function (k) {
-          return errors[k].join(" ");
-        })
-        .join(" ");
+      var parts = [];
+      Object.keys(errors).forEach(function (k) {
+        [].concat(errors[k] || []).forEach(function (m) {
+          if (parts.indexOf(m) === -1) parts.push(m);
+        });
+      });
+      if (parts.length) return parts.join(" ");
     }
-    return (err && err.message) || "Could not check that mobile number.";
+    return (err && err.message) || fallback;
+  }
+
+  function phoneCheckError(err) {
+    return serverMessage(err, "Could not check that mobile number.");
+  }
+
+  /** The server's answer as an Error the pages can show, keeping the status for the few that care. */
+  function failure(err, fallback) {
+    var out = new Error(serverMessage(err, fallback));
+    out.status = err && err.status;
+    out.code = err && err.data && err.data.code;
+    return out;
   }
 
   /** Resolves with the +63 number, or rejects when it is invalid or already registered. */
@@ -116,37 +131,13 @@
     };
   }
 
-  function touchSession() {
-    var s = NS.store.getSession();
-    if (!s) return null;
-    if (Date.now() > s.expiresAt) {
-      logout();
-      return null;
-    }
-    s.expiresAt = Date.now() + SESSION_MS;
-    NS.store.setSession(s);
-    return s;
-  }
+  /* ---------------------------------------------------------------- notices and local session */
 
-  function sessionUser() {
-    var s = NS.store.getSession();
-    if (!s || Date.now() > s.expiresAt) return null;
-    var list = users();
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].id === s.userId) return list[i];
-    }
-    return null;
-  }
-
-  function leaveDisabled() {
+  function setNotice(message) {
     try {
-      sessionStorage.setItem(NOTICE_KEY, DISABLED_MSG);
+      sessionStorage.setItem(NOTICE_KEY, message);
     } catch (e) {
       /* the login page still blocks the session */
-    }
-    logout();
-    if (!/\/auth\/login\.html/i.test(location.pathname || "")) {
-      location.replace(NS.routes.href("login"));
     }
   }
 
@@ -157,6 +148,80 @@
       return msg;
     } catch (e) {
       return "";
+    }
+  }
+
+  function purgePersonalData() {
+    PERSONAL_KEYS.forEach(function (key) {
+      NS.store.set(key, []);
+    });
+  }
+
+  /** Drops the local session (the server ends its own when idle) and what was cached for it. */
+  function endSession(notice) {
+    if (notice) setNotice(notice);
+    NS.store.setSession(null);
+    purgePersonalData();
+  }
+
+  function hasToken(session) {
+    return !!(session && typeof session.token === "string" && session.token.length >= 32);
+  }
+
+  function touchSession() {
+    var s = NS.store.getSession();
+    if (!s) return null;
+    if (!hasToken(s)) {
+      /* A session from before sign-in moved to the server: there is nothing the API would accept. */
+      endSession(UPGRADE_MSG);
+      return null;
+    }
+    if (Date.now() > s.expiresAt) {
+      endSession(IDLE_MSG);
+      return null;
+    }
+    s.expiresAt = Date.now() + SESSION_MS;
+    NS.store.setSession(s);
+    return s;
+  }
+
+  function sessionUser() {
+    var s = NS.store.getSession();
+    if (!s || !hasToken(s) || Date.now() > s.expiresAt) return null;
+    var list = users();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === s.userId) return list[i];
+    }
+    return null;
+  }
+
+  function onLoginPage() {
+    return /\/auth\/login\.html/i.test(location.pathname || "");
+  }
+
+  function leaveDisabled() {
+    setNotice(DISABLED_MSG);
+    logout();
+    if (!onLoginPage()) {
+      location.replace(NS.routes.href("login"));
+    }
+  }
+
+  var ending = false;
+
+  /*
+   * The API said this token is no longer good (it expired, was revoked by a password change, or the
+   * account was disabled). Called by the API client; does nothing when nobody is signed in here.
+   */
+  function sessionEnded() {
+    if (ending || !NS.store.getSession()) return;
+    ending = true;
+    endSession(ENDED_MSG);
+    var need = (document.body && document.body.getAttribute("data-auth")) || "public";
+    if (need === "public") {
+      location.reload();
+    } else if (!onLoginPage()) {
+      location.replace(NS.routes.href("login", "?next=" + encodeURIComponent(currentRouteKey())));
     }
   }
 
@@ -205,165 +270,162 @@
     );
   }
 
-  function startSession(user) {
-    var session = {
+  function startSession(user, token) {
+    NS.store.setSession({
       id: NS.security.randomHex(16),
       userId: user.id,
       role: user.role,
       issuedAt: Date.now(),
-      expiresAt: Date.now() + SESSION_MS
-    };
-    NS.store.setSession(session);
+      expiresAt: Date.now() + SESSION_MS,
+      token: token
+    });
     return publicUser(user);
   }
 
-  function login(email, password, csrf) {
-    email = NS.security.sanitizeEmail(email);
-    if (!email || !password) throw new Error("Email and password are required.");
-    NS.security.assertNotLocked(email);
-    var user = findUser(email);
-    var dummySalt = "00000000000000000000000000000000";
-    var candidateHash = NS.security.hashPassword(password, user ? user.salt : dummySalt);
-    var ok = user && NS.security.timingSafeEqual(user.passwordHash, candidateHash);
-    if (!ok) {
-      NS.security.recordLoginFailure(email);
-      throw new Error("Invalid email or password.");
-    }
-    if (user.status !== "active") throw new Error("This account is disabled.");
+  /* ---------------------------------------------------------------- server accounts */
 
-    try {
-      if (csrf) NS.security.assertCsrf(csrf);
-      else NS.security.issueCsrf();
-    } catch (csrfErr) {
-      NS.security.issueCsrf();
+  /*
+   * Puts the account the server just returned into the local cache (keyed by its server id).
+   * The server never sends password data, and none is ever written here.
+   */
+  function adoptServerUser(row, extras) {
+    var list = users();
+    var email = NS.security.sanitizeEmail(row.email);
+    var at = -1;
+    var i;
+    for (i = 0; i < list.length; i++) {
+      if (row.user_id != null && list[i].apiId === row.user_id) {
+        at = i;
+        break;
+      }
     }
+    if (at < 0) {
+      for (i = 0; i < list.length; i++) {
+        if (list[i].apiId == null && list[i].email === email) {
+          at = i;
+          break;
+        }
+      }
+    }
+    var prev = at >= 0 ? list[at] : null;
+    var next = Object.assign({}, prev, NS.domain.apiUser(row, prev), extras || {}, {
+      id: prev ? prev.id : "usr_api_" + row.user_id,
+      apiId: row.user_id
+    });
+    delete next.passwordHash;
+    delete next.salt;
+    if (!next.avatar && row.avatar) {
+      try {
+        next.avatar = normalizeAvatar(row.avatar);
+      } catch (e) {
+        /* an unusable picture is simply not shown */
+      }
+    }
+    if (at >= 0) list[at] = next;
+    else list.push(next);
+    saveUsers(list);
+    return next;
+  }
 
-    NS.security.clearLoginFailures(email);
-    var profile = startSession(user);
-    NS.domain.audit("login", user.id, "Signed in.");
+  /* Turns a sign-in answer ({ token, user }) into this browser's session. */
+  function openSession(res, action, detail, extras) {
+    if (!res || typeof res.token !== "string" || !res.user || !res.user.email) {
+      throw new Error("Sign-in failed. Please try again.");
+    }
+    purgePersonalData();
+    var user = adoptServerUser(res.user, extras);
+    if (user.status !== "active") throw new Error(DISABLED_MSG);
+    NS.security.issueCsrf();
+    var profile = startSession(user, res.token);
+    NS.domain.audit(action, user.id, detail);
     return profile;
   }
 
-  function register(payload, csrf) {
-    var email = NS.security.sanitizeEmail(payload.email);
-    var firstName = NS.security.sanitizeText(payload.firstName, 40);
-    var lastName = NS.security.sanitizeText(payload.lastName, 40);
-    var phone = NS.validation.canonicalPhone(payload.phone);
-    var password = payload.password || "";
+  function login(email, password) {
+    email = NS.security.sanitizeEmail(email);
+    if (!email || !password) return Promise.reject(new Error("Email and password are required."));
+    if (!NS.api) return Promise.reject(new Error("Sign-in is unavailable right now."));
+    return NS.api.post("/auth/login", { email: email, password: password }).then(
+      function (res) {
+        return openSession(res, "login", "Signed in.");
+      },
+      function (err) {
+        throw failure(err, "Sign in failed. Check the email and password.");
+      }
+    );
+  }
 
-    if (!firstName) throw new Error("First name is required.");
-    if (!lastName) throw new Error("Last name is required.");
-    if (!NS.validation.email(email)) throw new Error("Enter a valid email address.");
-    if (!phone) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
-    if (phoneOwner(phone, null)) throw new Error(PHONE_TAKEN);
-    var birthdate = NS.security.sanitizeText(payload.birthdate || payload.idBirthdate || "", 10);
-    if (!birthdate) throw new Error("Enter your birth date.");
-    if (!payload.privacy) throw new Error("You must accept the Data Privacy notice.");
-    if (!payload.terms) throw new Error("You must accept the rental terms.");
-    var issues = NS.security.passwordIssues(password, email);
-    if (issues.length) throw new Error("Password needs: " + issues.join(" "));
-    if (password !== payload.confirmPassword) throw new Error("Passwords do not match.");
-    if (findUser(email)) throw new Error("An account with this email already exists.");
-
-    /* Soft CSRF: if token missing/mismatch after validation, rotate and continue for this local demo. */
+  function register(payload, ignoredCsrf) {
+    var body;
+    var idImage = "";
     try {
-      if (csrf) NS.security.assertCsrf(csrf);
-      else NS.security.issueCsrf();
-    } catch (csrfErr) {
-      NS.security.issueCsrf();
+      var email = NS.security.sanitizeEmail(payload.email);
+      var firstName = NS.security.sanitizeText(payload.firstName, 40);
+      var lastName = NS.security.sanitizeText(payload.lastName, 40);
+      var phone = NS.validation.canonicalPhone(payload.phone);
+      var password = payload.password || "";
+
+      if (!firstName) throw new Error("First name is required.");
+      if (!lastName) throw new Error("Last name is required.");
+      if (!NS.validation.email(email)) throw new Error("Enter a valid email address.");
+      if (!phone) throw new Error("Use a Philippine mobile number (09XXXXXXXXX).");
+      var birthdate = NS.security.sanitizeText(payload.birthdate || payload.idBirthdate || "", 10);
+      if (!birthdate) throw new Error("Enter your birth date.");
+      if (!payload.privacy) throw new Error("You must accept the Data Privacy notice.");
+      if (!payload.terms) throw new Error("You must accept the rental terms.");
+      var issues = NS.security.passwordIssues(password, email);
+      if (issues.length) throw new Error("Password needs: " + issues.join(" "));
+      if (password !== payload.confirmPassword) throw new Error("Passwords do not match.");
+      if (!NS.api) throw new Error("Sign-up is unavailable right now.");
+
+      /* Optional details read from the uploaded ID (OCR); they are only sent when they look right. */
+      var idNumber = NS.security.sanitizeText(payload.idNumber || "", 30).toUpperCase().replace(/\s+/g, "");
+      var idExpiry = NS.security.sanitizeText(payload.idExpiry || "", 10);
+      var idAddress = NS.security.sanitizeText(payload.idAddress || "", 120);
+      idImage = typeof payload.idImage === "string" ? payload.idImage.trim() : "";
+      if (idImage && !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(idImage)) idImage = "";
+      if (idImage && idImage.length > 750000) idImage = "";
+
+      body = {
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        phone: phone,
+        password: password,
+        password_confirmation: payload.confirmPassword,
+        birthdate: birthdate,
+        privacy_accepted: true,
+        terms_accepted: true
+      };
+      if (idNumber && NS.validation.license(idNumber)) body.license_no = idNumber;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(idExpiry)) body.license_expiry = idExpiry;
+      if (idAddress) body.address = idAddress;
+    } catch (err) {
+      return Promise.reject(err);
     }
 
-    var salt = NS.security.randomHex(16);
-    /* Optional ID details captured from the register upload (OCR). All optional. */
-    var idNumber = NS.security.sanitizeText(payload.idNumber || "", 30).toUpperCase().replace(/\s+/g, "");
-    var idExpiry = NS.security.sanitizeText(payload.idExpiry || "", 10);
-    var idAddress = NS.security.sanitizeText(payload.idAddress || "", 120);
-    var idBirthdate = NS.security.sanitizeText(payload.idBirthdate || "", 10);
-    var idImage = typeof payload.idImage === "string" ? payload.idImage.trim() : "";
-    if (idImage && !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(idImage)) idImage = "";
-    if (idImage && idImage.length > 750000) idImage = "";
-    var user = {
-      id: "usr_" + NS.security.randomHex(8),
-      email: email,
-      passwordHash: NS.security.hashPassword(password, salt),
-      salt: salt,
-      role: "customer",
-      firstName: firstName,
-      lastName: lastName,
-      phone: phone,
-      licenseNo: idNumber || "",
-      licenseExpiry: idExpiry || "",
-      address: idAddress || "",
-      birthdate: birthdate || idBirthdate || "",
-      privacyAcceptedAt: new Date().toISOString(),
-      isBadRenter: false,
-      idImage: idImage || "",
-      avatar: "",
-      passwordSet: true,
-      status: "active",
-      createdAt: new Date().toISOString()
-    };
-    var list = users();
-    list.push(user);
-    saveUsers(list);
-    NS.domain.audit("register", user.id, "Customer registered.");
-    var profile = startSession(user);
-    NS.domain.audit("login", user.id, "Signed in after registration.");
-    return profile;
+    return NS.api.post("/auth/register", body).then(
+      function (res) {
+        /* The ID photo is only kept on this device; the desk sees the one given with a booking. */
+        return openSession(res, "register", "Customer registered.", idImage ? { idImage: idImage } : null);
+      },
+      function (err) {
+        throw failure(err, "Could not create account.");
+      }
+    );
   }
 
   /*
-   * Finishes a Google sign-in after the backend verified the ID token and returned the account.
-   * Links to an existing local account by email, otherwise creates one (no usable password).
+   * Finishes a Google sign-in once the backend has verified the ID token and answered with
+   * { token, user }. The account is created or linked on the server, never decided here.
    */
-  function googleSignIn(apiUser) {
-    if (!apiUser || !apiUser.email) throw new Error("Google sign-in failed.");
-    var email = NS.security.sanitizeEmail(apiUser.email);
-    var list = users();
-    var user = null;
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].email === email || (apiUser.user_id != null && list[i].apiId === apiUser.user_id)) user = list[i];
-    }
-    var picture = "";
-    try {
-      picture = normalizeAvatar(apiUser.avatar || "");
-    } catch (e) {
-      picture = "";
-    }
-    if (user) {
-      if (user.status !== "active") throw new Error("This account is disabled.");
-      if (user.apiId == null && apiUser.user_id != null) user.apiId = apiUser.user_id;
-      if (!user.avatar && picture) user.avatar = picture;
-      user.authProvider = user.authProvider || "google";
-    } else {
-      var salt = NS.security.randomHex(16);
-      user = {
-        id: "usr_" + NS.security.randomHex(8),
-        apiId: apiUser.user_id != null ? apiUser.user_id : null,
-        email: email,
-        passwordHash: NS.security.hashPassword(NS.security.randomHex(32), salt),
-        salt: salt,
-        role: ROLES[apiUser.role] ? apiUser.role : "customer",
-        firstName: NS.security.sanitizeText(apiUser.first_name || "", 40) || email.split("@")[0],
-        lastName: NS.security.sanitizeText(apiUser.last_name || "", 40),
-        phone: NS.validation.canonicalPhone(apiUser.phone || ""),
-        licenseNo: "",
-        licenseExpiry: "",
-        address: NS.security.sanitizeText(apiUser.address || "", 120),
-        avatar: picture,
-        authProvider: "google",
-        passwordSet: false,
-        status: "active",
-        createdAt: new Date().toISOString()
-      };
-      list.push(user);
-      NS.domain.audit("register", user.id, "Account created with Google sign-in.");
-    }
-    saveUsers(list);
-    NS.security.issueCsrf();
-    var profile = startSession(user);
-    NS.domain.audit("login", user.id, "Signed in with Google.");
-    return profile;
+  function googleSignIn(data) {
+    if (!data || !data.user || !data.user.email) throw new Error("Google sign-in failed.");
+    return openSession(
+      data,
+      data.created ? "register" : "login",
+      data.created ? "Account created with Google sign-in." : "Signed in with Google."
+    );
   }
 
   function setPhone(phone) {
@@ -385,10 +447,27 @@
     throw new Error("User not found.");
   }
 
+  /*
+   * Ends the session here and on the server. Resolves when the server has answered (or after a few
+   * seconds), so a page that navigates away straight after does not cancel the request.
+   */
   function logout() {
     var s = NS.store.getSession();
-    if (s) NS.domain.audit("logout", s.userId, "Signed out.");
+    var done = Promise.resolve();
+    if (s) {
+      NS.domain.audit("logout", s.userId, "Signed out.");
+      if (hasToken(s) && NS.api) {
+        done = NS.api.post("/auth/logout", {}, { timeoutMs: 4000 }).then(
+          function () {},
+          function () {
+            /* the server ends an unused session by itself */
+          }
+        );
+      }
+    }
     NS.store.setSession(null);
+    purgePersonalData();
+    return done;
   }
 
   function updateProfile(userId, patch, csrf) {
@@ -460,80 +539,38 @@
     throw new Error("User not found.");
   }
 
-  function changePassword(currentPassword, nextPassword, csrf) {
-    NS.security.assertCsrf(csrf);
+  /*
+   * Changes the password of the signed-in account on the server. Every other session of the account
+   * ends. An account that signs in with Google and has no password yet leaves the current one empty.
+   */
+  function changePassword(currentPassword, nextPassword, csrf, confirmPassword) {
+    try {
+      NS.security.assertCsrf(csrf);
+    } catch (csrfErr) {
+      return Promise.reject(csrfErr);
+    }
     var me = current();
-    if (!me) throw new Error("Sign in required.");
-    var list = users();
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].id === me.id) {
-        var check = NS.security.hashPassword(currentPassword, list[i].salt);
-        if (!NS.security.timingSafeEqual(check, list[i].passwordHash)) {
-          throw new Error("Current password is incorrect.");
-        }
-        var issues = NS.security.passwordIssues(nextPassword, list[i].email);
-        if (issues.length) throw new Error("New password: " + issues.join(" "));
-        var salt = NS.security.randomHex(16);
-        list[i].salt = salt;
-        list[i].passwordHash = NS.security.hashPassword(nextPassword, salt);
-        list[i].passwordSet = true;
-        saveUsers(list);
+    if (!me) return Promise.reject(new Error("Sign in required."));
+    var issues = NS.security.passwordIssues(nextPassword, me.email);
+    if (issues.length) return Promise.reject(new Error("New password: " + issues.join(" ")));
+    var body = {
+      password: nextPassword,
+      password_confirmation: confirmPassword == null ? nextPassword : confirmPassword
+    };
+    if (currentPassword) body.current_password = currentPassword;
+    return NS.api.post("/auth/password", body).then(
+      function (res) {
+        if (res && res.user) adoptServerUser(res.user);
         NS.domain.audit("password", me.id, "Password changed.");
         return true;
+      },
+      function (err) {
+        throw failure(err, "Could not change the password.");
       }
-    }
-    throw new Error("User not found.");
+    );
   }
 
-  function resetTarget(email) {
-    email = NS.security.sanitizeEmail(email);
-    if (!NS.validation.email(email)) throw new Error("Enter a valid email address.");
-    NS.security.assertNotLocked(email);
-    var user = findUser(email);
-    if (user && user.status !== "active") throw new Error(DISABLED_MSG);
-    if (!user) {
-      NS.security.recordLoginFailure(email);
-      throw new Error("No account uses that email.");
-    }
-    return user;
-  }
-
-  /** "code" for Google accounts (emailed code), "old" for email-and-password accounts. */
-  function resetMethodFor(email) {
-    return resetTarget(email).authProvider === "google" ? "code" : "old";
-  }
-
-  function storeNewPassword(user, nextPassword, auditDetail) {
-    var issues = NS.security.passwordIssues(nextPassword, user.email);
-    if (issues.length) throw new Error("New password: " + issues.join(" "));
-    var list = users();
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].id !== user.id) continue;
-      var salt = NS.security.randomHex(16);
-      list[i].salt = salt;
-      list[i].passwordHash = NS.security.hashPassword(nextPassword, salt);
-      list[i].passwordSet = true;
-      saveUsers(list);
-      NS.security.clearLoginFailures(user.email);
-      NS.domain.audit("password", user.id, auditDetail);
-      return true;
-    }
-    throw new Error("User not found.");
-  }
-
-  /** Emails a 6-digit code through the backend. Resolves with the server message. */
-  function sendResetCode(email) {
-    var user;
-    try {
-      user = resetTarget(email);
-      if (user.authProvider !== "google") throw new Error("This account uses a password. Reset it with your old password.");
-    } catch (err) {
-      return Promise.reject(err);
-    }
-    return NS.api.post("/auth/password-code", { email: user.email }).then(function (res) {
-      return (res && res.message) || "Code sent. Check your email.";
-    });
-  }
+  /* ---------------------------------------------------------------- forgotten password */
 
   var RESET_TICKET_KEY = "idrive_reset_ticket";
   var RESET_TICKET_MS = 10 * 60 * 1000;
@@ -543,7 +580,7 @@
       var raw = sessionStorage.getItem(RESET_TICKET_KEY);
       if (!raw) return null;
       var ticket = JSON.parse(raw);
-      if (!ticket || !ticket.email || !ticket.at || Date.now() - ticket.at > RESET_TICKET_MS) {
+      if (!ticket || !ticket.email || !ticket.ticket || !ticket.at || Date.now() - ticket.at > RESET_TICKET_MS) {
         sessionStorage.removeItem(RESET_TICKET_KEY);
         return null;
       }
@@ -553,11 +590,8 @@
     }
   }
 
-  function saveResetTicket(email) {
-    sessionStorage.setItem(
-      RESET_TICKET_KEY,
-      JSON.stringify({ email: email, at: Date.now(), token: NS.security.randomHex(16) })
-    );
+  function saveResetTicket(email, ticket) {
+    sessionStorage.setItem(RESET_TICKET_KEY, JSON.stringify({ email: email, ticket: ticket, at: Date.now() }));
   }
 
   function clearResetTicket() {
@@ -568,57 +602,65 @@
     }
   }
 
-  /** Confirms the emailed code, then allows the new-password page for a short time. */
+  /*
+   * Emails a 6-digit code. The server answers the same whether or not the address has an account, so
+   * nothing here can be used to find out who is registered. Resolves with the server's message.
+   */
+  function sendResetCode(email) {
+    email = NS.security.sanitizeEmail(email);
+    if (!NS.validation.email(email)) return Promise.reject(new Error("Enter a valid email address."));
+    return NS.api.post("/auth/password-code", { email: email }).then(
+      function (res) {
+        return (res && res.message) || "If that email has an account, a 6-digit code is on its way.";
+      },
+      function (err) {
+        throw failure(err, "Could not send the code.");
+      }
+    );
+  }
+
+  /* Confirms the emailed code; the server hands back a one-time ticket for the new-password page. */
   function verifyResetCode(email, code) {
-    var user;
-    try {
-      user = resetTarget(email);
-      if (user.authProvider !== "google") throw new Error("This account uses a password. Reset it with your old password.");
-      code = String(code || "").replace(/\D/g, "");
-      if (code.length !== 6) throw new Error("Enter the 6-digit code from the email.");
-    } catch (err) {
-      return Promise.reject(err);
-    }
-    return NS.api.post("/auth/password-code/verify", { email: user.email, code: code }).then(function () {
-      saveResetTicket(user.email);
-      return user.email;
-    });
+    email = NS.security.sanitizeEmail(email);
+    code = String(code || "").replace(/\D/g, "");
+    if (!NS.validation.email(email)) return Promise.reject(new Error("Enter a valid email address."));
+    if (code.length !== 6) return Promise.reject(new Error("Enter the 6-digit code from the email."));
+    return NS.api.post("/auth/password-code/verify", { email: email, code: code }).then(
+      function (res) {
+        if (!res || !res.ticket) throw new Error("That code is not valid.");
+        saveResetTicket(email, res.ticket);
+        return email;
+      },
+      function (err) {
+        throw failure(err, "That code is not valid.");
+      }
+    );
   }
 
-  function completeVerifiedReset(nextPassword, csrf) {
-    try {
-      if (csrf) NS.security.assertCsrf(csrf);
-      else NS.security.issueCsrf();
-    } catch (e) {
-      NS.security.issueCsrf();
-    }
+  function completeVerifiedReset(nextPassword, confirmPassword) {
     var ticket = readResetTicket();
-    if (!ticket) throw new Error("Confirm the email code first. It may have expired.");
-    var user = resetTarget(ticket.email);
-    storeNewPassword(user, nextPassword, "Password reset with an emailed code.");
-    clearResetTicket();
-    return true;
+    if (!ticket) return Promise.reject(new Error("Confirm the email code first. It may have expired."));
+    var issues = NS.security.passwordIssues(nextPassword, ticket.email);
+    if (issues.length) return Promise.reject(new Error("New password: " + issues.join(" ")));
+    return NS.api
+      .post("/auth/password-reset", {
+        email: ticket.email,
+        ticket: ticket.ticket,
+        password: nextPassword,
+        password_confirmation: confirmPassword == null ? nextPassword : confirmPassword
+      })
+      .then(
+        function () {
+          clearResetTicket();
+          return true;
+        },
+        function (err) {
+          throw failure(err, "Could not save the password.");
+        }
+      );
   }
 
-  /* Sign-in checks the password stored in this browser, so the new password is saved here once the backend accepts the code. */
-  function resetPasswordWithCode(email, code, nextPassword, csrf) {
-    return verifyResetCode(email, code).then(function () {
-      return completeVerifiedReset(nextPassword, csrf);
-    });
-  }
-
-  function resetPasswordWithOld(email, currentPassword, nextPassword, csrf) {
-    NS.security.assertCsrf(csrf);
-    var user = resetTarget(email);
-    if (user.authProvider === "google") throw new Error("This account signs in with Google. Reset it with an emailed code.");
-    if (!user.passwordHash) throw new Error("This account has no password yet. Contact the desk.");
-    if (NS.security.hashPassword(currentPassword || "", user.salt) !== user.passwordHash) {
-      NS.security.recordLoginFailure(user.email);
-      throw new Error("Old password is incorrect.");
-    }
-    if (currentPassword === nextPassword) throw new Error("New password must be different from the old one.");
-    return storeNewPassword(user, nextPassword, "Password changed from the sign-in page using the old password.");
-  }
+  /* ---------------------------------------------------------------- staff tools */
 
   function setUserStatus(userId, status, csrf) {
     NS.security.assertCsrf(csrf);
@@ -630,11 +672,18 @@
       if (list[i].id === userId) {
         if (list[i].role === "admin") throw new Error("Admin accounts cannot be disabled here.");
         if (me.role !== "admin" && list[i].role !== "customer") throw new Error("Only an admin can change staff and driver accounts.");
+        var before = list[i].status;
         list[i].status = status === "active" ? "active" : "disabled";
         saveUsers(list);
         if (NS.api && list[i].apiId != null) {
           NS.api.users.update(list[i].apiId, { status: list[i].status }).catch(function (err) {
-            console.warn("iDrive: account status was not saved to the server.", err);
+            /* The server decides; put the screen back to what it still says. */
+            var again = users();
+            for (var j = 0; j < again.length; j++) {
+              if (again[j].id === userId) again[j].status = before;
+            }
+            saveUsers(again);
+            if (NS.ui && NS.ui.toast) NS.ui.toast("The server did not change that account: " + serverMessage(err, "try again."), "err");
           });
         }
         NS.domain.audit("user-status", me.id, list[i].email + " → " + list[i].status);
@@ -716,6 +765,7 @@
     current: current,
     assertActive: assertActive,
     takeNotice: takeNotice,
+    sessionEnded: sessionEnded,
     DISABLED_MSG: DISABLED_MSG,
     login: login,
     register: register,
@@ -728,13 +778,10 @@
     updateProfile: updateProfile,
     updateAvatar: updateAvatar,
     changePassword: changePassword,
-    resetMethodFor: resetMethodFor,
     sendResetCode: sendResetCode,
     verifyResetCode: verifyResetCode,
     completeVerifiedReset: completeVerifiedReset,
     readResetTicket: readResetTicket,
-    resetPasswordWithCode: resetPasswordWithCode,
-    resetPasswordWithOld: resetPasswordWithOld,
     setUserStatus: setUserStatus,
     listUsers: listUsers,
     countRole: countRole,

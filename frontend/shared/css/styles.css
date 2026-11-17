@@ -4587,8 +4587,9 @@ body .auth-actions .btn.google-fallback,
 .shortcut-group { margin-bottom: 0.8rem; }
 .shortcut-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.6rem; }
 .role-tabs { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.4rem 0 0.8rem; }
-.role-tab { min-height: 44px; height: 44px; padding: 0 0.9rem; border-radius: 8px; border: 1px solid #e4e4e4; background: #fff; font-weight: 700; font-size: 0.8rem; }
-.role-tab.active { background: #c4504b; color: #fff; border-color: #c4504b; }
+.role-tab { min-height: 44px; height: 44px; padding: 0 0.9rem; border-radius: 8px; border: 1px solid #e4e4e4; background: #fff; font-weight: 700; font-size: 0.8rem; cursor: pointer; text-transform: capitalize; }
+.role-tab:hover { border-color: #c4504b; color: #c4504b; }
+.role-tab.active, .role-tab.active:hover { background: #c4504b; color: #fff; border-color: #c4504b; }
 .pickup-map-block { margin: 0.2rem 0 1rem; }
 .pickup-map-tools { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
 .pickup-map-tools .form-control { flex: 1; }

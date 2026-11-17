@@ -77,7 +77,10 @@
 
   function request(method, path, options) {
     options = options || {};
-    var headers = Object.assign({}, CONFIG.headers, authHeader(), options.headers || {});
+    var url = buildUrl(path, options.query);
+    /* The sign-in token is only ever sent to our own API. */
+    var ours = url.indexOf(CONFIG.baseUrl.replace(/\/+$/, "") + "/") === 0;
+    var headers = Object.assign({}, CONFIG.headers, ours ? authHeader() : {}, options.headers || {});
     var body = options.body;
     if (body instanceof FormData) delete headers["Content-Type"];
     else if (body !== undefined && typeof body !== "string") body = JSON.stringify(body);
@@ -85,7 +88,7 @@
     var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     var timer = controller ? setTimeout(function () { controller.abort(); }, options.timeoutMs || CONFIG.timeoutMs) : null;
 
-    return fetch(buildUrl(path, options.query), {
+    return fetch(url, {
       method: method,
       headers: headers,
       body: body,
@@ -98,7 +101,14 @@
         return parse.then(function (data) {
           if (!res.ok) {
             var msg = (data && data.message) || res.statusText || "Request failed";
-            if (res.status === 401 && NS.store) NS.store.setSession(null);
+            /*
+             * The server no longer accepts this sign-in (expired, signed out elsewhere, password changed,
+             * account disabled). A wrong password at the sign-in form is also a 401, but carries no such code.
+             */
+            if (res.status === 401 && data && (data.code === "session_ended" || data.code === "unauthenticated")) {
+              if (NS.auth && NS.auth.sessionEnded) NS.auth.sessionEnded();
+              else if (NS.store) NS.store.setSession(null);
+            }
             throw ApiError(msg, res.status, data);
           }
           return data;

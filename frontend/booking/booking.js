@@ -2104,7 +2104,15 @@
       returnBtn +
       staffAccept +
       cancel +
-      '<button class="btn btn-ghost" type="button" onclick="window.print()">Print receipt</button></div></div>';
+      '<button class="btn btn-ghost" type="button" data-print>Print receipt</button></div></div>';
+
+    /* Delegated, so the page needs no inline onclick (the Content-Security-Policy blocks those). */
+    if (!document.documentElement.hasAttribute("data-print-bound")) {
+      document.documentElement.setAttribute("data-print-bound", "1");
+      document.addEventListener("click", function (e) {
+        if (e.target.closest && e.target.closest("[data-print]")) window.print();
+      });
+    }
 
     var ratingForm = document.getElementById("rating-form");
     if (ratingForm) {

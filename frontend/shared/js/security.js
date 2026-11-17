@@ -1,6 +1,7 @@
 /**
  * iDrive CDO — frontend security primitives.
- * Client-side only: hashing, sanitization, CSRF, sessions, lockout, integrity.
+ * Client-side helpers only: sanitization, form tokens, integrity seals. Passwords, sessions and
+ * lockouts are handled by the API, never here.
  */
 (function (global) {
   "use strict";
@@ -131,11 +132,7 @@
     return diff === 0;
   }
 
-  function hashPassword(password, salt) {
-    var material = unescape(encodeURIComponent(salt + "::" + password + "::idrive-cdo"));
-    return sha256(material);
-  }
-
+  /* Only a first check so people see what is wrong before sending; the server enforces the real policy. */
   function passwordIssues(password, email) {
     var issues = [];
     if (!password || password.length < 8) issues.push("At least 8 characters.");
@@ -192,49 +189,6 @@
     issueCsrf();
   }
 
-  var LOCK_WINDOW_MS = 15 * 60 * 1000;
-  var LOCK_LIMIT = 5;
-
-  function lockKey(email) {
-    return "idrive_lock_" + sha256(String(email || "").toLowerCase());
-  }
-
-  function getLockState(email) {
-    try {
-      return JSON.parse(localStorage.getItem(lockKey(email)) || "null") || { fails: 0, until: 0 };
-    } catch (e) {
-      return { fails: 0, until: 0 };
-    }
-  }
-
-  function setLockState(email, state) {
-    localStorage.setItem(lockKey(email), JSON.stringify(state));
-  }
-
-  function assertNotLocked(email) {
-    var state = getLockState(email);
-    if (state.until && Date.now() < state.until) {
-      var mins = Math.ceil((state.until - Date.now()) / 60000);
-      throw new Error("Account temporarily locked. Try again in " + mins + " minute(s).");
-    }
-  }
-
-  function recordLoginFailure(email) {
-    var state = getLockState(email);
-    if (state.until && Date.now() > state.until) state = { fails: 0, until: 0 };
-    state.fails += 1;
-    if (state.fails >= LOCK_LIMIT) {
-      state.until = Date.now() + LOCK_WINDOW_MS;
-      state.fails = 0;
-    }
-    setLockState(email, state);
-    return state;
-  }
-
-  function clearLoginFailures(email) {
-    localStorage.removeItem(lockKey(email));
-  }
-
   function luhnValid(num) {
     var digits = String(num || "").replace(/\s+/g, "");
     if (!/^\d{13,19}$/.test(digits)) return false;
@@ -265,17 +219,12 @@
     sha256: sha256,
     randomHex: randomHex,
     timingSafeEqual: timingSafeEqual,
-    hashPassword: hashPassword,
     passwordIssues: passwordIssues,
     integritySeal: integritySeal,
     issueCsrf: issueCsrf,
     getCsrf: getCsrf,
     assertCsrf: assertCsrf,
-    assertNotLocked: assertNotLocked,
-    recordLoginFailure: recordLoginFailure,
-    clearLoginFailures: clearLoginFailures,
     luhnValid: luhnValid,
-    maskCard: maskCard,
-    LOCK_LIMIT: LOCK_LIMIT
+    maskCard: maskCard
   };
 })(window);

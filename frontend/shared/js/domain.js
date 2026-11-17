@@ -796,8 +796,8 @@
   }
 
   /*
-   * Login is still local, so customers are matched to a Laravel `users` row by email.
-   * Resolves to that users.id and stores it as the local user's apiId.
+   * Customers are real accounts on the server: signing in gives the local copy its server id (apiId).
+   * Resolves to that users.id. The browser can no longer create or look up accounts by email.
    */
   function ensureCustomerOnApi(userId) {
     if (!NS.api) return Promise.reject(new Error("API client not loaded."));
@@ -807,26 +807,7 @@
     if (!user) return Promise.reject(new Error("Customer account not found."));
     if (user.role !== "customer") return Promise.reject(new Error("Bookings must belong to a customer account."));
     if (user.apiId != null) return Promise.resolve(user.apiId);
-    /* Backend contract: POST /users/sync with first_name/last_name/phone/address/license_*. */
-    var phone = NS.validation.canonicalPhone(user.phone || "");
-    if (!phone) return Promise.reject(new Error("Add a mobile number before booking."));
-    var body = {
-      email: user.email,
-      first_name: user.firstName || (user.email || "").split("@")[0] || "Guest",
-      last_name: user.lastName || "-",
-      phone: phone
-    };
-    if (user.address) body.address = user.address;
-    if (user.licenseNo) body.license_no = user.licenseNo;
-    if (user.licenseExpiry) body.license_expiry = user.licenseExpiry;
-    if (user.birthdate) body.birthdate = user.birthdate;
-    if (user.privacyAcceptedAt) body.privacy_accepted_at = user.privacyAcceptedAt;
-    return NS.api.post("/users/sync", body).then(function (saved) {
-      var list = NS.store.get("users", []);
-      for (var i = 0; i < list.length; i++) if (list[i].id === userId) list[i].apiId = saved.user_id;
-      NS.store.set("users", list);
-      return saved.user_id;
-    });
+    return Promise.reject(new Error("Please sign in again to continue."));
   }
 
   /*
@@ -2386,46 +2367,6 @@
     });
   }
 
-  function seedUsers() {
-    function make(role, email, password, first, last, phone, extra) {
-      var salt = NS.security.randomHex(16);
-      var user = {
-        id: "usr_" + role,
-        email: email,
-        passwordHash: NS.security.hashPassword(password, salt),
-        salt: salt,
-        role: role,
-        firstName: first,
-        lastName: last,
-        phone: phone,
-        address: (extra && extra.address) || "",
-        department: (extra && extra.department) || "",
-        licenseNo: role === "customer" ? "N04-12-345678" : "A01-11-100001",
-        licenseExpiry: "2028-12-31",
-        avatar: "",
-        status: "active",
-        createdAt: "2026-01-15T08:00:00.000Z"
-      };
-      return user;
-    }
-    var seeded = [
-      make("admin", "admin@idrivecdo.ph", "Drive@Admin1", "Mara", "Villanueva", "09171234567", {
-        address: "Limketkai Drive, CDO",
-        department: "Administration"
-      }),
-      make("staff", "staff@idrivecdo.ph", "Drive@Staff1", "Ken", "Sable", "09181234567", {
-        address: "Divisoria, CDO",
-        department: "Rental-Incharge"
-      }),
-      make("customer", "guest@idrivecdo.ph", "Drive@Guest1", "Paolo", "Reyes", "09191234567", {
-        address: "Uptown Cagayan de Oro"
-      })
-    ];
-    seeded[2].avatar =
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=320&h=320&q=80";
-    return seeded;
-  }
-
   function seedVehicles() {
     var img = function (file) {
       return "/shared/img/fleet/" + file;
@@ -2773,41 +2714,10 @@
     }
     if (userChanged) NS.store.set("users", users);
 
-    // Driver login account for the self-service trip interface.
-    var hasDriverUser = users.some(function (u) {
-      return u.role === "driver";
-    });
-    if (!hasDriverUser) {
-      var salt = NS.security.randomHex(16);
-      users.push({
-        id: "usr_driver",
-        email: "driver@idrivecdo.ph",
-        passwordHash: NS.security.hashPassword("Drive@Driver1", salt),
-        salt: salt,
-        role: "driver",
-        firstName: "Rico",
-        lastName: "Manalo",
-        phone: "09170001111",
-        address: "Carmen, Cagayan de Oro",
-        department: "Chauffeur",
-        licenseNo: "N02-98-112233",
-        licenseExpiry: "2028-06-30",
-        avatar: "",
-        status: "active",
-        driverId: "drv_001",
-        createdAt: new Date().toISOString()
-      });
-      NS.store.set("users", users);
-    }
-
-    // Link the driver record back to its login account.
+    /* Accounts (drivers included) live on the server; none is created in the browser any more. */
     var ds = drivers();
     var dsChanged = false;
     for (var di = 0; di < ds.length; di++) {
-      if (ds[di].id === "drv_001" && !ds[di].userId) {
-        ds[di].userId = "usr_driver";
-        dsChanged = true;
-      }
       if (!ds[di].dutyStatus) {
         ds[di].dutyStatus = di === 0 ? "on_call" : "regular";
         dsChanged = true;
@@ -2843,9 +2753,39 @@
     audit("seed", "system", "Fleet photos updated to real Mirage / Strada / Soluto / Stargazer / L300 / Ertiga units.");
   }
 
+  /*
+   * One-time clean-up when sign-in moved to the server: the passwords (and the shared demo ones) that
+   * older versions kept in this browser are removed, along with accounts that only ever existed here.
+   */
+  function purgeLegacyAccountsOnce() {
+    var key = "authMigrated";
+    if (NS.store.get(key) === "server-auth-20261114") return;
+    var kept = NS.store
+      .get("users", [])
+      .filter(function (u) {
+        return u && u.apiId != null;
+      })
+      .map(function (u) {
+        var copy = Object.assign({}, u);
+        delete copy.passwordHash;
+        delete copy.salt;
+        return copy;
+      });
+    NS.store.set("users", kept);
+    try {
+      Object.keys(localStorage).forEach(function (name) {
+        if (name.indexOf("idrive_lock_") === 0) localStorage.removeItem(name);
+      });
+      sessionStorage.removeItem("idrive_reset_ticket");
+    } catch (e) {
+      /* nothing else to clear */
+    }
+    NS.store.set(key, "server-auth-20261114");
+  }
+
   function seedIfNeeded() {
     if (!NS.store.get("seeded", false)) {
-      NS.store.set("users", seedUsers());
+      NS.store.set("users", []);
       NS.store.set("vehicles", seedVehicles());
       NS.store.set("bookings", seedBookings());
       NS.store.set("audit", []);
@@ -2862,10 +2802,11 @@
       NS.store.set("fleetReset", "fleet-20261104b");
       saveVehicleRegs(seedVehicleRegs());
       saveFuelRecords(seedFuelRecords());
-      audit("seed", "system", "Initial fleet and demo accounts loaded.");
+      audit("seed", "system", "Initial fleet loaded.");
     } else {
       patchVehicleImages();
     }
+    purgeLegacyAccountsOnce();
     migrateLegacyInbox();
     ensureErdSeed();
     clearStoredBookingsOnce();
@@ -3068,6 +3009,8 @@
       badRenterReason: row.bad_renter_reason || (prev && prev.badRenterReason) || "",
       badRenterLabeledBy: row.bad_renter_labeled_by || (prev && prev.badRenterLabeledBy) || "",
       badRenterLabeledAt: row.bad_renter_labeled_at || (prev && prev.badRenterLabeledAt) || "",
+      authProvider: row.auth_provider || (prev && prev.authProvider) || "password",
+      passwordSet: row.has_password != null ? !!row.has_password : prev && prev.passwordSet !== undefined ? prev.passwordSet : true,
       createdAt: row.created_at
     };
   }
@@ -3109,22 +3052,19 @@
     saveBookings(list);
   }
 
-  /* Single /users endpoint carries role; we keep local-only accounts (no apiId) as-is. */
+  /*
+   * The server decides which accounts this person may see (a renter gets only their own). Whatever
+   * the browser cached beyond that is dropped, so nobody else's details linger after a sync.
+   */
   function syncUsersFromApi(users) {
-    var adopted = adoptServerRows(NS.store.get("users", []), users, "user_id", function (r) {
-      return String(r.email || "").toLowerCase();
-    }, function (u) {
-      return u.passwordHash ? String(u.email || "").toLowerCase() : "";
-    });
     NS.store.set(
       "users",
-      mergeFromApi(adopted.list, users, "user_id", "usr_api_", function (r, prev) {
+      mergeFromApi(NS.store.get("users", []), users, "user_id", "usr_api_", function (r, prev) {
         return apiUser(r, prev);
       }, function () {
-        return true;
+        return false;
       })
     );
-    remapBookingRefs("userId", adopted.renamed);
   }
 
   function syncDriversFromApi(rows) {
@@ -3254,10 +3194,12 @@
         };
         if (prev && !/^bkg_api_/.test(prev.id)) return mapped;
         if (prev) return mapped;
+        /* Someone else's booking arrives without a name or reference: it only blocks those dates. */
         return Object.assign(
           {
-            ref: r.ref || "IDR-" + r.booking_id,
-            userId: userIds[r.user_id] || "usr_api_" + r.user_id,
+            ref: r.ref || (r.anonymous ? "" : "IDR-" + r.booking_id),
+            userId: r.anonymous ? "" : userIds[r.user_id] || "usr_api_" + r.user_id,
+            anonymous: !!r.anonymous,
             pickup: locName(r.pickup_location || r.pickupLocation),
             dropoff: locName(r.dropoff_location || r.dropoffLocation),
             addons: [],
@@ -3845,6 +3787,7 @@
     syncAllFromApi: syncAllFromApi,
     pushUserProfileToApi: pushUserProfileToApi,
     ensureCustomerOnApi: ensureCustomerOnApi,
+    apiUser: apiUser,
     saveVehicleExtras: saveVehicleExtras,
     bookings: bookings,
     fifoOrder: fifoOrder,

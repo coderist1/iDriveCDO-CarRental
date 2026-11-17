@@ -1,0 +1,10 @@
+Dockerfile
+nginx.conf
+start-server.bat
+.dockerignore
+.gitignore
+.env
+.env.*
+*.bak
+*.zip
+*.log

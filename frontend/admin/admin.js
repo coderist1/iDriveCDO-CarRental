@@ -946,8 +946,12 @@
   function adminBookings() {
     mountAdminNav();
     var host = document.getElementById("admin-bookings");
+    function selectedStatus() {
+      var active = document.querySelector("#status-filter .role-tab.active");
+      return active ? active.getAttribute("data-status") || "" : "";
+    }
     function render() {
-      var filter = document.getElementById("status-filter").value;
+      var filter = selectedStatus();
       var list = NS.domain.allBookings().filter(function (b) {
         return !filter || b.status === filter;
       });
@@ -1007,7 +1011,16 @@
         })
         .join("");
     }
-    document.getElementById("status-filter").addEventListener("change", render);
+    document.getElementById("status-filter").addEventListener("click", function (e) {
+      var tab = e.target.closest(".role-tab");
+      if (!tab || !document.getElementById("status-filter").contains(tab)) return;
+      document.querySelectorAll("#status-filter .role-tab").forEach(function (btn) {
+        var on = btn === tab;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      render();
+    });
     host.addEventListener("click", function (e) {
       var receiptId = e.target.getAttribute("data-pay-receipt");
       if (receiptId) {

@@ -1,0 +1,4 @@
+Contact: mailto:hello@idrivecdo.ph
+Expires: 2027-11-01T00:00:00.000Z
+Preferred-Languages: en, fil
+Canonical: https://idrive-cdo.vercel.app/.well-known/security.txt

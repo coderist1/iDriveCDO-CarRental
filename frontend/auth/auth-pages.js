@@ -276,7 +276,7 @@
             NS.api
               .googleSignIn(resp.credential)
               .then(function (data) {
-                var user = NS.auth.googleSignIn(data.user);
+                var user = NS.auth.googleSignIn(data);
                 if (!NS.validation.canonicalPhone(user.phone)) {
                   promptGooglePhone(form, user);
                   return;
@@ -358,44 +358,45 @@
         btn.textContent = "Signing in…";
       }
 
-      try {
-        try {
-          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-        } catch (ignore) {}
-        var csrfEl = field(form, "csrf");
-        var user = NS.auth.login(val(form, "email"), val(form, "password"), csrfEl ? csrfEl.value : "");
-        showAlert(form, "Welcome back, " + user.firstName + ".", "ok");
-        var next = NS.ui.qs("next");
-        var dest =
-          user.role === "driver"
-            ? NS.routes.href("driverHome")
-            : NS.routes.isSafeNext(next)
-            ? NS.routes.base() + next
-            : user.role === "staff" || user.role === "admin"
-            ? NS.routes.href("adminHome")
-            : NS.routes.href("home");
-        setTimeout(function () {
-          location.href = dest;
-        }, 150);
-      } catch (err) {
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = "Sign in";
-        }
-        try {
-          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-        } catch (ignore) {}
-        showAlert(form, err.message || "Sign in failed.", "err");
-      }
+      NS.auth
+        .login(val(form, "email"), val(form, "password"))
+        .then(function (user) {
+          showAlert(form, "Welcome back, " + user.firstName + ".", "ok");
+          var next = NS.ui.qs("next");
+          var dest =
+            user.role === "driver"
+              ? NS.routes.href("driverHome")
+              : NS.routes.isSafeNext(next)
+              ? NS.routes.base() + next
+              : user.role === "staff" || user.role === "admin"
+              ? NS.routes.href("adminHome")
+              : NS.routes.href("home");
+          setTimeout(function () {
+            location.href = dest;
+          }, 150);
+        })
+        .catch(function (err) {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Sign in";
+          }
+          try {
+            if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+          } catch (ignore) {}
+          showAlert(form, (err && err.message) || "Sign in failed.", "err");
+        });
     });
   };
 
+  /*
+   * Forgot password, for every account: ask for a 6-digit code by email, confirm it, then choose a new
+   * password on the next page. The server answers the same whether or not the address has an account.
+   */
   NS.pages.forgot = function forgot() {
     var emailForm = document.getElementById("forgot-email-form");
     var codeForm = document.getElementById("forgot-code-form");
-    var oldForm = document.getElementById("forgot-old-form");
     var accountRow = document.getElementById("forgot-account");
-    if (!emailForm || !codeForm || !oldForm || codeForm.getAttribute("data-bound") === "1") return;
+    if (!emailForm || !codeForm || codeForm.getAttribute("data-bound") === "1") return;
     codeForm.setAttribute("data-bound", "1");
     try {
       if (NS.auth && NS.auth.current && NS.auth.current()) {
@@ -405,10 +406,10 @@
     } catch (e) {
       console.warn("current() check failed", e);
     }
-    NS.ui.bindCsrf(codeForm);
-    NS.ui.bindCsrf(oldForm);
 
     var chosenEmail = "";
+    var sendBtn = document.getElementById("send-code-btn");
+    var cooldownTimer = null;
 
     function notice(message, type) {
       var box = document.getElementById("form-alert");
@@ -420,53 +421,13 @@
       if (message) NS.ui.toast(message, type === "ok" ? "ok" : "err");
     }
 
-    function checkNewPassword(form) {
-      var next = val(form, "password");
-      if (next !== val(form, "confirmPassword")) {
-        notice("New passwords do not match.", "err");
-        return null;
-      }
-      var issues = NS.security.passwordIssues(next, chosenEmail);
-      if (issues.length) {
-        notice("New password: " + issues.join(" "), "err");
-        return null;
-      }
-      return next;
-    }
-
-    function showStep(method) {
-      emailForm.hidden = !!method;
-      accountRow.hidden = !method;
-      codeForm.hidden = method !== "code";
-      oldForm.hidden = method !== "old";
+    function showStep(codeStep) {
+      emailForm.hidden = !!codeStep;
+      accountRow.hidden = !codeStep;
+      codeForm.hidden = !codeStep;
       document.getElementById("forgot-account-email").textContent = chosenEmail;
     }
 
-    emailForm.addEventListener("submit", function (e) {
-      e.preventDefault();
-      notice("", "ok");
-      try {
-        var method = NS.auth.resetMethodFor(val(emailForm, "email"));
-        chosenEmail = NS.security.sanitizeEmail(val(emailForm, "email"));
-        showStep(method);
-        var first = method === "code" ? document.getElementById("send-code-btn") : field(oldForm, "currentPassword");
-        if (first) first.focus();
-      } catch (err) {
-        notice((err && err.message) || "Could not find that account.", "err");
-      }
-    });
-
-    document.getElementById("forgot-change-email").addEventListener("click", function () {
-      notice("", "ok");
-      codeForm.reset();
-      oldForm.reset();
-      chosenEmail = "";
-      showStep(null);
-      field(emailForm, "email").focus();
-    });
-
-    var sendBtn = document.getElementById("send-code-btn");
-    var cooldownTimer = null;
     function startCooldown(seconds) {
       var left = seconds;
       sendBtn.disabled = true;
@@ -483,6 +444,50 @@
         sendBtn.textContent = "Resend in " + left + "s";
       }, 1000);
     }
+
+    function codeSent(message) {
+      showStep(true);
+      notice(message, "ok");
+      startCooldown(60);
+      var codeInput = field(codeForm, "code");
+      if (codeInput) codeInput.focus();
+    }
+
+    /* A code asked for less than a minute ago is still valid, so carry on to the code step. */
+    function justSent(err) {
+      return !!(err && err.status === 429 && /just sent/i.test(err.message || ""));
+    }
+
+    emailForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      notice("", "ok");
+      var email = NS.security.sanitizeEmail(val(emailForm, "email"));
+      if (!NS.validation.email(email)) {
+        notice("Enter a valid email address.", "err");
+        return;
+      }
+      chosenEmail = email;
+      var btn = emailForm.querySelector('button[type="submit"]');
+      if (btn) btn.disabled = true;
+      NS.auth.sendResetCode(email).then(codeSent).catch(function (err) {
+        if (justSent(err)) {
+          codeSent(err.message);
+          return;
+        }
+        notice((err && err.message) || "Could not send the code.", "err");
+      }).then(function () {
+        if (btn) btn.disabled = false;
+      });
+    });
+
+    document.getElementById("forgot-change-email").addEventListener("click", function () {
+      notice("", "ok");
+      codeForm.reset();
+      chosenEmail = "";
+      showStep(false);
+      field(emailForm, "email").focus();
+    });
+
     sendBtn.addEventListener("click", function () {
       notice("", "ok");
       var label = sendBtn.textContent;
@@ -513,33 +518,8 @@
       NS.auth.verifyResetCode(chosenEmail, code).then(function () {
         location.assign(NS.routes.href("resetPassword"));
       }).catch(function (err) {
-        notice((err && err.message) || "That code is not valid.", "err");
-      }).then(function () {
         btn.disabled = false;
-      });
-    });
-
-    oldForm.addEventListener("submit", function (e) {
-      e.preventDefault();
-      notice("", "ok");
-      if (!val(oldForm, "currentPassword")) {
-        notice("Enter your old password.", "err");
-        return;
-      }
-      var next = checkNewPassword(oldForm);
-      if (!next) return;
-      NS.ui.askYesNo("Change to this new password?", { title: "Change password", yes: "Yes", no: "No" }).then(function (ok) {
-        if (!ok) return;
-        NS.ui.bindCsrf(oldForm);
-        try {
-          NS.auth.resetPasswordWithOld(chosenEmail, val(oldForm, "currentPassword"), next, val(oldForm, "csrf"));
-          oldForm.reset();
-          NS.ui.bindCsrf(oldForm);
-          notice("Password changed. You can sign in with the new password.", "ok");
-        } catch (err) {
-          NS.ui.bindCsrf(oldForm);
-          notice((err && err.message) || "Could not change the password.", "err");
-        }
+        notice((err && err.message) || "That code is not valid.", "err");
       });
     });
   };
@@ -563,7 +543,6 @@
     }
     var emailEl = document.getElementById("reset-account-email");
     if (emailEl) emailEl.textContent = ticket.email;
-    NS.ui.bindCsrf(form);
 
     form.addEventListener("submit", function (e) {
       e.preventDefault();
@@ -580,21 +559,18 @@
       }
       NS.ui.askYesNo("Save this as your new password?", { title: "Save password", yes: "Yes", no: "No" }).then(function (ok) {
         if (!ok) return;
-        NS.ui.bindCsrf(form);
         var btn = form.querySelector('button[type="submit"]');
         if (btn) btn.disabled = true;
-        try {
-          NS.auth.completeVerifiedReset(next, val(form, "csrf"));
+        NS.auth.completeVerifiedReset(next, val(form, "confirmPassword")).then(function () {
           form.reset();
           showAlert(form, "Password updated. You can sign in with the new password.", "ok");
           setTimeout(function () {
             location.assign(NS.routes.href("login"));
           }, 1200);
-        } catch (err) {
-          NS.ui.bindCsrf(form);
+        }).catch(function (err) {
           showAlert(form, (err && err.message) || "Could not save the password.", "err");
           if (btn) btn.disabled = false;
-        }
+        });
       });
     });
   };
@@ -653,8 +629,29 @@
         btn.textContent = "Creating…";
       }
 
+      function failRegister(err) {
+        busy = false;
+        if (btn) {
+          var phoneInput = field(form, "phone");
+          btn.disabled = !!(phoneInput && phoneInput.getAttribute("data-phone-blocked") === "1");
+          btn.textContent = "Create account";
+        }
+        try {
+          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
+        } catch (ignore) {}
+        var msg = err && err.message ? err.message : "Could not create account.";
+        showAlert(form, msg, "err");
+        try {
+          if (/first name/i.test(msg)) NS.ui.fieldError(field(form, "firstName"), msg);
+          else if (/last name/i.test(msg)) NS.ui.fieldError(field(form, "lastName"), msg);
+          else if (/password/i.test(msg) && /match/i.test(msg)) NS.ui.fieldError(field(form, "confirmPassword"), msg);
+          else if (/password/i.test(msg)) NS.ui.fieldError(field(form, "password"), msg);
+          else if (/email/i.test(msg)) NS.ui.fieldError(field(form, "email"), msg);
+          else if (/mobile|phone/i.test(msg)) NS.ui.fieldError(field(form, "phone"), msg);
+        } catch (ignore) {}
+      }
+
       NS.auth.ensurePhoneFree(val(form, "phone"), null).then(function () {
-      try {
         if (!NS.auth || !NS.auth.register) {
           throw new Error("Auth module failed to load. Refresh the page.");
         }
@@ -663,7 +660,8 @@
         } catch (ignore) {}
         var csrfInput = field(form, "csrf");
 
-        var user = NS.auth.register(
+        /* The server creates the account and signs the new customer in. */
+        return NS.auth.register(
           {
             firstName: val(form, "firstName"),
             lastName: val(form, "lastName"),
@@ -682,57 +680,12 @@
           },
           csrfInput ? csrfInput.value : ""
         );
-
+      }).then(function (user) {
         showAlert(form, "Welcome, " + user.firstName + ". Redirecting…", "ok");
-        /* Navigating away cancels the request, so wait for it (briefly); the first booking retries if it fails. */
-        function delay(ms) {
-          return new Promise(function (resolve) {
-            setTimeout(resolve, ms);
-          });
-        }
-        var ready = NS.api && NS.domain.ensureCustomerOnApi
-          ? Promise.race([
-              NS.domain.ensureCustomerOnApi(user.id).catch(function (e) {
-                console.warn("iDrive: customer was not saved to the server yet.", e);
-              }),
-              delay(4000)
-            ])
-          : delay(150);
-        ready.then(function () {
+        setTimeout(function () {
           location.href = NS.routes.href("home");
-        });
-      } catch (err) {
-        busy = false;
-        if (btn) {
-          var phoneInput = field(form, "phone");
-          btn.disabled = !!(phoneInput && phoneInput.getAttribute("data-phone-blocked") === "1");
-          btn.textContent = "Create account";
-        }
-        try {
-          if (NS.ui && NS.ui.bindCsrf) NS.ui.bindCsrf(form);
-        } catch (ignore) {}
-        var msg = err && err.message ? err.message : "Could not create account.";
-        showAlert(form, msg, "err");
-        try {
-          if (/first name/i.test(msg)) NS.ui.fieldError(field(form, "firstName"), msg);
-          else if (/last name/i.test(msg)) NS.ui.fieldError(field(form, "lastName"), msg);
-          else if (/email/i.test(msg)) NS.ui.fieldError(field(form, "email"), msg);
-          else if (/mobile|phone/i.test(msg)) NS.ui.fieldError(field(form, "phone"), msg);
-          else if (/password/i.test(msg) && /match/i.test(msg)) NS.ui.fieldError(field(form, "confirmPassword"), msg);
-          else if (/password/i.test(msg)) NS.ui.fieldError(field(form, "password"), msg);
-        } catch (ignore) {}
-      }
-      }).catch(function (err) {
-        busy = false;
-        if (btn) {
-          var blockedInput = field(form, "phone");
-          btn.disabled = !!(blockedInput && blockedInput.getAttribute("data-phone-blocked") === "1");
-          btn.textContent = "Create account";
-        }
-        var phoneMsg = (err && err.message) || "Could not check that mobile number.";
-        showAlert(form, phoneMsg, "err");
-        if (NS.ui && NS.ui.fieldError) NS.ui.fieldError(field(form, "phone"), phoneMsg);
-      });
+        }, 150);
+      }).catch(failRegister);
     });
   };
 })(window);

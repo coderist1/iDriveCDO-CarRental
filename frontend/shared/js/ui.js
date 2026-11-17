@@ -322,9 +322,14 @@
     var logoutBtn = document.getElementById("logout-btn");
     if (logoutBtn) {
       logoutBtn.addEventListener("click", function () {
-        NS.auth.logout();
-        clearTrail();
-        location.href = NS.routes.href("home");
+        /* Let the server end the session before the page goes away (it gives up after a few seconds). */
+        function leave() {
+          clearTrail();
+          location.href = NS.routes.href("home");
+        }
+        var done = NS.auth.logout();
+        if (done && done.then) done.then(leave, leave);
+        else leave();
       });
     }
     var backBtn = document.getElementById("nav-back-btn");
@@ -542,7 +547,7 @@
     });
   }
 
-  function statusBadge(status) {
+  function statusLabel(status) {
     var labels = {
       pending: "Pending",
       confirmed: "Approved",
@@ -550,13 +555,24 @@
       completed: "Completed",
       cancelled: "Cancelled",
       rejected: "Rejected",
-      return_requested: "Return requested",
-      on_call: "on call",
-      regular: "regular",
-      check_first: "check first",
-      bad_renter: "Bad renter"
+      return_requested: "Return Requested",
+      on_call: "On Call",
+      regular: "Regular",
+      check_first: "Check First",
+      bad_renter: "Bad Renter",
+      paid: "Paid",
+      unpaid: "Unpaid"
     };
-    var label = labels[status] || status;
+    if (labels[status]) return labels[status];
+    var raw = String(status || "").replace(/_/g, " ");
+    if (!raw) return "";
+    return raw.replace(/\b[a-z]/g, function (letter) {
+      return letter.toUpperCase();
+    });
+  }
+
+  function statusBadge(status) {
+    var label = statusLabel(status);
     return (
       '<span class="badge badge-' +
       NS.security.escapeHtml(status) +
@@ -999,7 +1015,7 @@
       ["Passengers", esc(String(b.numberOfPassengers || 1))],
       ["Payment", esc(paymentLine)],
       ["Total amount", peso(b.total)],
-      ["Status", esc(b.status || "—")]
+      ["Status", esc(statusLabel(b.status) || "—")]
     ];
     if (b.returnNotes) rows.push(["Return notes", esc(b.returnNotes)]);
     if (b.notes) rows.push(["Notes", esc(b.notes)]);
@@ -1108,7 +1124,19 @@
       "<h3>Who can see it</h3>" +
       "<p>Only Admin and Staff can view uploaded IDs. Drivers see trip details they need for an assigned chauffeur booking, not your ID photos. We do not sell your data.</p>" +
       "<h3>Your rights</h3>" +
-      "<p>You may request to view or delete your personal data from your Account page. Staff will review a delete request before the account is disabled and identifying fields are cleared.</p>"
+      "<p>You may request to view or delete your personal data from your Account page. Staff will review a delete request before the account is disabled and identifying fields are cleared.</p>" +
+      "<h3>Companies that handle your data for us</h3>" +
+      "<ul><li><strong>Supabase</strong>: database where accounts, bookings, payments, and ID records are stored</li>" +
+      "<li><strong>Vercel</strong>: hosts this website, the booking server, and the maintenance-prediction service</li>" +
+      "<li><strong>Google</strong>: Google Sign-In if you choose it, and the Gemini service that reads the text on an ID photo when you use the ID reader</li>" +
+      "<li><strong>OpenStreetMap (Nominatim)</strong>: turns the address you type into a map pin</li>" +
+      "<li><strong>Brevo</strong>: email delivery service that sends booking confirmations and password reset codes</li>" +
+      "<li><strong>Google Fonts, jsDelivr, and unpkg</strong>: deliver fonts and page libraries, so they see your IP address like any website you visit</li></ul>" +
+      "<h3>Cookies and browser storage</h3>" +
+      "<p>We use your browser’s storage to keep you signed in and to remember your bookings on this device. We do not use advertising or analytics cookies.</p>" +
+      "<h3>Report a security problem</h3>" +
+      "<p>If you find a weakness in this site, email <strong>hello@idrivecdo.ph</strong> with the subject “Security” and give us time to fix it before you share it.</p>" +
+      '<p class="fineprint">Last updated November 14, 2026.</p>'
     );
   }
 
@@ -1396,7 +1424,7 @@
       NS.api
         .googleSignIn(resp.credential)
         .then(function (data) {
-          var user = NS.auth.googleSignIn(data.user);
+          var user = NS.auth.googleSignIn(data);
           if (!NS.validation.canonicalPhone(user.phone)) {
             showGooglePhone(user);
             return;
@@ -1485,23 +1513,17 @@
         btn.disabled = true;
         btn.textContent = "Signing in…";
       }
-      try {
-        if (NS.ui.bindCsrf) NS.ui.bindCsrf(loginPanel);
-        var csrf = loginPanel.querySelector('[name="csrf"]');
-        var user = NS.auth.login(
-          loginPanel.email.value,
-          loginPanel.password.value,
-          csrf ? csrf.value : ""
-        );
-        finish(user);
-      } catch (err) {
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = "Sign in";
-        }
-        if (NS.ui.bindCsrf) NS.ui.bindCsrf(loginPanel);
-        authAlert(alertBox, (err && err.message) || "Sign in failed. Check the email and password.");
-      }
+      NS.auth
+        .login(loginPanel.email.value, loginPanel.password.value)
+        .then(finish)
+        .catch(function (err) {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Sign in";
+          }
+          if (NS.ui.bindCsrf) NS.ui.bindCsrf(loginPanel);
+          authAlert(alertBox, (err && err.message) || "Sign in failed. Check the email and password.");
+        });
     });
 
     signupPanel.addEventListener("submit", function (e) {
@@ -1521,25 +1543,20 @@
       }
       var ready = NS.auth.ensurePhoneFree ? NS.auth.ensurePhoneFree(signupPanel.phone.value, null) : Promise.resolve();
       ready.then(function () {
-        try {
-          if (NS.ui.bindCsrf) NS.ui.bindCsrf(signupPanel);
-          var csrf = signupPanel.querySelector('[name="csrf"]');
-          var user = NS.auth.register({
-            firstName: signupPanel.firstName.value,
-            lastName: signupPanel.lastName.value,
-            email: signupPanel.email.value,
-            phone: signupPanel.phone.value,
-            password: signupPanel.password.value,
-            confirmPassword: signupPanel.confirmPassword.value,
-            birthdate: signupPanel.birthdate.value,
-            privacy: signupPanel.privacy.checked,
-            terms: signupPanel.terms.checked
-          }, csrf ? csrf.value : "");
-          finish(user);
-        } catch (err) {
-          fail(err && err.message);
-        }
-      }).catch(function (err) {
+        if (NS.ui.bindCsrf) NS.ui.bindCsrf(signupPanel);
+        var csrf = signupPanel.querySelector('[name="csrf"]');
+        return NS.auth.register({
+          firstName: signupPanel.firstName.value,
+          lastName: signupPanel.lastName.value,
+          email: signupPanel.email.value,
+          phone: signupPanel.phone.value,
+          password: signupPanel.password.value,
+          confirmPassword: signupPanel.confirmPassword.value,
+          birthdate: signupPanel.birthdate.value,
+          privacy: signupPanel.privacy.checked,
+          terms: signupPanel.terms.checked
+        }, csrf ? csrf.value : "");
+      }).then(finish).catch(function (err) {
         fail(err && err.message);
       });
     });
@@ -1593,6 +1610,7 @@
 
   NS.ui = {
     peso: peso,
+    statusLabel: statusLabel,
     fmtDate: fmtDate,
     qs: qs,
     toast: toast,
