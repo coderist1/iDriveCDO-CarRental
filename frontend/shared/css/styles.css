@@ -702,10 +702,10 @@ h1, h2, h3, .brand span, .brand-workspace {
   color: #fff !important;
 }
 .btn.btn-risk, a.btn.btn-risk, button.btn.btn-risk {
-  height: 32px;
-  min-height: 32px;
-  padding: 0 0.7rem;
-  font-size: 0.75rem;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   background: #fff;
   color: #991b1b;
@@ -718,9 +718,6 @@ h1, h2, h3, .brand span, .brand-workspace {
   color: #7f1d1d;
 }
 .btn.btn-approve, a.btn.btn-approve, button.btn.btn-approve {
-  min-height: 44px;
-  height: 44px;
-  padding: 0 1.15rem;
   background: var(--success);
   color: #fff !important;
   border: 1px solid var(--success);
@@ -742,9 +739,6 @@ button.btn.btn-approve:focus-visible:not(:disabled) {
   opacity: 1;
 }
 .btn.btn-pay, a.btn.btn-pay, button.btn.btn-pay {
-  min-height: 44px;
-  height: 44px;
-  padding: 0 1.15rem;
   background: #1b1b1b;
   color: #fff !important;
   border: 1px solid #1b1b1b;
@@ -757,11 +751,8 @@ button.btn.btn-approve:focus-visible:not(:disabled) {
   color: #fff !important;
 }
 .btn.btn-reject, a.btn.btn-reject, button.btn.btn-reject {
-  min-height: 44px;
-  height: 44px;
-  padding: 0 1.05rem;
   background: #fff;
-  color: var(--muted);
+  color: var(--ink);
   border: 1px solid #c8c8c8;
   font-weight: 600;
 }
@@ -798,12 +789,6 @@ button.btn.btn-approve:focus-visible:not(:disabled) {
 .card-actions .btn.btn-ghost,
 .card-actions .btn.btn-reject {
   box-sizing: border-box;
-  min-height: 44px;
-  height: 44px;
-  padding: 0 1.05rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.2;
   border-width: 1px;
   border-style: solid;
 }
@@ -846,7 +831,7 @@ button.btn.btn-approve:focus-visible:not(:disabled) {
   color: #fff;
   border-color: var(--primary);
 }
-.btn-block { width: auto; }
+.btn-block { width: 100%; }
 .btn-row { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 1rem; }
 
 /* —— Home hero —— */
@@ -2147,11 +2132,6 @@ textarea { min-height: 120px; resize: vertical; }
   display: flex;
   justify-content: flex-end;
   border-top: 1px solid #f0f0ee;
-}
-.fleet-ops-actions .btn {
-  min-width: 7.5rem;
-  min-height: 44px;
-  height: 44px;
 }
 @media (max-width: 960px) {
   .fleet-ops-grid { grid-template-columns: 1fr; }
@@ -4824,7 +4804,6 @@ body .auth-actions .btn.google-fallback,
 }
 .book-step-actions-primary .btn-gold {
   width: 100%;
-  min-height: 48px;
   min-width: 0;
 }
 .book-search-bar {
