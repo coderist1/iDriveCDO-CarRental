@@ -65,6 +65,8 @@
       var matching = NS.domain.vehicles().filter(function (v) {
         if (type && type.value && v.type !== type.value) return false;
         if (trans && trans.value && v.transmission !== trans.value) return false;
+        // cars currently in-use (ongoing booking) disappear until they come back
+        if (NS.domain.ongoingBookingForVehicle(v.id)) return false;
         return true;
       });
       var stateOf = {};

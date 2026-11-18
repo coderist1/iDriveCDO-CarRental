@@ -258,6 +258,8 @@
   function availableVehicles(start, end) {
     return vehicles().filter(function (v) {
       if (v.status !== "available") return false;
+      // hide cars currently in-use (ongoing / return_requested) until returned
+      if (ongoingBookingForVehicle(v.id)) return false;
       if (start && end) return isAvailable(v.id, start, end);
       return true;
     });
@@ -395,7 +397,7 @@
     for (var i = 0; i < list.length; i++) {
       if (list[i].vehicleId !== vehicleId) continue;
       if (exceptId && list[i].id === exceptId) continue;
-      if (list[i].status === "ongoing") return list[i];
+      if (list[i].status === "ongoing" || list[i].status === "return_requested") return list[i];
     }
     return null;
   }
@@ -2599,7 +2601,7 @@
     return [
       {
         id: "drv_001",
-        fullName: "Rico Manalo",
+        fullName: "Jason Hipiga",
         driverLicense: "N02-98-112233",
         typeDriverLicense: "Professional",
         licenseExpiry: "2028-06-30",
@@ -2610,13 +2612,24 @@
       },
       {
         id: "drv_002",
-        fullName: "Ana Belmonte",
-        driverLicense: "N03-01-445566",
+        fullName: "Adrian Zanro Ares",
+        driverLicense: "N03-04-778899",
         typeDriverLicense: "Professional",
-        licenseExpiry: "2029-01-15",
+        licenseExpiry: "2029-03-15",
         status: "active",
         dutyStatus: "regular",
-        phone: "09170002222",
+        phone: "09170003333",
+        createdAt: "2026-01-15T08:00:00.000Z"
+      },
+      {
+        id: "drv_003",
+        fullName: "Kenneth Mendoza",
+        driverLicense: "N04-06-221144",
+        typeDriverLicense: "Professional",
+        licenseExpiry: "2028-11-30",
+        status: "active",
+        dutyStatus: "regular",
+        phone: "09170004444",
         createdAt: "2026-01-15T08:00:00.000Z"
       }
     ];
@@ -2811,6 +2824,21 @@
     ensureErdSeed();
     clearStoredBookingsOnce();
     refreshFleetOnce();
+    refreshDriversOnce();
+  }
+
+  /* Swap the demo chauffeur pair for the current roster when nothing else has been saved. */
+  function refreshDriversOnce() {
+    var key = "driverReset";
+    if (NS.store.get(key) === "drivers-20261118") return;
+    var current = drivers();
+    var demoOnly =
+      !current.length ||
+      current.every(function (d) {
+        return d.fullName === "Rico Manalo" || d.fullName === "Ana Belmonte";
+      });
+    if (demoOnly) saveDrivers(seedDrivers());
+    NS.store.set(key, "drivers-20261118");
   }
 
   function migrateLegacyInbox() {
