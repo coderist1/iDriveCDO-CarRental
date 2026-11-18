@@ -238,6 +238,7 @@ CREATE TABLE bookings (
   date_reserve         timestamptz NOT NULL DEFAULT now(),
   started_at           timestamptz,
   started_by           bigint,
+  start_requested_at   timestamptz,
   return_requested_at  timestamptz,
   return_requested_by  bigint,
   returned_at          timestamptz,
