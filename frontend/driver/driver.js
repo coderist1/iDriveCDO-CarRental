@@ -39,7 +39,7 @@
 
     if (greeting && me) {
       greeting.textContent =
-        "Welcome, " + me.firstName + ". Start trips, log fuel, and close out assigned chauffeur bookings.";
+        "Welcome, " + me.firstName + ". Request a start when you are ready, then request the return when the trip is done. The desk approves both.";
     }
 
     if (!driver) {
@@ -211,16 +211,20 @@
           : '<div class="driver-photo-empty">' + esc(v && v.type ? v.type : "Car") + "</div>";
 
       var actions = "";
-      if (b.status === "confirmed") {
+      if (b.status === "confirmed" && !b.startRequestedAt) {
         actions =
           '<button class="btn btn-gold" type="button" data-start="' +
           b.id +
-          '">Start trip</button>';
+          '">Request start</button>';
+      } else if (b.status === "confirmed") {
+        actions = "<p class='fineprint'>Start requested. Waiting for the desk.</p>";
       } else if (b.status === "ongoing") {
         actions =
           '<button class="btn btn-gold" type="button" data-end="' +
           b.id +
-          '">End trip</button>';
+          '">Request return</button>';
+      } else if (b.status === "return_requested") {
+        actions = "<p class='fineprint'>Return requested. The trip completes when the desk approves it.</p>";
       }
 
       var fuelBlock = canFuel
@@ -315,17 +319,18 @@
       if (!root) return;
       root.querySelectorAll("[data-start]").forEach(function (btn) {
         btn.addEventListener("click", function () {
+          if (!global.confirm("Request the desk to start this trip?")) return;
           run(function () {
-            NS.domain.driverSetTripStatus(btn.getAttribute("data-start"), "ongoing", csrf());
-          }, "Trip started.");
+            NS.domain.requestTripStart(btn.getAttribute("data-start"), csrf());
+          }, "Start requested. Waiting for the desk.");
         });
       });
       root.querySelectorAll("[data-end]").forEach(function (btn) {
         btn.addEventListener("click", function () {
-          if (!global.confirm("End this trip and mark the vehicle returned?")) return;
+          if (!global.confirm("Request the return of this vehicle? The desk completes the trip after approval.")) return;
           run(function () {
-            NS.domain.driverSetTripStatus(btn.getAttribute("data-end"), "completed", csrf());
-          }, "Trip completed.");
+            NS.domain.requestVehicleReturn(btn.getAttribute("data-end"), "", csrf());
+          }, "Return requested. Waiting for the desk.");
         });
       });
       root.querySelectorAll("[data-fuel-save]").forEach(function (btn) {

@@ -1001,6 +1001,14 @@
       ],
       ["Vehicle", esc(v ? v.name + " · " + v.plate : "—")],
       ["Drive mode", esc(driveMode)],
+      [
+        "Driver",
+        b.driveMode === "chauffeur"
+          ? (NS.domain.getDriver ? NS.domain.getDriver(b.driverDetailsId) : null)
+            ? esc(NS.domain.getDriver(b.driverDetailsId).fullName) + " · " + esc(NS.domain.getDriver(b.driverDetailsId).phone)
+            : "Not assigned yet"
+          : "—"
+      ],
       ["Pick-up Location", esc(b.pickup || "—") + (b.pickupTime ? " · " + esc(b.pickupTime) : "")],
       [
         b.driveMode === "chauffeur"

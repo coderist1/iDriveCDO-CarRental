@@ -197,8 +197,13 @@
   }
 
   function getDriver(id) {
+    if (id == null || id === "") return null;
     var list = drivers();
-    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    var key = String(id);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === id || String(list[i].id) === key) return list[i];
+      if (list[i].apiId != null && String(list[i].apiId) === key) return list[i];
+    }
     return null;
   }
 
@@ -255,17 +260,30 @@
     return !!(v && v.status === "available");
   }
 
+  /* A car stays occupied until its booking is completed, cancelled, or rejected. */
+  function vehicleIsBusy(vehicleId, exceptBookingId) {
+    if (!vehicleId) return false;
+    return bookings().some(function (b) {
+      if (exceptBookingId && b.id === exceptBookingId) return false;
+      return b.vehicleId === vehicleId && ACTIVE_BOOKING[b.status];
+    });
+  }
+
   function availableVehicles(start, end) {
     return vehicles().filter(function (v) {
       if (v.status !== "available") return false;
-      // hide cars currently in-use (ongoing / return_requested) until returned
-      if (ongoingBookingForVehicle(v.id)) return false;
+      if (vehicleIsBusy(v.id)) return false;
       if (start && end) return isAvailable(v.id, start, end);
       return true;
     });
   }
 
-  var AVAILABILITY_LABELS = { available: "Available", reserved: "Reserved", maintenance: "Under maintenance" };
+  var AVAILABILITY_LABELS = {
+    available: "Available",
+    reserved: "Reserved",
+    rented: "Currently rented",
+    maintenance: "Under maintenance"
+  };
   var RESERVATION_DOWNPAYMENT = 2000;
   var RESERVATION_LEAD_DAYS = 3;
 
@@ -299,10 +317,11 @@
     return latest;
   }
 
-  /* "available", "reserved" (an active booking overlaps the dates) or "maintenance". */
+  /* "available", "reserved", "rented" (any active booking), or "maintenance". */
   function vehicleAvailability(vehicleId, start, end) {
     var v = getVehicle(vehicleId);
     if (!v || v.status !== "available") return "maintenance";
+    if (vehicleIsBusy(vehicleId)) return "rented";
     return reservedUntil(vehicleId, start, end) ? "reserved" : "available";
   }
 
@@ -323,6 +342,9 @@
     if (!vehicle) throw new Error("Vehicle not found.");
     if (vehicle.status !== "available") throw new Error("This vehicle is not available for hire.");
     if (!vehicle.dailyRate) throw new Error("This vehicle has no daily rate yet. Contact us to book it.");
+    if (!options.ignoreAvailability && vehicleIsBusy(vehicleId)) {
+      throw new Error("This car is currently rented. Choose another vehicle.");
+    }
     if (!options.ignoreAvailability && !isAvailable(vehicleId, start, end)) {
       throw new Error("Those dates overlap an existing booking for this car.");
     }
@@ -528,12 +550,13 @@
         ? NS.security.sanitizeText(payload.driverDetailsId, 40)
         : "";
       var driver = driverId ? getDriver(driverId) : null;
+      if (driver && driverIsBusy(driver.id)) driver = null;
       if (!driver) {
-        var roster = activeDrivers().filter(function (d) { return d.apiId != null; });
+        var roster = availableDrivers().filter(function (d) { return d.apiId != null; });
         driver = roster[0] || null;
       }
-      if (!driver || driver.status !== "active") {
-        throw new Error("No chauffeur is available right now. Choose self-drive, or try again later.");
+      if (!driver || driver.status !== "active" || driverIsBusy(driver.id)) {
+        throw new Error("No chauffeur is free right now. Choose self-drive, or try again later.");
       }
       booking.driverDetailsId = driver.id;
     }
@@ -541,6 +564,9 @@
       throw new Error("Passengers exceed this vehicle's capacity (" + q.vehicle.seats + ").");
     }
     assertOneCarAtATime(bookingUserId);
+    if (vehicleIsBusy(booking.vehicleId)) {
+      throw new Error("This car is currently rented. Choose another vehicle.");
+    }
     if (!isAvailable(booking.vehicleId, booking.startDate, booking.endDate)) {
       throw new Error("Those dates overlap an existing booking for this car.");
     }
@@ -1187,6 +1213,20 @@
     return me;
   }
 
+  /* Staff, the renter, or the driver assigned to this trip. */
+  function partyForBooking(booking) {
+    var me = NS.auth.current();
+    if (!me) throw new Error("Sign in required.");
+    if (me.role === "admin" || me.role === "staff") return me;
+    if (me.role === "driver") {
+      var assigned = currentDriver();
+      if (assigned && booking.driverDetailsId === assigned.id) return me;
+      throw new Error("This trip is not assigned to you.");
+    }
+    if (booking.userId !== me.id) throw new Error("You cannot access this booking.");
+    return me;
+  }
+
   function payBooking(bookingId, payload, csrf) {
     try {
       if (csrf) NS.security.assertCsrf(csrf);
@@ -1371,7 +1411,7 @@
     var allowed = {
       pending: ["confirmed", "rejected"],
       confirmed: ["ongoing", "return_requested"],
-      ongoing: ["completed", "return_requested"],
+      ongoing: ["return_requested"],
       return_requested: ["completed", "ongoing"],
       rejected: [],
       cancelled: [],
@@ -1379,7 +1419,7 @@
     };
     var booking = getBooking(bookingId);
     if (!booking) throw new Error("Booking not found.");
-    var me = assertBookingAccess(booking);
+    var me = partyForBooking(booking);
     var next = NS.security.sanitizeText(status, 20);
     if (next === "cancelled") {
       assertCustomerCanCancel(booking, me);
@@ -1389,8 +1429,10 @@
       throw new Error("That status change is not allowed.");
     }
     if (next === "return_requested") {
-      if (me.role !== "customer" && !NS.auth.hasRole("staff")) {
-        throw new Error("Sign in as the renter to return this vehicle.");
+      var assignedDriver = currentDriver();
+      var driverOwns = me.role === "driver" && assignedDriver && booking.driverDetailsId === assignedDriver.id;
+      if (me.role !== "customer" && !NS.auth.hasRole("staff") && !driverOwns) {
+        throw new Error("Sign in as the renter or the assigned driver to return this vehicle.");
       }
       if (me.role === "customer" && booking.userId !== me.id) {
         throw new Error("You can only return your own vehicle.");
@@ -1410,6 +1452,9 @@
       }
     }
     if (next === "ongoing") {
+      if (!booking.startRequestedAt) {
+        throw new Error("Wait for a start request before approving this trip.");
+      }
       assertOneCarAtATime(booking.userId, booking.id);
     }
     booking.status = next;
@@ -1505,15 +1550,55 @@
     return saveThread(thread);
   }
 
+  function requestTripStart(bookingId, csrf) {
+    try {
+      if (csrf) NS.security.assertCsrf(csrf);
+      else NS.security.issueCsrf();
+    } catch (csrfErr) {
+      NS.security.issueCsrf();
+    }
+    var booking = getBooking(bookingId);
+    if (!booking) throw new Error("Booking not found.");
+    var me = partyForBooking(booking);
+    if (booking.status !== "confirmed") throw new Error("This trip is not ready to start.");
+    if (booking.paymentStatus !== "paid") throw new Error("The trip can start once the booking is paid.");
+    if (booking.startRequestedAt) throw new Error("A start request is already waiting for the desk.");
+    booking.startRequestedAt = new Date().toISOString();
+    booking.updatedAt = booking.startRequestedAt;
+    persistBooking(booking);
+    var apiId = resolveBookingApiId(booking);
+    var apiPush = null;
+    if (apiId != null && NS.api) {
+      apiPush = NS.api.bookings.update(apiId, { start_requested_at: booking.startRequestedAt }).catch(function (err) {
+        console.warn("iDrive: start request was not saved to the server.", err);
+        if (NS.ui && NS.ui.toast) NS.ui.toast("Server did not save the start request: " + apiErrorMessage(err), "err");
+        return null;
+      });
+    }
+    audit("booking-start-request", me.id, booking.ref);
+    var thread = threads().filter(function (t) { return t.bookingId === booking.id; })[0];
+    if (!thread) {
+      var customer = NS.auth.userById(booking.userId) || me;
+      thread = openReturnThread(booking, customer, false);
+    }
+    if (thread) {
+      pushThreadMessage(thread, me.role === "driver" ? "staff" : "customer", me, "Start requested for " + booking.ref + ". Waiting for the desk to approve.");
+      thread.unreadStaff = true;
+      saveThread(thread);
+    }
+    booking._statusPush = apiPush;
+    return booking;
+  }
+
   function requestVehicleReturn(bookingId, notes, csrf) {
     var booking = getBooking(bookingId);
     if (!booking) throw new Error("Booking not found.");
-    var me = assertBookingAccess(booking);
+    var me = partyForBooking(booking);
     if (me.role === "customer" && booking.userId !== me.id) {
       throw new Error("You can only return your own vehicle.");
     }
-    if (booking.status !== "confirmed" && booking.status !== "ongoing") {
-      throw new Error("Only confirmed or ongoing trips can be returned.");
+    if (booking.status !== "ongoing") {
+      throw new Error("The trip has to be ongoing before the vehicle can be returned.");
     }
     var extra = NS.security.sanitizeText(notes || "", 240);
     if (extra) booking.returnNotes = extra;
@@ -1814,6 +1899,21 @@
       });
   }
 
+  /* A driver stays occupied until the booking is completed, cancelled, or rejected. */
+  function driverIsBusy(driverId, exceptBookingId) {
+    if (!driverId) return false;
+    return bookings().some(function (b) {
+      if (exceptBookingId && b.id === exceptBookingId) return false;
+      return b.driverDetailsId === driverId && ACTIVE_BOOKING[b.status];
+    });
+  }
+
+  function availableDrivers(exceptBookingId) {
+    return activeDrivers().filter(function (d) {
+      return !driverIsBusy(d.id, exceptBookingId);
+    });
+  }
+
   function saveDriver(payload, csrf) {
     try {
       if (csrf) NS.security.assertCsrf(csrf);
@@ -1946,9 +2046,13 @@
     var me = NS.auth.current();
     var booking = driverGetTrip(bookingId);
     next = NS.security.sanitizeText(next, 20);
-    var allowed = { confirmed: ["ongoing"], ongoing: ["completed"] };
+    var allowed = {};
     if ((allowed[booking.status] || []).indexOf(next) === -1) {
-      throw new Error("That trip update is not allowed right now.");
+      throw new Error(
+        next === "ongoing"
+          ? "Request the start and wait for the desk to approve it."
+          : "Request the return and wait for the desk to approve it. The trip completes after that approval."
+      );
     }
     if (next === "ongoing" && booking.paymentStatus !== "paid") {
       throw new Error("Trip can start once the booking is paid.");
@@ -3215,6 +3319,7 @@
           cancelledAt: r.cancelled_at || (prev && prev.cancelledAt) || "",
           returnRequestedAt: r.return_requested_at || (prev && prev.returnRequestedAt) || "",
           returnNotes: r.return_notes || (prev && prev.returnNotes) || "",
+          startRequestedAt: r.start_requested_at || "",
           subtotal: Number(r.subtotal) || 0,
           extras: Number(r.extras) || 0,
           total: Number(r.total) || (Number(r.subtotal) || 0) + (Number(r.extras) || 0),
@@ -3667,6 +3772,47 @@
     });
   }
 
+  /* Staff/admin pick a driver for a chauffeur booking. Pushes drive_mode + driver_id to the server.
+   * The renter's own ID document is never touched — the driver is a separate person. */
+  function setBookingDriver(bookingId, driverId, csrf) {
+    try {
+      if (csrf) NS.security.assertCsrf(csrf);
+      else NS.security.issueCsrf();
+    } catch (csrfErr) {
+      NS.security.issueCsrf();
+    }
+    requireStaff();
+    var booking = getBooking(bookingId);
+    if (!booking) throw new Error("Booking not found.");
+    var me = assertBookingAccess(booking);
+    if (booking.driveMode !== "chauffeur") {
+      throw new Error("This booking is not a chauffeur booking.");
+    }
+    var driver = driverId ? getDriver(driverId) : null;
+    if (!driver) throw new Error("Pick an active driver to assign.");
+    if (driver.status !== "active") throw new Error("That driver is not active.");
+    if (driverIsBusy(driver.id, booking.id)) {
+      throw new Error(driver.fullName + " is already assigned to another booking.");
+    }
+    if (driver.apiId == null) throw new Error("This driver is not on the server yet.");
+    var apiId = resolveBookingApiId(booking);
+    if (apiId == null) {
+      throw new Error("This booking is not synced to the server yet.");
+    }
+    var body = { drive_mode: "chauffeur", driver_id: Number(driver.apiId) };
+    return NS.api.bookings.update(apiId, body).then(function () {
+      booking.driverDetailsId = driver.id;
+      booking.updatedAt = new Date().toISOString();
+      var list = bookings();
+      for (var i = 0; i < list.length; i++) if (list[i].id === booking.id) list[i] = booking;
+      saveBookings(list);
+      audit("booking-driver", me.id, booking.ref + " → " + (driver ? driver.fullName : "unassigned"));
+      return booking;
+    }, function (err) {
+      throw new Error(apiErrorMessage(err) || "Server did not save the driver assignment.");
+    });
+  }
+
   /* Display-only fields (name, photo, gear, fuel, features, status) that Laravel does not store. */
   function saveVehicleExtras(plate, extras) {
     var key = String(plate).toUpperCase();
@@ -3831,6 +3977,7 @@
     ageFromBirthdate: ageFromBirthdate,
     flagBadRenter: flagBadRenter,
     ongoingBookingForVehicle: ongoingBookingForVehicle,
+    vehicleIsBusy: vehicleIsBusy,
     hasValidIdInfo: hasValidIdInfo,
     availableVehicles: availableVehicles,
     AVAILABILITY_LABELS: AVAILABILITY_LABELS,
@@ -3846,7 +3993,9 @@
     apiErrorMessage: apiErrorMessage,
     payBooking: payBooking,
     setBookingStatus: setBookingStatus,
+    setBookingDriver: setBookingDriver,
     cancelBooking: cancelBooking,
+    requestTripStart: requestTripStart,
     requestVehicleReturn: requestVehicleReturn,
     acceptVehicleReturn: acceptVehicleReturn,
     pendingReturns: pendingReturns,
@@ -3864,6 +4013,8 @@
     getDriver: getDriver,
     drivers: drivers,
     activeDrivers: activeDrivers,
+    availableDrivers: availableDrivers,
+    driverIsBusy: driverIsBusy,
     saveDriver: saveDriver,
     removeDriver: removeDriver,
     DRIVER_FUEL_LEVELS: DRIVER_FUEL_LEVELS,

@@ -803,6 +803,66 @@ button.btn.btn-approve:focus-visible:not(:disabled) {
   border-color: #9f9f9f;
   color: var(--ink);
 }
+.booking-card-stacked > .booking-driver-bar,
+.booking-desk-dialog .booking-driver-bar {
+  grid-area: driver;
+}
+.booking-driver-bar {
+  margin: 0.15rem 0 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.booking-driver-readonly {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  margin: 0.15rem 0 0;
+  font-size: 0.95rem;
+}
+.booking-driver-readonly span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.booking-driver-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  max-width: 28rem;
+}
+.booking-driver-field > span {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.driver-assign-select {
+  width: 100%;
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2352525b' d='M1.2 1.4 6 6.2 10.8 1.4'/%3E%3C/svg%3E") no-repeat right 0.75rem center;
+  border: 1px solid #c8c8c8;
+  border-radius: 8px;
+  padding: 0.45rem 2rem 0.45rem 0.7rem;
+  appearance: none;
+  cursor: pointer;
+}
+.booking-driver-bar.is-empty .driver-assign-select {
+  border-color: #fdba74;
+  background-color: #fff7ed;
+}
+.driver-assign-select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.driver-assign-select:disabled { opacity: 0.7; cursor: not-allowed; }
 .notice-warn {
   background: #fff7ed;
   border: 1px solid #fdba74;
@@ -3434,7 +3494,7 @@ textarea { min-height: 120px; resize: vertical; }
 .booking-card.booking-card-stacked {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "body badges" "actions actions";
+  grid-template-areas: "body badges" "driver driver" "actions actions";
   gap: 0.75rem 1rem;
   align-items: start;
 }
@@ -3474,7 +3534,7 @@ textarea { min-height: 120px; resize: vertical; }
   gap: 0.5rem;
 }
 @media (max-width: 720px) {
-  .booking-card.booking-card-stacked { grid-template-columns: 1fr; grid-template-areas: "badges" "body" "actions"; }
+  .booking-card.booking-card-stacked { grid-template-columns: 1fr; grid-template-areas: "badges" "body" "driver" "actions"; }
   .booking-card-stacked > .card-badges { flex-direction: row; align-items: center; }
   .card-actions-risk { margin-left: 0; width: 100%; justify-content: flex-start; }
   .booking-card.booking-card-stacked > .card-actions {
@@ -3920,6 +3980,29 @@ body:is(.site-mode, .desk-mode) textarea:focus {
   background: #fff;
   border-color: rgba(196, 80, 75, 0.55);
   box-shadow: 0 0 0 4px var(--primary-soft);
+}
+body:is(.site-mode, .desk-mode) .booking-driver-bar .driver-assign-select {
+  width: 100%;
+  max-width: 28rem;
+  min-height: 44px;
+  margin-top: 0;
+  padding: 0.45rem 2rem 0.45rem 0.75rem;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2352525b' d='M1.2 1.4 6 6.2 10.8 1.4'/%3E%3C/svg%3E") no-repeat right 0.75rem center;
+  border: 1px solid #c8c8c8;
+  border-radius: 8px;
+  box-shadow: none;
+  font-weight: 600;
+  appearance: none;
+}
+body:is(.site-mode, .desk-mode) .booking-driver-bar .driver-assign-select:focus,
+body:is(.site-mode, .desk-mode) .booking-driver-bar .driver-assign-select:focus-visible {
+  background-color: #fff;
+  border-color: rgba(196, 80, 75, 0.55);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+body:is(.site-mode, .desk-mode) .booking-driver-bar.is-empty .driver-assign-select {
+  border-color: #fdba74;
+  background-color: #fff7ed;
 }
 body:is(.site-mode, .desk-mode) .notice,
 body:is(.site-mode, .desk-mode) .filters,

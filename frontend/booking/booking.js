@@ -1355,10 +1355,6 @@
         carEmpty.hidden = list.length > 0;
         carGrid.innerHTML = list.map(function (v) {
           var selected = v.id === chosenVehicle;
-          var occupant = NS.domain.ongoingBookingForVehicle ? NS.domain.ongoingBookingForVehicle(v.id) : null;
-          var inUse = occupant
-            ? "<p class='book-car-inuse'>In use now · both renters need a valid ID</p>"
-            : "";
           return (
             '<button class="book-car-card' + (selected ? " is-selected" : "") + '" type="button" role="option" aria-selected="' +
             (selected ? "true" : "false") + '" data-pick-car="' + v.id + '">' +
@@ -1371,7 +1367,6 @@
             (v.description
               ? '<p class="book-car-desc">' + NS.security.escapeHtml(v.description) + "</p>"
               : "") +
-            inUse +
             "</div></button>"
           );
         }).join("");
@@ -1658,9 +1653,14 @@
   }
 
   function bookableVehicles(start, end) {
-    return NS.domain.vehicles().filter(function (v) {
-      if (String(v.status || "").toLowerCase() !== "available" || !(Number(v.dailyRate) > 0)) return false;
-      if (start && end && NS.domain.isAvailable) return NS.domain.isAvailable(v.id, start, end);
+    var list = NS.domain.availableVehicles
+      ? NS.domain.availableVehicles(start, end)
+      : NS.domain.vehicles().filter(function (v) {
+          return String(v.status || "").toLowerCase() === "available";
+        });
+    return list.filter(function (v) {
+      if (!(Number(v.dailyRate) > 0)) return false;
+      if (NS.domain.vehicleIsBusy && NS.domain.vehicleIsBusy(v.id)) return false;
       return true;
     });
   }
@@ -1700,15 +1700,20 @@
         ? list
             .map(function (b) {
               var v = NS.domain.getVehicle(b.vehicleId);
-              var canReturn =
+              var canStart =
                 me &&
                 me.role === "customer" &&
-                (b.status === "confirmed" || b.status === "ongoing");
+                b.status === "confirmed" &&
+                b.paymentStatus === "paid" &&
+                !b.startRequestedAt;
+              var canReturn = me && me.role === "customer" && b.status === "ongoing";
               var detailHref = NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(b.id));
               var waiting =
                 b.status === "return_requested"
-                  ? "<p class='fineprint'>Waiting for desk to accept return</p>"
-                  : "";
+                  ? "<p class='fineprint'>Return requested. Waiting for the desk to approve it.</p>"
+                  : b.status === "confirmed" && b.startRequestedAt
+                    ? "<p class='fineprint'>Start requested. Waiting for the desk to approve it.</p>"
+                    : "";
               var canRate =
                 me &&
                 me.role === "customer" &&
@@ -1724,7 +1729,13 @@
                 actions +=
                   '<a class="btn btn-ghost" href="' + detailHref + '">Rate car</a>';
               }
-              if (canReturn) {
+              if (canStart) {
+                actions +=
+                  '<a class="btn btn-ghost" href="' + detailHref + '">Open</a>' +
+                  '<button class="btn btn-pay" type="button" data-start-request="' +
+                  b.id +
+                  '">Request start</button>';
+              } else if (canReturn) {
                 actions +=
                   '<a class="btn btn-ghost" href="' + detailHref + '">Open</a>' +
                   '<button class="btn btn-pay" type="button" data-return="' +
@@ -1761,6 +1772,22 @@
         : "<p class='notice'>You have no bookings yet. <a href='" + NS.routes.href("book") + "'>Make a booking</a>.</p>";
     }
     host.addEventListener("click", function (e) {
+      var startId = e.target.getAttribute("data-start-request");
+      if (startId) {
+        NS.ui
+          .askYesNo("Request the desk to start this trip?", { title: "Request start", yes: "Request", no: "Cancel" })
+          .then(function (ok) {
+            if (!ok) return;
+            try {
+              NS.domain.requestTripStart(startId, NS.security.getCsrf());
+              NS.ui.toast("Start requested. Waiting for the desk to approve it.", "ok");
+              render();
+            } catch (err) {
+              NS.ui.toast(err.message, "err");
+            }
+          });
+        return;
+      }
       var id = e.target.getAttribute("data-return");
       if (!id) return;
       NS.ui
@@ -1870,11 +1897,21 @@
       booking.status === "pending"
         ? '<button class="btn btn-ghost" id="cancel-booking" type="button">Cancel trip</button>'
         : "";
+    var canStart =
+      me &&
+      me.role === "customer" &&
+      booking.userId === me.id &&
+      booking.status === "confirmed" &&
+      booking.paymentStatus === "paid" &&
+      !booking.startRequestedAt;
+    var startBtn = canStart
+      ? '<button class="btn btn-gold" id="request-start-btn" type="button">Request start</button>'
+      : "";
     var canReturn =
       me &&
       me.role === "customer" &&
       booking.userId === me.id &&
-      (booking.status === "confirmed" || booking.status === "ongoing");
+      booking.status === "ongoing";
     var returnBtn = canReturn
       ? '<button class="btn btn-gold" id="return-vehicle-btn" type="button">Return vehicle</button>'
       : "";
@@ -1882,14 +1919,25 @@
       me &&
       NS.auth.hasRole("staff") &&
       booking.status === "return_requested"
-        ? '<button class="btn btn-gold" id="accept-return-btn" type="button">Accept return</button>'
+        ? '<button class="btn btn-gold" id="accept-return-btn" type="button">Approve return</button>'
+        : "";
+    var staffStart =
+      me &&
+      NS.auth.hasRole("staff") &&
+      booking.status === "confirmed" &&
+      booking.startRequestedAt
+        ? '<button class="btn btn-gold" id="approve-start-btn" type="button">Approve start</button>'
         : "";
     var returnPending =
       booking.status === "return_requested"
         ? me && me.role === "customer"
-          ? "<p class='notice'>Return requested. Waiting for the desk to accept the vehicle.</p>"
-          : "<p class='notice'>Customer requested vehicle return. Accept it when the car is back at the desk.</p>"
-        : "";
+          ? "<p class='notice'>Return requested. The trip completes when the desk approves it.</p>"
+          : "<p class='notice'>The vehicle is back. Approve the return to complete the trip.</p>"
+        : booking.status === "confirmed" && booking.startRequestedAt
+          ? "<p class='notice'>Start requested. Waiting for the desk to approve it.</p>"
+          : booking.status === "ongoing"
+            ? "<p class='notice'>Trip is ongoing. Return the vehicle when you are done. The desk completes it after approval.</p>"
+            : "";
     var existingRating = NS.domain.getRatingForBooking(booking.id) || booking.rating || null;
     var canRate =
       me &&
@@ -2101,7 +2149,9 @@
       ratingBlock +
       '<div class="btn-row">' +
       pay +
+      startBtn +
       returnBtn +
+      staffStart +
       staffAccept +
       cancel +
       '<button class="btn btn-ghost" type="button" data-print>Print receipt</button></div></div>';
@@ -2146,6 +2196,42 @@
       });
     }
 
+    var requestStartBtn = document.getElementById("request-start-btn");
+    if (requestStartBtn) {
+      requestStartBtn.addEventListener("click", function () {
+        NS.ui
+          .askYesNo("Request the desk to start this trip?", { title: "Request start", yes: "Request", no: "Cancel" })
+          .then(function (ok) {
+            if (!ok) return;
+            try {
+              NS.domain.requestTripStart(booking.id, NS.security.getCsrf());
+              NS.ui.toast("Start requested. Waiting for the desk to approve it.", "ok");
+              NS.pages.detail();
+            } catch (err) {
+              NS.ui.toast(err.message, "err");
+            }
+          });
+      });
+    }
+
+    var approveStartBtn = document.getElementById("approve-start-btn");
+    if (approveStartBtn) {
+      approveStartBtn.addEventListener("click", function () {
+        NS.ui
+          .askYesNo("Approve the start of this trip?", { title: "Approve start", yes: "Approve", no: "Cancel" })
+          .then(function (ok) {
+            if (!ok) return;
+            try {
+              NS.domain.setBookingStatus(booking.id, "ongoing", NS.security.getCsrf());
+              NS.ui.toast("Start approved. The trip is ongoing.", "ok");
+              NS.pages.detail();
+            } catch (err) {
+              NS.ui.toast(err.message, "err");
+            }
+          });
+      });
+    }
+
     var returnVehicleBtn = document.getElementById("return-vehicle-btn");
     if (returnVehicleBtn) {
       returnVehicleBtn.addEventListener("click", function () {
@@ -2177,16 +2263,16 @@
     if (acceptReturnBtn) {
       acceptReturnBtn.addEventListener("click", function () {
         NS.ui
-          .askYesNo("Accept this vehicle return and complete the trip?", {
-            title: "Accept return",
-            yes: "Yes",
-            no: "No"
+          .askYesNo("Approve this return? The trip will be marked complete, and the car and driver become free.", {
+            title: "Approve return",
+            yes: "Approve",
+            no: "Cancel"
           })
           .then(function (ok) {
             if (!ok) return;
             try {
               NS.domain.acceptVehicleReturn(booking.id, NS.security.getCsrf());
-              NS.ui.toast("Return accepted. Trip completed.", "ok");
+              NS.ui.toast("Return approved. The trip is complete.", "ok");
               location.reload();
             } catch (err) {
               NS.ui.toast(err.message, "err");

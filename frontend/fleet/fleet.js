@@ -65,15 +65,17 @@
       var matching = NS.domain.vehicles().filter(function (v) {
         if (type && type.value && v.type !== type.value) return false;
         if (trans && trans.value && v.transmission !== trans.value) return false;
-        // cars currently in-use (ongoing booking) disappear until they come back
-        if (NS.domain.ongoingBookingForVehicle(v.id)) return false;
+        /* Occupied cars stay hidden from renters until the trip is done. */
+        if (NS.domain.vehicleIsBusy ? NS.domain.vehicleIsBusy(v.id) : NS.domain.ongoingBookingForVehicle(v.id)) {
+          return false;
+        }
         return true;
       });
       var stateOf = {};
       var counts = { all: 0, available: 0, reserved: 0 };
       matching.forEach(function (v) {
         var state = NS.domain.vehicleAvailability(v.id, start, end);
-        if (state === "maintenance") return;
+        if (state === "maintenance" || state === "rented") return;
         stateOf[v.id] = state;
         counts.all++;
         counts[state]++;
@@ -182,10 +184,11 @@
     var start = NS.ui.qs("start") || "";
     var end = NS.ui.qs("end") || "";
     var pickup = NS.ui.qs("pickup") || "";
-    var state = NS.domain.vehicleAvailability(v.id, start, end);
+    var busy = NS.domain.vehicleIsBusy ? NS.domain.vehicleIsBusy(v.id) : !!NS.domain.ongoingBookingForVehicle(v.id);
+    var state = busy ? "rented" : NS.domain.vehicleAvailability(v.id, start, end);
     var until = state === "reserved" ? NS.domain.reservedUntil(v.id, start, end) : "";
-    /* Without trip dates a car reserved today can still be booked for later days. */
-    var free = state === "available" || (state === "reserved" && !(start && end));
+    /* Occupied cars are not bookable. Free cars can be booked for later days. */
+    var free = !busy && (state === "available" || (state === "reserved" && !(start && end)));
 
     var bookQuery =
       "?vehicle=" +
@@ -289,7 +292,9 @@
         : '<p class="notice">' +
           (state === "maintenance"
             ? "This car is under maintenance and cannot be booked right now."
-            : "Reserved" + (until ? " until " + NS.ui.fmtDate(until) : "") + " for the selected dates.") +
+            : state === "rented"
+              ? "This car is currently rented. It will show again once that trip is complete."
+              : "Reserved" + (until ? " until " + NS.ui.fmtDate(until) : "") + " for the selected dates.") +
           ' <a href="' +
           NS.routes.href("fleet", "?availability=available") +
           '">See available cars</a>.</p>') +

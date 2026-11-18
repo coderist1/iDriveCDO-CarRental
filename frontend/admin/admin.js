@@ -9,7 +9,10 @@
    * for the Admin and Staff desk views. Only lines that have data are shown.
    */
   function bookingDetailList(b) {
-    return NS.ui.bookingDetailListHtml(NS.ui.bookingDetailRowsFromRecord(b));
+    var rows = NS.ui.bookingDetailRowsFromRecord(b).filter(function (r) {
+      return r[0] !== "Driver";
+    });
+    return NS.ui.bookingDetailListHtml(rows);
   }
 
   function checkFirstBadge(b) {
@@ -69,25 +72,123 @@
         encodeURIComponent(b.id) +
         '">Record payment</a>';
     }
-    if (b.status === "confirmed") {
+    if (b.status === "confirmed" && b.startRequestedAt) {
       primary +=
         '<button class="btn btn-approve" type="button" data-act="ongoing" data-id="' +
         b.id +
-        '">Start trip</button>';
-    }
-    if (b.status === "ongoing") {
-      primary +=
-        '<button class="btn btn-approve" type="button" data-act="completed" data-id="' +
-        b.id +
-        '">Complete</button>';
+        '">Approve start</button>';
     }
     if (b.status === "return_requested") {
       primary +=
         '<button class="btn btn-approve" type="button" data-accept-return="' +
         b.id +
-        '">Accept return</button>';
+        '">Approve return</button>';
     }
     return primary;
+  }
+
+  function bookingFlowNote(b) {
+    if (b.status === "confirmed" && b.startRequestedAt) {
+      return '<p class="fineprint card-actions-note">Start requested. Approve it to begin the trip.</p>';
+    }
+    if (b.status === "confirmed") {
+      return '<p class="fineprint card-actions-note">Waiting for the renter or driver to request the start.</p>';
+    }
+    if (b.status === "ongoing") {
+      return '<p class="fineprint card-actions-note">Trip is ongoing. It completes when the return is approved.</p>';
+    }
+    if (b.status === "return_requested") {
+      return '<p class="fineprint card-actions-note">Vehicle is back. Approve the return to complete the trip.</p>';
+    }
+    return "";
+  }
+
+  /* Chauffeur bookings: one field under the trip facts, listing only free drivers. */
+  function driverAssignBarHtml(b) {
+    if (b.driveMode !== "chauffeur" || !NS.auth.hasRole || !NS.auth.hasRole("staff")) return "";
+    var currentDriver = b.driverDetailsId && NS.domain.getDriver ? NS.domain.getDriver(b.driverDetailsId) : null;
+    var closed = b.status === "completed" || b.status === "cancelled" || b.status === "rejected";
+    if (closed) {
+      var closedName = currentDriver ? currentDriver.fullName : "No driver was assigned";
+      return (
+        '<div class="booking-driver-bar is-readonly">' +
+        '<p class="booking-driver-readonly"><span>Assigned driver</span><strong>' +
+        NS.security.escapeHtml(closedName) +
+        "</strong></p></div>"
+      );
+    }
+    var driverPicker = NS.domain.availableDrivers ? NS.domain.availableDrivers(b.id).slice() : [];
+    if (currentDriver && !driverPicker.some(function (d) { return d.id === currentDriver.id; })) {
+      driverPicker.unshift(currentDriver);
+    }
+    var pickerOptions = driverPicker
+      .map(function (d) {
+        var label = d.fullName + (d.phone ? " · " + d.phone : "");
+        return (
+          '<option value="' +
+          NS.security.escapeHtml(d.id) +
+          '"' +
+          (d.id === b.driverDetailsId ? " selected" : "") +
+          ">" +
+          NS.security.escapeHtml(label) +
+          "</option>"
+        );
+      })
+      .join("");
+    var empty = !currentDriver && !pickerOptions;
+    return (
+      '<div class="booking-driver-bar' +
+      (currentDriver ? "" : " is-empty") +
+      '">' +
+      '<label class="booking-driver-field">' +
+      "<span>Assigned driver</span>" +
+      '<select class="driver-assign-select" data-driver-assign="' +
+      b.id +
+      '" aria-label="Assigned driver for booking ' +
+      NS.security.escapeHtml(b.ref) +
+      '"' +
+      (empty ? " disabled" : "") +
+      ">" +
+      (currentDriver ? "" : '<option value="">' + (empty ? "No driver is free" : "Choose a free driver") + "</option>") +
+      pickerOptions +
+      "</select></label></div>"
+    );
+  }
+
+  function applyDriverAssignment(sel, after) {
+    var assignId = sel.getAttribute("data-driver-assign");
+    var driverId = sel.value;
+    if (!driverId) {
+      if (after) after();
+      return;
+    }
+    var current = NS.domain.getBooking(assignId);
+    if (current && current.driverDetailsId === driverId) return;
+    sel.disabled = true;
+    var pending;
+    try {
+      pending = NS.domain.setBookingDriver(assignId, driverId, NS.security.getCsrf());
+    } catch (err) {
+      NS.ui.toast(err.message, "err");
+      sel.disabled = false;
+      if (after) after();
+      return;
+    }
+    Promise.resolve(pending).then(
+      function (booking) {
+        var driver = booking && NS.domain.getDriver ? NS.domain.getDriver(booking.driverDetailsId) : null;
+        NS.ui.toast(
+          driver ? driver.fullName + " is assigned to this booking." : "Driver assigned to this booking.",
+          "ok"
+        );
+        if (after) after();
+      },
+      function (err) {
+        NS.ui.toast((err && err.message) || "Could not save the driver.", "err");
+        sel.disabled = false;
+        if (after) after();
+      }
+    );
   }
 
   /* Floating desk for a single booking — used from Inbox "Open desk". */
@@ -135,7 +236,9 @@
         NS.ui.statusBadge(booking.paymentStatus) +
         "</div>" +
         bookingDetailList(booking) +
+        driverAssignBarHtml(booking) +
         '<div class="card-actions" style="margin-top:1rem">' +
+        bookingFlowNote(booking) +
         '<div class="card-actions-secondary">' +
         secondary +
         "</div>" +
@@ -183,16 +286,16 @@
       var acceptId = e.target.getAttribute("data-accept-return");
       if (acceptId) {
         NS.ui
-          .askYesNo("Accept this vehicle return and complete the trip?", {
-            title: "Accept return",
-            yes: "Yes",
-            no: "No"
+          .askYesNo("Approve this return? The trip will be marked complete, and the car and driver become free.", {
+            title: "Approve return",
+            yes: "Approve",
+            no: "Cancel"
           })
           .then(function (ok) {
             if (!ok) return;
             try {
               NS.domain.acceptVehicleReturn(acceptId, NS.security.getCsrf());
-              NS.ui.toast("Return accepted. Trip completed.", "ok");
+              NS.ui.toast("Return approved. The trip is complete.", "ok");
               paint();
               if (onChanged) onChanged();
             } catch (err) {
@@ -218,13 +321,12 @@
           ? "This car is currently in use. Approve only if both renters have a valid ID on file? A confirmation email will be sent."
           : "Approve this booking? A confirmation email will be sent to the renter.",
         rejected: "Reject this booking? Keep this away from Approve — this cannot be undone from this screen.",
-        ongoing: "Start this trip?",
-        completed: "Mark this trip complete?"
+        ongoing: "Approve the start of this trip?"
       };
       NS.ui
         .askYesNo(labels[act] || "Save this booking edit?", {
-          title: act === "rejected" ? "Reject booking" : "Save edit",
-          yes: act === "rejected" ? "Reject" : "Yes",
+          title: act === "rejected" ? "Reject booking" : act === "ongoing" ? "Approve start" : "Save edit",
+          yes: act === "rejected" ? "Reject" : "Approve",
           no: "Cancel"
         })
         .then(function (ok) {
@@ -236,7 +338,9 @@
                 ? "Booking approved. A confirmation email was sent to the renter."
                 : act === "rejected"
                   ? "Booking rejected."
-                  : "Booking updated.",
+                  : act === "ongoing"
+                    ? "Start approved. The trip is ongoing."
+                    : "Booking updated.",
               "ok"
             );
             paint();
@@ -245,6 +349,15 @@
             NS.ui.toast(err.message, "err");
           }
         });
+    });
+
+    modal.addEventListener("change", function (e) {
+      var sel = e.target.closest("[data-driver-assign]");
+      if (!sel || !modal.contains(sel)) return;
+      applyDriverAssignment(sel, function () {
+        paint();
+        if (onChanged) onChanged();
+      });
     });
 
     document.body.appendChild(modal);
@@ -998,7 +1111,10 @@
             checkFirstBadge(b) +
             NS.ui.statusBadge(b.status) +
             NS.ui.statusBadge(b.paymentStatus) +
-            '</div><div class="card-actions">' +
+            "</div>" +
+            driverAssignBarHtml(b) +
+            '<div class="card-actions">' +
+            bookingFlowNote(b) +
             note +
             '<div class="card-actions-secondary">' +
             secondary +
@@ -1046,17 +1162,17 @@
       var acceptId = e.target.getAttribute("data-accept-return");
       if (acceptId) {
         NS.ui
-          .askYesNo("Accept this vehicle return and complete the trip?", {
-            title: "Accept return",
-            yes: "Yes",
-            no: "No"
+          .askYesNo("Approve this return? The trip will be marked complete, and the car and driver become free.", {
+            title: "Approve return",
+            yes: "Approve",
+            no: "Cancel"
           })
           .then(function (ok) {
             if (!ok) return;
             try {
               NS.domain.acceptVehicleReturn(acceptId, NS.security.getCsrf());
               render();
-              NS.ui.toast("Return accepted. Trip completed.", "ok");
+              NS.ui.toast("Return approved. The trip is complete.", "ok");
             } catch (err) {
               NS.ui.toast(err.message, "err");
             }
@@ -1080,12 +1196,11 @@
           ? "This car is currently in use. Approve only if both renters have a valid ID on file? A confirmation email will be sent."
           : "Approve this booking? A confirmation email will be sent to the renter.",
         rejected: "Reject this booking? Keep this away from Approve — this cannot be undone from this screen.",
-        ongoing: "Start this trip?",
-        completed: "Mark this trip complete?"
+        ongoing: "Approve the start of this trip?"
       };
       NS.ui.askYesNo(labels[act] || "Save this booking edit?", {
-        title: act === "rejected" ? "Reject booking" : "Save edit",
-        yes: act === "rejected" ? "Reject" : "Yes",
+        title: act === "rejected" ? "Reject booking" : act === "ongoing" ? "Approve start" : "Save edit",
+        yes: act === "rejected" ? "Reject" : "Approve",
         no: "Cancel"
       }).then(function (ok) {
         if (!ok) return;
@@ -1097,13 +1212,20 @@
               ? "Booking approved. A confirmation email was sent to the renter."
               : act === "rejected"
                 ? "Booking rejected."
-                : "Booking updated.",
+                : act === "ongoing"
+                  ? "Start approved. The trip is ongoing."
+                  : "Booking updated.",
             "ok"
           );
         } catch (err) {
           NS.ui.toast(err.message, "err");
         }
       });
+    });
+    host.addEventListener("change", function (e) {
+      var sel = e.target.closest("[data-driver-assign]");
+      if (!sel || !host.contains(sel)) return;
+      applyDriverAssignment(sel, render);
     });
     render();
   }
@@ -2150,10 +2272,13 @@
                 bookingDetailList(b) +
                 '</div><div class="card-badges">' +
                 NS.ui.statusBadge(b.status) +
-                '</div><div class="card-actions">' +
+                "</div>" +
+                driverAssignBarHtml(b) +
+                '<div class="card-actions">' +
+                bookingFlowNote(b) +
                 '<button class="btn btn-gold" data-accept-return="' +
                 b.id +
-                '">Accept return</button></div></article>'
+                '">Approve return</button></div></article>'
               );
             })
             .join("")
@@ -2166,16 +2291,16 @@
 
     function acceptReturn(id) {
       NS.ui
-        .askYesNo("Accept this vehicle return and complete the trip?", {
-          title: "Accept return",
-          yes: "Yes",
-          no: "No"
+        .askYesNo("Approve this return? The trip will be marked complete, and the car and driver become free.", {
+          title: "Approve return",
+          yes: "Approve",
+          no: "Cancel"
         })
         .then(function (ok) {
           if (!ok) return;
           try {
             NS.domain.acceptVehicleReturn(id, NS.security.getCsrf());
-            NS.ui.toast("Return accepted. Trip completed.", "ok");
+            NS.ui.toast("Return approved. The trip is complete.", "ok");
             renderReturns();
             mountAdminNav();
           } catch (err) {
