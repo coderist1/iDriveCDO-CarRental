@@ -28,7 +28,7 @@
       '<article class="password-dialog" role="dialog" aria-modal="true" aria-labelledby="pay-receipt-title">' +
       '<div class="password-dialog-head"><h2 id="pay-receipt-title">GCash / cashless receipt' +
       (ref ? " · " + NS.security.escapeHtml(ref) : "") +
-      '</h2><button class="btn btn-ghost btn-sm" type="button" data-receipt-close>Close</button></div>' +
+      '</h2><button class="btn btn-ghost" type="button" data-receipt-close>Close</button></div>' +
       '<div class="license-photo-view"><img src="' +
       String(src).replace(/"/g, "") +
       '" alt="GCash or cashless receipt"></div></article>';
@@ -127,7 +127,7 @@
         "</p><h2 id=\"booking-desk-title\">" +
         NS.security.escapeHtml(v ? v.name : "Booking") +
         "</h2></div>" +
-        '<button class="btn btn-ghost btn-sm" type="button" data-desk-close aria-label="Close">Close</button>' +
+        '<button class="btn btn-ghost" type="button" data-desk-close aria-label="Close">Close</button>' +
         "</div>" +
         '<div class="card-badges" style="margin:0 0 0.75rem">' +
         checkFirstBadge(booking) +
@@ -441,7 +441,7 @@
               NS.security.escapeHtml(v ? v.name : "") +
               "</span></div>" +
               '<div class="queue-col queue-go">' +
-              '<span class="btn btn-ghost btn-sm queue-open">Open</span>' +
+              '<span class="btn btn-ghost queue-open">Open</span>' +
               '<span class="queue-chevron" aria-hidden="true">›</span>' +
               "</div></a>"
             );
@@ -481,7 +481,7 @@
                 (b.dropoff ? " · " + NS.security.escapeHtml(b.dropoff) : "") +
                 "</span></div>" +
                 '<div class="queue-col queue-go">' +
-                '<span class="btn btn-ghost btn-sm queue-open">Open</span>' +
+                '<span class="btn btn-ghost queue-open">Open</span>' +
                 '<span class="queue-chevron" aria-hidden="true">›</span>' +
                 "</div></a>"
               );
@@ -645,11 +645,11 @@
                 NS.ui.peso(v.dailyRate) +
                 "/day</p>" +
                 (canManage
-                  ? '<div class="btn-row"><button class="btn btn-ghost btn-sm" type="button" data-edit="' +
+                  ? '<div class="btn-row"><button class="btn btn-ghost" type="button" data-edit="' +
                     v.id +
                     '">Edit</button>' +
                     (isAdmin
-                      ? '<button class="btn btn-ghost btn-sm" type="button" data-del="' + v.id + '">Remove</button>'
+                      ? '<button class="btn btn-ghost" type="button" data-del="' + v.id + '">Remove</button>'
                       : "") +
                     "</div>"
                   : "") +
@@ -841,7 +841,7 @@
       '<article class="password-dialog id-check-dialog" role="dialog" aria-modal="true" aria-labelledby="id-check-title">' +
       '<div class="password-dialog-head"><h2 id="id-check-title">ID check · ' +
       esc(booking.ref || booking.id) +
-      '</h2><button class="btn btn-ghost btn-sm" type="button" data-id-close>Close</button></div>' +
+      '</h2><button class="btn btn-ghost" type="button" data-id-close>Close</button></div>' +
       '<div class="id-check-layout"><div class="id-check-photos"></div><div><p class="eyebrow">Typed details</p>' +
       (fields.length
         ? '<ul class="booking-detail-list">' + fields.join("") + "</ul>"
@@ -1170,7 +1170,7 @@
                 var action =
                   u.role === "admin"
                     ? ""
-                    : '<button class="btn btn-ghost btn-sm" data-id="' +
+                    : '<button class="btn btn-ghost" data-id="' +
                       u.id +
                       '" data-status="' +
                       (u.status === "active" ? "disabled" : "active") +
@@ -1305,7 +1305,7 @@
                       NS.security.escapeHtml(String(r.user_id || "")) +
                       "</td><td>" +
                       NS.security.escapeHtml(r.type) +
-                      '</td><td><button class="btn btn-gold btn-sm" data-fulfill="' +
+                      '</td><td><button class="btn btn-gold" data-fulfill="' +
                       r.request_id +
                       '">Fulfill</button></td></tr>'
                     );
@@ -1459,10 +1459,10 @@
               NS.ui.statusBadge(dutyOf(d)) +
               NS.ui.statusBadge(d.status) +
               (canManage
-                ? '<div class="btn-row"><button class="btn btn-ghost btn-sm" data-edit="' +
+                ? '<div class="btn-row"><button class="btn btn-ghost" data-edit="' +
                   d.id +
                   '">Edit</button>' +
-                  (isAdmin ? '<button class="btn btn-ghost btn-sm" data-del="' + d.id + '">Remove</button>' : "") +
+                  (isAdmin ? '<button class="btn btn-ghost" data-del="' + d.id + '">Remove</button>' : "") +
                   "</div>"
                 : "") +
               "</div></article>"
@@ -1614,7 +1614,7 @@
                 '<div class="ops-maint-status">' +
                 NS.ui.statusBadge(m.finished ? "completed" : "pending") +
                 (canManage && !m.finished
-                  ? '<button class="btn btn-pay btn-sm" type="button" data-finish="' +
+                  ? '<button class="btn btn-pay" type="button" data-finish="' +
                     m.id +
                     '">Mark finished</button>'
                   : "") +
@@ -1957,7 +1957,7 @@
                 payment: { method: p.paymentMethod, brand: p.brand, receipt: p.receipt }
               });
               var action = hasReceipt
-                ? '<button class="btn btn-ghost btn-sm pay-action-btn" type="button" data-pay-receipt="' +
+                ? '<button class="btn btn-ghost pay-action-btn" type="button" data-pay-receipt="' +
                   esc(p.bookingId) +
                   '">View <span class="pay-action-chevron" aria-hidden="true">›</span></button>'
                 : '<span class="pay-action-muted">—</span>';
@@ -2151,7 +2151,7 @@
                 '</div><div class="card-badges">' +
                 NS.ui.statusBadge(b.status) +
                 '</div><div class="card-actions">' +
-                '<button class="btn btn-gold btn-sm" data-accept-return="' +
+                '<button class="btn btn-gold" data-accept-return="' +
                 b.id +
                 '">Accept return</button></div></article>'
               );

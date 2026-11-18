@@ -21,12 +21,12 @@
       <div class="profile-photo-block">
         <div id="profile-avatar" class="avatar avatar-lg avatar-fallback">?</div>
         <div class="profile-photo-actions">
-          <label class="btn btn-ghost btn-sm profile-upload-label">
+          <label class="btn btn-ghost profile-upload-label">
             Upload photo
             <input id="avatar-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
           </label>
-          <button class="btn btn-ghost btn-sm" id="avatar-remove" type="button">Remove</button>
-          <button class="btn btn-ghost btn-sm" id="password-toggle" type="button" aria-expanded="false" aria-controls="password-form">Change password</button>
+          <button class="btn btn-ghost" id="avatar-remove" type="button">Remove</button>
+          <button class="btn btn-ghost" id="password-toggle" type="button" aria-expanded="false" aria-controls="password-form">Change password</button>
           <p class="fineprint">JPG, PNG, or WebP ?? under 5 MB ?? cropped square preview</p>
         </div>
       </div>
@@ -47,7 +47,7 @@
     <form id="password-form" class="password-dialog" role="dialog" aria-modal="true" aria-labelledby="password-title">
       <div class="password-dialog-head">
         <h2 id="password-title">Change password</h2>
-        <button class="btn btn-ghost btn-sm" type="button" id="password-close" aria-label="Close">Close</button>
+        <button class="btn btn-ghost" type="button" id="password-close" aria-label="Close">Close</button>
       </div>
       <label class="field">Current password <input class="form-control" name="currentPassword" type="password" autocomplete="current-password" required></label>
       <label class="field">Password <input class="form-control" name="nextPassword" type="password" autocomplete="new-password" required></label>

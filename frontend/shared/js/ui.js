@@ -115,7 +115,7 @@
         '<p class="eyebrow">Desk action</p>' +
         '<h2 id="bad-renter-title">Label Bad Renter</h2>' +
         "</div>" +
-        '<button class="btn btn-ghost btn-sm" type="button" data-bad-close aria-label="Close">Close</button>' +
+        '<button class="btn btn-ghost" type="button" data-bad-close aria-label="Close">Close</button>' +
         "</div>" +
         "<p>You are labeling <strong>" +
         NS.security.escapeHtml(name) +
@@ -249,7 +249,7 @@
     var page = document.body.getAttribute("data-page") || "";
     if (page === "home" || page === "adminHome" || page === "driverHome") return "";
     return (
-      '<button class="btn btn-ghost btn-sm nav-back" id="nav-back-btn" type="button" aria-label="Go back">' +
+      '<button class="btn btn-ghost nav-back" id="nav-back-btn" type="button" aria-label="Go back">' +
       "Back" +
       "</button>"
     );
@@ -352,13 +352,13 @@
           "<span>" +
           NS.security.escapeHtml(me.firstName) +
           "</span></a>" +
-          '<button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Sign out</button>' +
+          '<button class="btn btn-ghost" id="logout-btn" type="button">Sign out</button>' +
           "</div>"
         : '<div class="nav-user">' +
-          '<a class="btn btn-ghost btn-sm" href="' +
+          '<a class="btn btn-ghost" href="' +
           NS.routes.href("login") +
           '">Log in</a>' +
-          '<a class="btn btn-gold btn-sm" href="' +
+          '<a class="btn btn-gold" href="' +
           NS.routes.href("register") +
           '">Register</a>' +
           "</div>";
@@ -398,7 +398,7 @@
         '<div class="sf-row">' +
         '<div class="sf-contact">' +
         '<a class="sf-phone" href="tel:09269864450">0926 986 4450</a>' +
-        '<a class="btn btn-gold btn-sm" data-book="1" href="' +
+        '<a class="btn btn-gold" data-book="1" href="' +
         NS.routes.href("fleet") +
         '">Book Now</a>' +
         "</div>" +
@@ -447,7 +447,7 @@
         '<a class="nav-link" href="' +
         NS.routes.href("home") +
         '">Guest site</a>' +
-        '<button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Sign out</button>' +
+        '<button class="btn btn-ghost" id="logout-btn" type="button">Sign out</button>' +
         "</div></nav></header>";
       bindNavChrome();
     }
@@ -486,7 +486,7 @@
         '<span class="role-pill">' +
         NS.security.escapeHtml(me.firstName || "Driver") +
         "</span>" +
-        '<button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Sign out</button>' +
+        '<button class="btn btn-ghost" id="logout-btn" type="button">Sign out</button>' +
         "</div></nav></header>";
       bindNavChrome();
     }
@@ -1092,7 +1092,7 @@
       '<h2 id="terms-title">' +
       NS.security.escapeHtml(terms.title || "Rental terms") +
       "</h2>" +
-      '<button type="button" class="btn btn-ghost btn-sm" data-terms-close>Close</button>' +
+      '<button type="button" class="btn btn-ghost" data-terms-close>Close</button>' +
       "</div>" +
       '<div class="terms-body">' +
       termsBodyHtml(kind) +
@@ -1149,7 +1149,7 @@
       '<article class="password-dialog terms-dialog" role="dialog" aria-modal="true" aria-labelledby="terms-title">' +
       '<div class="password-dialog-head">' +
       '<h2 id="terms-title">Data Privacy notice</h2>' +
-      '<button type="button" class="btn btn-ghost btn-sm" data-terms-close>Close</button>' +
+      '<button type="button" class="btn btn-ghost" data-terms-close>Close</button>' +
       "</div>" +
       '<div class="terms-body">' +
       privacyBodyHtml() +

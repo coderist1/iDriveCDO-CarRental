@@ -1722,17 +1722,17 @@
               var actions = "";
               if (canRate) {
                 actions +=
-                  '<a class="btn btn-ghost btn-sm" href="' + detailHref + '">Rate car</a>';
+                  '<a class="btn btn-ghost" href="' + detailHref + '">Rate car</a>';
               }
               if (canReturn) {
                 actions +=
-                  '<a class="btn btn-ghost btn-sm" href="' + detailHref + '">Open</a>' +
-                  '<button class="btn btn-pay btn-sm" type="button" data-return="' +
+                  '<a class="btn btn-ghost" href="' + detailHref + '">Open</a>' +
+                  '<button class="btn btn-pay" type="button" data-return="' +
                   b.id +
                   '">Return vehicle</button>';
               } else {
                 actions +=
-                  '<a class="btn btn-pay btn-sm" href="' + detailHref + '">Open</a>';
+                  '<a class="btn btn-pay" href="' + detailHref + '">Open</a>';
               }
               return (
                 '<article class="booking-card my-booking-card"><div><p class="eyebrow">' +

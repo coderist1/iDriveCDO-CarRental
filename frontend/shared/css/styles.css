@@ -4100,7 +4100,7 @@ body.site-mode .site-footer {
   padding: 3.2rem 5vw 0;
   text-align: center;
   overflow: hidden;
-  background: linear-gradient(180deg, #f7f7f5 0%, #ffffff 70%);
+  background: #ffffff;
 }
 .hp-hero-copy { max-width: 980px; margin: 0 auto; }
 .hp-avail {
@@ -4437,8 +4437,8 @@ body.site-mode .site-footer {
   justify-content: center;
   gap: 0.4rem;
   background: #fff !important;
-  border: 1.5px solid #1f1f1f !important;
-  color: #141414 !important;
+  border: 1px solid #c8c8c8 !important;
+  color: var(--ink) !important;
   font-family: var(--display);
   font-weight: 600;
   font-size: 0.82rem;

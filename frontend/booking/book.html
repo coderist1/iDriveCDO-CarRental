@@ -71,7 +71,7 @@
           </div>
         </div>
         <p class="fineprint book-reserve-hint" data-reserve-hint></p>
-        <div class="book-step-actions book-step-actions-primary">
+        <div class="book-step-actions">
           <button class="btn btn-gold" type="button" data-wizard-next>Show available cars</button>
         </div>
       </div>
@@ -109,7 +109,7 @@
       </div>
 
       <form id="self-form" class="form-card" hidden novalidate>
-        <button class="btn btn-ghost btn-sm form-step-back" type="button" data-change-type>Change drive type</button>
+        <button class="btn btn-ghost form-step-back" type="button" data-change-type>Change drive type</button>
         <h1 tabindex="-1">Self-drive</h1>
         <div class="notice form-alert" hidden></div>
 
@@ -161,7 +161,7 @@
               <div class="pickup-map-block" data-address="dropoff" data-map-for="dropoff">
                 <p class="fineprint">One map. The red square pin is the delivery / return spot.</p>
                 <div class="pickup-map-tools">
-                  <button class="btn btn-ghost btn-sm" type="button" data-map-locate>Use my location</button>
+                  <button class="btn btn-ghost" type="button" data-map-locate>Use my location</button>
                   <span class="map-pin-legend">
                     <span class="pin-mark pin-red pin-square" aria-hidden="true"></span>
                     <span>Delivery / return</span>
@@ -360,7 +360,7 @@
       </form>
 
       <form id="chauffeur-form" class="form-card" hidden novalidate>
-        <button class="btn btn-ghost btn-sm form-step-back" type="button" data-change-type>Change drive type</button>
+        <button class="btn btn-ghost form-step-back" type="button" data-change-type>Change drive type</button>
         <h1 tabindex="-1">With chauffeur</h1>
         <div class="notice form-alert" hidden></div>
         <p class="fineprint">Includes the professional driver fee. No driver's license required.</p>
@@ -393,9 +393,9 @@
             <div class="pickup-map-block field-span-2" data-trip-map>
               <p class="fineprint">One map for both pins. The circle pin is pick-up. The square pin is drop-off.</p>
               <div class="pickup-map-tools">
-                <button class="btn btn-ghost btn-sm is-active" type="button" data-place-pin="pickup">Place pick-up</button>
-                <button class="btn btn-ghost btn-sm" type="button" data-place-pin="dropoff">Place drop-off</button>
-                <button class="btn btn-ghost btn-sm" type="button" data-map-locate>Use my location for pick-up</button>
+                <button class="btn btn-ghost is-active" type="button" data-place-pin="pickup">Place pick-up</button>
+                <button class="btn btn-ghost" type="button" data-place-pin="dropoff">Place drop-off</button>
+                <button class="btn btn-ghost" type="button" data-map-locate>Use my location for pick-up</button>
                 <span class="map-pin-legend">
                   <span class="pin-mark pin-blue" aria-hidden="true"></span>
                   <span>Pick-up</span>
