@@ -117,7 +117,7 @@
       .catch(function (e) {
         if (e && e.name === "AbortError") throw ApiError("Request timed out.", 0, null);
         if (e && e.name === "ApiError") throw e;
-        throw ApiError("Network error: unable to reach the server.", 0, null);
+        throw ApiError("Network error: could not reach iDrive right now. Check your connection and try again.", 0, null);
       })
       .finally(function () {
         if (timer) clearTimeout(timer);
@@ -150,8 +150,8 @@
         return load(1);
       },
       get: function (id) { return request("GET", item(id)); },
-      create: function (data) { return request("POST", path, { body: data }); },
-      update: function (id, data) { return request("PUT", item(id), { body: data }); },
+      create: function (data, options) { return request("POST", path, Object.assign({}, options, { body: data })); },
+      update: function (id, data, options) { return request("PUT", item(id), Object.assign({}, options, { body: data })); },
       remove: function (id) { return request("DELETE", item(id)); }
     };
   }

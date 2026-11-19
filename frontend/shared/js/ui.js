@@ -407,6 +407,7 @@
         '<a href="' + NS.routes.href("myBookings") + '">Bookings</a>' +
         '<a href="' + NS.routes.href("about") + '">About</a>' +
         '<a href="' + NS.routes.href("contact") + '">Contact</a>' +
+        '<button type="button" class="sf-contract" data-contract-open>Car Rental Contract</button>' +
         "</nav></div>" +
         '<div class="sf-bottom">' +
         "<div>" +
@@ -456,7 +457,8 @@
     if (footer) {
       footer.innerHTML =
         '<footer class="desk-footer">' +
-        "<p><strong>iDrive Desk</strong> · Admin / Rental-Incharge console for bookings, fleet, drivers, and payments.</p>" +
+        '<p><strong>iDrive Desk</strong> · Admin / Rental-Incharge console for bookings, fleet, drivers, and payments. ' +
+        '<button type="button" class="sf-contract" data-contract-open>Car Rental Contract</button></p>' +
         "<p>Signed in as " +
         NS.security.escapeHtml(me.firstName + " " + me.lastName) +
         " · " +
@@ -1135,7 +1137,7 @@
       "<p>You may request to view or delete your personal data from your Account page. Staff will review a delete request before the account is disabled and identifying fields are cleared.</p>" +
       "<h3>Companies that handle your data for us</h3>" +
       "<ul><li><strong>Supabase</strong>: database where accounts, bookings, payments, and ID records are stored</li>" +
-      "<li><strong>Vercel</strong>: hosts this website, the booking server, and the maintenance-prediction service</li>" +
+      "<li><strong>Vercel</strong>: hosts this website, the booking API, and the maintenance-prediction service</li>" +
       "<li><strong>Google</strong>: Google Sign-In if you choose it, and the Gemini service that reads the text on an ID photo when you use the ID reader</li>" +
       "<li><strong>OpenStreetMap (Nominatim)</strong>: turns the address you type into a map pin</li>" +
       "<li><strong>Brevo</strong>: email delivery service that sends booking confirmations and password reset codes</li>" +
@@ -1172,6 +1174,62 @@
     if (closeBtn) closeBtn.focus();
   }
 
+  function openRentalContract(context) {
+    closeTermsModal();
+    var bodyHtml =
+      NS.domain && NS.domain.rentalContractHtml
+        ? NS.domain.rentalContractHtml(context || {})
+        : "<p>Contract is unavailable.</p>";
+    var pdfHref = NS.routes.base() + "shared/docs/car-rental-contract.pdf";
+    var overlay = document.createElement("div");
+    overlay.id = "terms-modal";
+    overlay.className = "password-modal terms-modal contract-modal";
+    overlay.innerHTML =
+      '<article class="password-dialog terms-dialog contract-dialog" role="dialog" aria-modal="true" aria-labelledby="terms-title">' +
+      '<div class="password-dialog-head">' +
+      '<h2 id="terms-title">Car rental contract</h2>' +
+      '<div class="contract-head-actions">' +
+      '<a class="btn btn-ghost" href="' +
+      pdfHref +
+      '" target="_blank" rel="noopener">Blank PDF</a>' +
+      '<button type="button" class="btn btn-ghost" data-contract-print>Print</button>' +
+      '<button type="button" class="btn btn-ghost" data-terms-close>Close</button>' +
+      "</div></div>" +
+      '<div class="terms-body contract-body">' +
+      bodyHtml +
+      "</div>" +
+      "</article>";
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay || e.target.closest("[data-terms-close]")) {
+        closeTermsModal();
+        return;
+      }
+      if (e.target.closest("[data-contract-print]")) {
+        e.preventDefault();
+        var win = window.open("", "_blank");
+        if (!win) {
+          toast("Allow pop-ups to print the contract.", "err");
+          return;
+        }
+        win.document.write(
+          "<!DOCTYPE html><html><head><title>Car rental contract</title>" +
+            '<link rel="stylesheet" href="' +
+            NS.routes.base() +
+            'shared/css/styles.css">' +
+            "<style>body{background:#fff;padding:24px} .password-modal,.contract-head-actions{display:none!important}</style>" +
+            "</head><body>" +
+            bodyHtml +
+            "<script>window.onload=function(){window.print();}<\/script></body></html>"
+        );
+        win.document.close();
+      }
+    });
+    document.addEventListener("keydown", onTermsKey);
+    document.body.appendChild(overlay);
+    var closeBtn = overlay.querySelector("[data-terms-close]");
+    if (closeBtn) closeBtn.focus();
+  }
+
   function bindTerms() {
     if (document.documentElement.getAttribute("data-terms-bound") === "1") return;
     document.documentElement.setAttribute("data-terms-bound", "1");
@@ -1181,6 +1239,19 @@
         e.preventDefault();
         e.stopPropagation();
         openPrivacy();
+        return;
+      }
+      var contractBtn = e.target.closest("[data-contract-open]");
+      if (contractBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        var bookingId = contractBtn.getAttribute("data-contract-open");
+        var context = {};
+        if (bookingId && NS.domain && NS.domain.getBooking && NS.domain.contractContextFromBooking) {
+          var booking = NS.domain.getBooking(bookingId);
+          if (booking) context = NS.domain.contractContextFromBooking(booking);
+        }
+        openRentalContract(context);
         return;
       }
       var btn = e.target.closest("[data-terms-open]");
@@ -1626,6 +1697,7 @@
     askBadRenterReason: askBadRenterReason,
     openTerms: openTerms,
     openPrivacy: openPrivacy,
+    openRentalContract: openRentalContract,
     bookingDetailListHtml: bookingDetailListHtml,
     bookingDetailRowsFromRecord: bookingDetailRowsFromRecord,
     chatMessageBodyHtml: chatMessageBodyHtml,

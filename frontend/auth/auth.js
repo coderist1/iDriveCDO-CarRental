@@ -18,7 +18,7 @@
   var ENDED_MSG = "Your session has ended. Please sign in again.";
   var IDLE_MSG = "You were signed out after 30 minutes of inactivity. Please sign in again.";
   var UPGRADE_MSG =
-    "Sign-in now works through our server. Please sign in again. If you signed up before this change, use Forgot password once to set a new password.";
+    "Sign-in has been updated. Please sign in again. If you signed up before this change, use Forgot password once to set a new password.";
   var NOTICE_KEY = "idrive_authNotice";
   /* Cached copies of other people's records must not outlive the session that was allowed to read them. */
   var PERSONAL_KEYS = ["users", "bookings", "payments"];
@@ -692,7 +692,7 @@
               if (again[j].id === userId) again[j].status = before;
             }
             saveUsers(again);
-            if (NS.ui && NS.ui.toast) NS.ui.toast("The server did not change that account: " + serverMessage(err, "try again."), "err");
+            if (NS.ui && NS.ui.toast) NS.ui.toast("Could not change that account: " + serverMessage(err, "try again."), "err");
           });
         }
         NS.domain.audit("user-status", me.id, list[i].email + " → " + list[i].status);

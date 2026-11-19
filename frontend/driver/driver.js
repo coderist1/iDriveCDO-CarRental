@@ -39,7 +39,7 @@
 
     if (greeting && me) {
       greeting.textContent =
-        "Welcome, " + me.firstName + ". Request a start when you are ready, then request the return when the trip is done. The desk approves both.";
+        "Welcome, " + me.firstName + ". You start chauffeur trips. Ask only when you return the vehicle.";
     }
 
     if (!driver) {
@@ -211,18 +211,16 @@
           : '<div class="driver-photo-empty">' + esc(v && v.type ? v.type : "Car") + "</div>";
 
       var actions = "";
-      if (b.status === "confirmed" && !b.startRequestedAt) {
+      if (b.status === "confirmed" && b.driveMode === "chauffeur") {
         actions =
           '<button class="btn btn-gold" type="button" data-start="' +
           b.id +
-          '">Request start</button>';
-      } else if (b.status === "confirmed") {
-        actions = "<p class='fineprint'>Start requested. Waiting for the desk.</p>";
+          '">Start trip</button>';
       } else if (b.status === "ongoing") {
         actions =
           '<button class="btn btn-gold" type="button" data-end="' +
           b.id +
-          '">Request return</button>';
+          '">Return vehicle</button>';
       } else if (b.status === "return_requested") {
         actions = "<p class='fineprint'>Return requested. The trip completes when the desk approves it.</p>";
       }
@@ -319,18 +317,25 @@
       if (!root) return;
       root.querySelectorAll("[data-start]").forEach(function (btn) {
         btn.addEventListener("click", function () {
-          if (!global.confirm("Request the desk to start this trip?")) return;
           run(function () {
-            NS.domain.requestTripStart(btn.getAttribute("data-start"), csrf());
-          }, "Start requested. Waiting for the desk.");
+            NS.domain.startTrip(btn.getAttribute("data-start"), csrf());
+          }, "Trip started.");
         });
       });
       root.querySelectorAll("[data-end]").forEach(function (btn) {
         btn.addEventListener("click", function () {
-          if (!global.confirm("Request the return of this vehicle? The desk completes the trip after approval.")) return;
-          run(function () {
-            NS.domain.requestVehicleReturn(btn.getAttribute("data-end"), "", csrf());
-          }, "Return requested. Waiting for the desk.");
+          NS.ui
+            .askYesNo("Return this vehicle? The trip will be marked complete.", {
+              title: "Return vehicle",
+              yes: "Return",
+              no: "Cancel"
+            })
+            .then(function (ok) {
+              if (!ok) return;
+              run(function () {
+                NS.domain.requestVehicleReturn(btn.getAttribute("data-end"), "", csrf());
+              }, "Vehicle returned. The trip is complete.");
+            });
         });
       });
       root.querySelectorAll("[data-fuel-save]").forEach(function (btn) {

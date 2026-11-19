@@ -78,6 +78,12 @@
         b.id +
         '">Approve start</button>';
     }
+    if (b.status === "ongoing") {
+      primary +=
+        '<button class="btn btn-approve" type="button" data-act="completed" data-id="' +
+        b.id +
+        '">Complete trip</button>';
+    }
     if (b.status === "return_requested") {
       primary +=
         '<button class="btn btn-approve" type="button" data-accept-return="' +
@@ -92,10 +98,12 @@
       return '<p class="fineprint card-actions-note">Start requested. Approve it to begin the trip.</p>';
     }
     if (b.status === "confirmed") {
-      return '<p class="fineprint card-actions-note">Waiting for the renter or driver to request the start.</p>';
+      return b.driveMode === "chauffeur"
+        ? '<p class="fineprint card-actions-note">Paid and confirmed. The assigned driver starts the trip.</p>'
+        : '<p class="fineprint card-actions-note">Paid and confirmed. The renter starts this self-drive trip.</p>';
     }
     if (b.status === "ongoing") {
-      return '<p class="fineprint card-actions-note">Trip is ongoing. It completes when the return is approved.</p>';
+      return '<p class="fineprint card-actions-note">Trip is ongoing. It completes when the vehicle is returned, or when you mark it complete.</p>';
     }
     if (b.status === "return_requested") {
       return '<p class="fineprint card-actions-note">Vehicle is back. Approve the return to complete the trip.</p>';
@@ -236,6 +244,10 @@
           booking.id +
           '">View receipt</button>';
       }
+      secondary +=
+        '<button class="btn btn-ghost" type="button" data-contract-open="' +
+        booking.id +
+        '">View contract</button>';
       var primary = bookingDeskPrimaryActions(booking);
       dialog.innerHTML =
         '<div class="password-dialog-head">' +
@@ -337,12 +349,13 @@
           ? "This car is currently in use. Approve only if both renters have a valid ID on file? A confirmation email will be sent."
           : "Approve this booking? A confirmation email will be sent to the renter.",
         rejected: "Reject this booking? Keep this away from Approve — this cannot be undone from this screen.",
-        ongoing: "Approve the start of this trip?"
+        ongoing: "Approve the start of this trip?",
+        completed: "Complete this trip now? The car and driver become free."
       };
       NS.ui
         .askYesNo(labels[act] || "Save this booking edit?", {
-          title: act === "rejected" ? "Reject booking" : act === "ongoing" ? "Approve start" : "Save edit",
-          yes: act === "rejected" ? "Reject" : "Approve",
+          title: act === "rejected" ? "Reject booking" : act === "completed" ? "Complete trip" : act === "ongoing" ? "Approve start" : "Save edit",
+          yes: act === "rejected" ? "Reject" : act === "completed" ? "Complete" : "Approve",
           no: "Cancel"
         })
         .then(function (ok) {
@@ -356,7 +369,9 @@
                   ? "Booking rejected."
                   : act === "ongoing"
                     ? "Start approved. The trip is ongoing."
-                    : "Booking updated.",
+                    : act === "completed"
+                      ? "Trip completed."
+                      : "Booking updated.",
               "ok"
             );
             paint();
@@ -401,7 +416,7 @@
         ["Payment", esc(m[5].charAt(0).toUpperCase() + m[5].slice(1))]
       );
     }
-    rows.push(["Status", "Not saved to the server — other details are unavailable"]);
+    rows.push(["Status", "Not synced yet — other details are unavailable"]);
     if (m && m[6]) rows.push(["Notes", esc(m[6])]);
     return (
       '<ul class="booking-detail-list">' +
@@ -1094,7 +1109,7 @@
       openIdCheck(booking, info);
       if (!apiId) {
         NS.ui.toast(
-          "This booking is a local-only copy (common with old demo data). Refresh the page to load server bookings, then open View ID on one of those.",
+          "This booking is a local-only copy (common with old demo data). Refresh the page to load synced bookings, then open View ID on one of those.",
           "err"
         );
       }
@@ -1104,7 +1119,7 @@
     var role = String(me.role || "").toLowerCase();
     if (role !== "admin" && role !== "staff") {
       openIdCheck(booking, info);
-      NS.ui.toast("Sign in as admin or staff to load the saved ID photo from the server.", "err");
+      NS.ui.toast("Sign in as admin or staff to load the saved ID photo.", "err");
       return;
     }
     function load() {
@@ -1125,7 +1140,7 @@
           rememberDriverInfo(booking, merged);
           openIdCheck(booking, merged);
           if (!idPhotos(merged).length) {
-            NS.ui.toast("ID details loaded, but no photo is stored on the server for this booking.", "err");
+            NS.ui.toast("ID details loaded, but no photo is stored for this booking.", "err");
           }
         },
         function (err) {
@@ -1134,8 +1149,8 @@
             err && err.status === 403
               ? "Only admin or staff can view renter IDs."
               : err && err.status === 404
-                ? "This booking is not on the server."
-                : (err && err.message) || "The server could not be reached.";
+                ? "This booking is not synced yet."
+                : (err && err.message) || "Could not reach iDrive right now.";
           NS.ui.toast("Could not load the saved ID photo (" + reason + "). Showing what is on this browser.", "err");
         }
       );
@@ -1184,6 +1199,10 @@
               b.id +
               '">View receipt</button>';
           }
+          secondary +=
+            '<button class="btn btn-ghost" type="button" data-contract-open="' +
+            b.id +
+            '">View contract</button>';
           primary = bookingDeskPrimaryActions(b);
           return (
             '<article class="booking-card booking-card-stacked"><div><p class="eyebrow">Booking ' +
@@ -1281,11 +1300,12 @@
           ? "This car is currently in use. Approve only if both renters have a valid ID on file? A confirmation email will be sent."
           : "Approve this booking? A confirmation email will be sent to the renter.",
         rejected: "Reject this booking? Keep this away from Approve — this cannot be undone from this screen.",
-        ongoing: "Approve the start of this trip?"
+        ongoing: "Approve the start of this trip?",
+        completed: "Complete this trip now? The car and driver become free."
       };
       NS.ui.askYesNo(labels[act] || "Save this booking edit?", {
-        title: act === "rejected" ? "Reject booking" : act === "ongoing" ? "Approve start" : "Save edit",
-        yes: act === "rejected" ? "Reject" : "Approve",
+        title: act === "rejected" ? "Reject booking" : act === "completed" ? "Complete trip" : act === "ongoing" ? "Approve start" : "Save edit",
+        yes: act === "rejected" ? "Reject" : act === "completed" ? "Complete" : "Approve",
         no: "Cancel"
       }).then(function (ok) {
         if (!ok) return;
@@ -1299,7 +1319,9 @@
                 ? "Booking rejected."
                 : act === "ongoing"
                   ? "Start approved. The trip is ongoing."
-                  : "Booking updated.",
+                  : act === "completed"
+                    ? "Trip completed."
+                    : "Booking updated.",
             "ok"
           );
         } catch (err) {

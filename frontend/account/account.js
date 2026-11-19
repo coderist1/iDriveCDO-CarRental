@@ -174,7 +174,7 @@
 
     function requestData(type) {
       if (!NS.api) {
-        showDataResult("The server is unavailable. Try again in a moment.", "err");
+        showDataResult("iDrive is unavailable right now. Try again in a moment.", "err");
         return;
       }
       var ready = me.apiId != null

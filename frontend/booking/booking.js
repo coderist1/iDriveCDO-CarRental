@@ -149,6 +149,7 @@
       expiry: "idExpiry",
       birthdate: "birthdate",
       issueDate: "idIssue",
+      address: "address",
       idType: "idType"
     },
     "self-id": {
@@ -388,6 +389,7 @@
       });
       form.querySelectorAll("[data-clear]").forEach(function (btn) { btn.hidden = true; });
       form.querySelectorAll("[data-status]").forEach(function (el) { el.textContent = ""; });
+      form.querySelectorAll("[data-after-upload]").forEach(function (panel) { panel.hidden = true; });
       var flags = form.querySelector(".ocr-flags");
       if (flags) {
         flags.hidden = true;
@@ -733,6 +735,8 @@
         }
         function setPhoto(dataUrl) {
           if (hidden) hidden.value = dataUrl || "";
+          var details = form.querySelector('[data-after-upload="' + slot + '"]');
+          if (details) details.hidden = !dataUrl;
           if (!preview) return;
           if (dataUrl) {
             preview.classList.remove("is-empty");
@@ -894,6 +898,9 @@
 
     function bookingGateErrors(form) {
       var errors = [];
+      if (!form.agreeContract || !form.agreeContract.checked) {
+        errors.push("Accept the Car Rental Contract before continuing to payment.");
+      }
       if (!form.agreeTerms || !form.agreeTerms.checked) {
         errors.push("Agree to the rental terms before continuing to payment.");
       }
@@ -1080,14 +1087,14 @@
             var notes = "";
             if (mode === "chauffeur") {
               var itinerary = form.itinerary.value.trim();
-              var requests = form.specialRequests.value.trim();
-              notes = (itinerary ? "Itinerary: " + itinerary : "") + (requests ? (itinerary ? "\n" : "") + "Requests: " + requests : "");
+              notes = itinerary ? "Itinerary: " + itinerary : "";
             }
             var shared = {
               fullName: form.fullName.value,
               phone: form.phone.value,
               email: form.email.value,
               agreed: form.agreeTerms.checked,
+              contractAccepted: !!(form.agreeContract && form.agreeContract.checked),
               mismatchAck: !!(form.mismatchAck && form.mismatchAck.checked),
               ocrNames: ocrValues(form, "fullName")
             };
@@ -1101,6 +1108,7 @@
             };
             var driverInfo = mode === "chauffeur"
               ? Object.assign(shared, extras, {
+                  address: form.address ? form.address.value : "",
                   idType: form.idType.value,
                   idNumber: form.idNumber.value,
                   idExpiry: form.idExpiry.value,
@@ -1138,7 +1146,8 @@
               driverInfo: driverInfo,
               addons: mode === "chauffeur" ? ["driver"] : [],
               notes: notes,
-              isReservation: isReservation()
+              isReservation: isReservation(),
+              contractAccepted: !!(form.agreeContract && form.agreeContract.checked)
             }, csrfInput ? csrfInput.value : "");
         } catch (err) {
           fail(err);
@@ -1174,6 +1183,7 @@
         id: "ID",
         consent: "Parent consent",
         review: "Review",
+        contract: "Contract",
         payment: "Payment"
       };
 
@@ -1193,8 +1203,8 @@
 
       function stepNames() {
         return needsConsent()
-          ? ["dates", "car", "mode", "id", "consent", "review"]
-          : ["dates", "car", "mode", "id", "review"];
+          ? ["dates", "car", "mode", "id", "consent", "review", "contract"]
+          : ["dates", "car", "mode", "id", "review", "contract"];
       }
 
       function occupantForChosen() {
@@ -1275,7 +1285,7 @@
             NS.ui.peso(downpayment) +
             " downpayment before staff can approve it.";
         } else {
-          hint.textContent = "Booking selected. After review you continue to full payment.";
+          hint.textContent = "Booking selected. After the contract you continue to full payment.";
         }
       }
 
@@ -1347,6 +1357,61 @@
         paintInUseNote(form);
       }
 
+      function contractDraft(form) {
+        var me = NS.auth.current() || {};
+        var vehicle = NS.domain.getVehicle(form.vehicleId ? form.vehicleId.value : chosenVehicle);
+        var days = 0;
+        try {
+          var q = NS.domain.quote(
+            form.vehicleId.value,
+            form.startDate.value,
+            form.endDate.value,
+            mode === "chauffeur" ? ["driver"] : [],
+            { ignoreAvailability: true }
+          );
+          days = q.days;
+        } catch (err) {
+          days = 0;
+        }
+        var destination =
+          mode === "chauffeur"
+            ? [form.pickup && form.pickup.value, form.dropoff && form.dropoff.value].filter(Boolean).join(" → ")
+            : selfHandover(form) === "deliver"
+              ? (form.dropoff && form.dropoff.value) || ""
+              : (form.pickup && form.pickup.value) || "";
+        return {
+          bookingRef: "(pending)",
+          renterName: (form.fullName && form.fullName.value) || ((me.firstName || "") + " " + (me.lastName || "")).trim(),
+          renterAddress: (form.address && String(form.address.value || "").trim()) || me.address || "",
+          renterContact: (form.phone && form.phone.value) || me.phone || "",
+          renterIdType: (form.idType && form.idType.value) || (mode === "chauffeur" ? "Government ID" : "Driver's License"),
+          renterIdNo: (form.idNumber && form.idNumber.value) || (form.license_no && form.license_no.value) || "",
+          vehicleLabel: vehicle ? [vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(" ") : "",
+          plate: vehicle ? vehicle.plate : "",
+          dailyRate: vehicle ? vehicle.dailyRate : "",
+          days: days,
+          startDate: form.startDate ? form.startDate.value : "",
+          endDate: form.endDate ? form.endDate.value : "",
+          pickupTime: form.pickupTime ? form.pickupTime.value : "",
+          returnTime: form.returnTime ? form.returnTime.value : "",
+          destination: destination,
+          fuel: "Full",
+          odometer: vehicle && vehicle.mileage != null ? vehicle.mileage : "",
+          purpose: mode === "chauffeur" ? "Chauffeur hire" : "Self-drive rental",
+          driveMode: mode || "self",
+          acceptedAt: ""
+        };
+      }
+
+      function paintContract(form) {
+        var host = form.querySelector("[data-contract-host]");
+        if (!host) return;
+        host.innerHTML =
+          NS.domain.rentalContractHtml
+            ? NS.domain.rentalContractHtml(contractDraft(form))
+            : "<p>Contract is unavailable.</p>";
+      }
+
       function paintCars() {
         syncMirrors();
         refillFleet();
@@ -1397,12 +1462,12 @@
           if (span && order >= 0) span.textContent = String(order + 1);
           el.classList.toggle("is-current", name === stepName);
           el.classList.toggle("is-done", order >= 0 && order < step - 1);
-          el.classList.toggle("is-next", name === "payment" && stepName === "review");
+          el.classList.toggle("is-next", name === "payment" && stepName === "contract");
         });
         search.hidden = stepName !== "dates";
         cars.hidden = stepName !== "car";
         typeStep.hidden = stepName !== "mode";
-        var onForm = ["mode", "id", "consent", "review"].indexOf(stepName) !== -1;
+        var onForm = ["mode", "id", "consent", "review", "contract"].indexOf(stepName) !== -1;
         selfForm.hidden = !(mode === "self" && onForm);
         chauffeurForm.hidden = !(mode === "chauffeur" && onForm);
         if (stepName === "mode" && mode) typeStep.hidden = true;
@@ -1414,13 +1479,15 @@
               (stepName === "mode" && name === "trip") ||
               (stepName === "id" && name === "id") ||
               (stepName === "consent" && name === "consent") ||
-              (stepName === "review" && name === "review")
+              (stepName === "review" && name === "review") ||
+              (stepName === "contract" && name === "contract")
             );
           });
           form.querySelectorAll("[data-id-next]").forEach(function (btn) {
             btn.textContent = needsConsent() ? "Continue to parent consent" : "Review booking";
           });
           if (stepName === "review") paintReview(form);
+          if (stepName === "contract") paintContract(form);
           if (stepName === "consent") syncParentConsent(form);
         });
         if (stepName === "car") paintCars();
@@ -1498,17 +1565,13 @@
         }
         if (from === "id") {
           var idForm = mode === "chauffeur" ? chauffeurForm : selfForm;
-          if (!idForm.birthdate || !idForm.birthdate.value) {
-            showAlert(idForm, "Enter your birth date so we can check if parent consent is needed.", "err");
-            return false;
-          }
           if (mode === "self") {
             if (!idForm.licensePhoto || !idForm.licensePhoto.value) {
               showAlert(idForm, "Upload a photo of your driver’s license.", "err");
               return false;
             }
             if (!idForm.license_no.value || !idForm.license_expiry.value || !idForm.dl_codes.value) {
-              showAlert(idForm, "Fill in the license number, expiry, and DL codes.", "err");
+              showAlert(idForm, "Correct the license number, expiry, and DL codes if the scan got them wrong.", "err");
               return false;
             }
           }
@@ -1520,13 +1583,21 @@
             showAlert(idForm, "Upload a photo of that ID.", "err");
             return false;
           }
+          if (!idForm.address || !String(idForm.address.value || "").trim()) {
+            showAlert(idForm, "Check the address. Correct it if the scan got it wrong.", "err");
+            return false;
+          }
+          if (!idForm.birthdate || !idForm.birthdate.value) {
+            showAlert(idForm, "Check the birth date. Correct it if the scan got it wrong.", "err");
+            return false;
+          }
           if (!idForm.idNumber || !idForm.idNumber.value) {
-            showAlert(idForm, "Enter the ID number, or wait for the scan to fill it.", "err");
+            showAlert(idForm, "Correct the ID number if the scan got it wrong.", "err");
             return false;
           }
           var gate = bookingGateErrors(idForm);
           var idOnly = gate.filter(function (msg) {
-            return !/terms|privacy|Agree/i.test(msg);
+            return !/terms|privacy|contract/i.test(msg);
           });
           if (idOnly.length) {
             showAlert(idForm, idOnly[0], "err");
@@ -1593,6 +1664,14 @@
         });
       }
       flow.addEventListener("click", function (e) {
+        var contractPreview = e.target.closest("[data-contract-preview]");
+        if (contractPreview) {
+          e.preventDefault();
+          e.stopPropagation();
+          var form = contractPreview.closest("form") || (mode === "chauffeur" ? chauffeurForm : selfForm);
+          NS.ui.openRentalContract(contractDraft(form));
+          return;
+        }
         if (e.target.closest("[data-wizard-next]")) {
           if (!canLeave(stepName)) return;
           var names = stepNames();
@@ -1700,19 +1779,20 @@
         ? list
             .map(function (b) {
               var v = NS.domain.getVehicle(b.vehicleId);
+              var selfDrive = b.driveMode !== "chauffeur";
               var canStart =
                 me &&
                 me.role === "customer" &&
+                selfDrive &&
                 b.status === "confirmed" &&
-                b.paymentStatus === "paid" &&
-                !b.startRequestedAt;
+                b.paymentStatus === "paid";
               var canReturn = me && me.role === "customer" && b.status === "ongoing";
               var detailHref = NS.routes.href("bookingDetail", "?id=" + encodeURIComponent(b.id));
               var waiting =
                 b.status === "return_requested"
                   ? "<p class='fineprint'>Return requested. Waiting for the desk to approve it.</p>"
-                  : b.status === "confirmed" && b.startRequestedAt
-                    ? "<p class='fineprint'>Start requested. Waiting for the desk to approve it.</p>"
+                  :                 b.status === "confirmed" && b.driveMode === "chauffeur"
+                    ? "<p class='fineprint'>Your driver starts this trip.</p>"
                     : "";
               var canRate =
                 me &&
@@ -1734,7 +1814,7 @@
                   '<a class="btn btn-ghost" href="' + detailHref + '">Open</a>' +
                   '<button class="btn btn-pay" type="button" data-start-request="' +
                   b.id +
-                  '">Request start</button>';
+                  '">Start trip</button>';
               } else if (canReturn) {
                 actions +=
                   '<a class="btn btn-ghost" href="' + detailHref + '">Open</a>' +
@@ -1774,24 +1854,19 @@
     host.addEventListener("click", function (e) {
       var startId = e.target.getAttribute("data-start-request");
       if (startId) {
-        NS.ui
-          .askYesNo("Request the desk to start this trip?", { title: "Request start", yes: "Request", no: "Cancel" })
-          .then(function (ok) {
-            if (!ok) return;
-            try {
-              NS.domain.requestTripStart(startId, NS.security.getCsrf());
-              NS.ui.toast("Start requested. Waiting for the desk to approve it.", "ok");
-              render();
-            } catch (err) {
-              NS.ui.toast(err.message, "err");
-            }
-          });
+        try {
+          NS.domain.startTrip(startId, NS.security.getCsrf());
+          NS.ui.toast("Trip started.", "ok");
+          render();
+        } catch (err) {
+          NS.ui.toast(err.message, "err");
+        }
         return;
       }
       var id = e.target.getAttribute("data-return");
       if (!id) return;
       NS.ui
-        .askYesNo("Return this vehicle to the desk now?", { title: "Return vehicle", yes: "Yes", no: "No" })
+        .askYesNo("Return this vehicle now? The trip will be marked complete.", { title: "Return vehicle", yes: "Return", no: "Cancel" })
         .then(function (ok) {
           if (!ok) return;
           try {
@@ -1799,11 +1874,11 @@
             var push = updated && updated._statusPush;
             Promise.resolve(push).then(function (saved) {
               if (updated.apiId == null) {
-                NS.ui.toast("Return saved here, but this booking is not on the server. Staff may not see it.", "err");
+                NS.ui.toast("Return saved here, but this booking is not synced yet. Staff may not see it.", "err");
               } else if (saved === null) {
-                NS.ui.toast("Return saved here, but the server did not get it. Ask staff to refresh after the desk syncs.", "err");
+                NS.ui.toast("Return saved here, but it did not sync. Ask staff to refresh after the desk updates.", "err");
               } else {
-                NS.ui.toast("Return request sent. Staff will see it in Inbox and Bookings.", "ok");
+                NS.ui.toast("Vehicle returned. The trip is complete.", "ok");
               }
             render();
             });
@@ -1901,11 +1976,11 @@
       me &&
       me.role === "customer" &&
       booking.userId === me.id &&
+      booking.driveMode !== "chauffeur" &&
       booking.status === "confirmed" &&
-      booking.paymentStatus === "paid" &&
-      !booking.startRequestedAt;
+      booking.paymentStatus === "paid";
     var startBtn = canStart
-      ? '<button class="btn btn-gold" id="request-start-btn" type="button">Request start</button>'
+      ? '<button class="btn btn-gold" id="request-start-btn" type="button">Start trip</button>'
       : "";
     var canReturn =
       me &&
@@ -1933,8 +2008,8 @@
         ? me && me.role === "customer"
           ? "<p class='notice'>Return requested. The trip completes when the desk approves it.</p>"
           : "<p class='notice'>The vehicle is back. Approve the return to complete the trip.</p>"
-        : booking.status === "confirmed" && booking.startRequestedAt
-          ? "<p class='notice'>Start requested. Waiting for the desk to approve it.</p>"
+        : booking.status === "confirmed" && booking.driveMode === "chauffeur" && me && me.role === "customer"
+          ? "<p class='notice'>Your driver starts this trip.</p>"
           : booking.status === "ongoing"
             ? "<p class='notice'>Trip is ongoing. Return the vehicle when you are done. The desk completes it after approval.</p>"
             : "";
@@ -2147,7 +2222,10 @@
         : "") +
       (booking.notes ? "<p>Notes: " + NS.security.escapeHtml(booking.notes) + "</p>" : "") +
       ratingBlock +
-      '<div class="btn-row">' +
+      '<div class="btn-row btn-row-balanced">' +
+      '<button class="btn btn-ghost" type="button" data-contract-open="' +
+      NS.security.escapeHtml(booking.id) +
+      '">View contract</button>' +
       pay +
       startBtn +
       returnBtn +
@@ -2199,18 +2277,13 @@
     var requestStartBtn = document.getElementById("request-start-btn");
     if (requestStartBtn) {
       requestStartBtn.addEventListener("click", function () {
-        NS.ui
-          .askYesNo("Request the desk to start this trip?", { title: "Request start", yes: "Request", no: "Cancel" })
-          .then(function (ok) {
-            if (!ok) return;
-            try {
-              NS.domain.requestTripStart(booking.id, NS.security.getCsrf());
-              NS.ui.toast("Start requested. Waiting for the desk to approve it.", "ok");
-              NS.pages.detail();
-            } catch (err) {
-              NS.ui.toast(err.message, "err");
-            }
-          });
+        try {
+          NS.domain.startTrip(booking.id, NS.security.getCsrf());
+          NS.ui.toast("Trip started.", "ok");
+          NS.pages.detail();
+        } catch (err) {
+          NS.ui.toast(err.message, "err");
+        }
       });
     }
 
@@ -2236,7 +2309,7 @@
     if (returnVehicleBtn) {
       returnVehicleBtn.addEventListener("click", function () {
         NS.ui
-          .askYesNo("Return this vehicle to the desk now?", { title: "Return vehicle", yes: "Yes", no: "No" })
+          .askYesNo("Return this vehicle now? The trip will be marked complete.", { title: "Return vehicle", yes: "Return", no: "Cancel" })
           .then(function (ok) {
             if (!ok) return;
             try {
@@ -2244,11 +2317,11 @@
               var push = updated && updated._statusPush;
               Promise.resolve(push).then(function (saved) {
                 if (updated.apiId == null) {
-                  NS.ui.toast("Return saved here, but this booking is not on the server. Staff may not see it.", "err");
+                  NS.ui.toast("Return saved here, but this booking is not synced yet. Staff may not see it.", "err");
                 } else if (saved === null) {
-                  NS.ui.toast("Return saved here, but the server did not get it. Try again or ask the desk.", "err");
+                  NS.ui.toast("Return saved here, but it did not sync. Try again or ask the desk.", "err");
                 } else {
-                  NS.ui.toast("Return request sent. Staff will see it in Inbox and Bookings.", "ok");
+                  NS.ui.toast("Vehicle returned. The trip is complete.", "ok");
                 }
               location.reload();
               });

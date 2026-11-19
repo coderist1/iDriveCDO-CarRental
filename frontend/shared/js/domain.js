@@ -543,7 +543,8 @@
       dropoffPin: payload.dropoffPin && payload.dropoffPin.lat != null ? payload.dropoffPin : null,
       dateReserve: new Date().toISOString(),
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      contractAcceptedAt: payload.contractAccepted ? new Date().toISOString() : ""
     };
     if (driveMode === "chauffeur") {
       var driverId = payload.driverDetailsId
@@ -562,6 +563,9 @@
     }
     if (booking.numberOfPassengers > (q.vehicle.seats || 5)) {
       throw new Error("Passengers exceed this vehicle's capacity (" + q.vehicle.seats + ").");
+    }
+    if (!payload.contractAccepted) {
+      throw new Error("Accept the Car Rental Contract before continuing to payment.");
     }
     assertOneCarAtATime(bookingUserId);
     if (vehicleIsBusy(booking.vehicleId)) {
@@ -813,14 +817,28 @@
     return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
   }
 
+  function scrubServerWording(text) {
+    return String(text || "")
+      .replace(/\bthe server\b/gi, "iDrive")
+      .replace(/\bour server\b/gi, "iDrive")
+      .replace(/\bserver\b/gi, "desk")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   function apiErrorMessage(err) {
     var errors = err && err.data && err.data.errors;
-    if (!errors) return (err && err.message) || "Could not save the booking to the server.";
-    return Object.keys(errors)
-      .map(function (k) {
-        return errors[k].join(" ");
-      })
-      .join(" ");
+    var raw;
+    if (!errors) {
+      raw = (err && err.message) || "Could not save the booking. Try again.";
+    } else {
+      raw = Object.keys(errors)
+        .map(function (k) {
+          return errors[k].join(" ");
+        })
+        .join(" ");
+    }
+    return scrubServerWording(raw);
   }
 
   /*
@@ -938,12 +956,15 @@
           return t.bookingId !== bookingId;
         })
       );
-      throw new Error("Server did not save the booking: " + apiErrorMessage(err));
+      throw new Error(apiErrorMessage(err) || "Could not save the booking. Try again.");
     }
     try {
       assertOneCarAtATime(booking.userId, booking.id);
       if (!isAvailable(booking.vehicleId, booking.startDate, booking.endDate, booking.id)) {
         throw new Error("Those dates overlap an existing booking for this car.");
+      }
+      if (!vehicle || vehicle.apiId == null) {
+        throw new Error("This car is not available to book right now. Refresh the page and pick the car again.");
       }
     } catch (precheck) {
       return discard(precheck);
@@ -953,12 +974,16 @@
       var addonIds = (booking.addons || [])
         .map(addonId)
         .filter(function (x) { return x != null; });
+      var officeLocId = locationId("iDrive CDO Main Office");
       var pickupLocId = firstLocationId([
         booking.pickup,
         OFFICE_PICKUP,
         "iDrive CDO Main Office"
-      ]);
-      var dropLocId = firstLocationId([booking.dropoff]) || pickupLocId;
+      ]) || officeLocId;
+      var dropLocId = firstLocationId([booking.dropoff]) || pickupLocId || officeLocId;
+      if (!pickupLocId || !dropLocId) {
+        throw new Error("Pickup location is not ready. Refresh the page and try again.");
+      }
       var notes = booking.notes || "";
       if (booking.driveMode !== "chauffeur") {
         var deliverLine =
@@ -974,7 +999,7 @@
       }
       if (notes.length > 1000) notes = notes.slice(0, 1000);
       var body = {
-        vehicle_id: vehicle && vehicle.apiId,
+        vehicle_id: vehicle.apiId,
         user_id: apiUserId,
         driver_id: driver && driver.apiId != null ? driver.apiId : null,
         drive_mode: booking.driveMode === "chauffeur" ? "chauffeur" : "self",
@@ -994,7 +1019,7 @@
       };
       var doc = renterDocumentBody(booking);
       if (doc) body.renter_document = doc;
-      return NS.api.bookings.create(body);
+      return NS.api.bookings.create(body, { timeoutMs: 60000 });
     }).then(function (saved) {
       var all = bookings();
       for (var i = 0; i < all.length; i++) {
@@ -1154,6 +1179,10 @@
       who.idExpiry = gov.idExpiry;
       who.idIssue = gov.idIssue;
       who.idPhoto = assertPhoto(info.idPhoto, "a photo of your government ID", 750000);
+      var chauffeurAddress = NS.security.sanitizeText(info.address || info.licenseAddress || "", 120);
+      if (!chauffeurAddress) throw new Error("Enter your address.");
+      who.address = chauffeurAddress;
+      who.licenseAddress = chauffeurAddress;
       who.itinerary = NS.security.sanitizeText(info.itinerary, 180);
       if (!who.itinerary) throw new Error("Enter the itinerary or destination.");
       who.agreed = true;
@@ -1375,7 +1404,7 @@
         note = NS.security.sanitizeText(note || "", 240);
         if (CANCEL_REASONS.indexOf(reason) === -1) throw new Error("Choose a reason from the list.");
         if (reason === "Other" && !note) throw new Error("Type your reason when you choose Other.");
-        if (booking.apiId == null || !NS.api) throw new Error("This booking is not on the server yet, so it cannot be cancelled.");
+        if (booking.apiId == null || !NS.api) throw new Error("This booking is not synced yet, so it cannot be cancelled.");
         var userId = serverUserId(me.id);
         if (userId == null) throw new Error("Sign in again so this cancellation can be saved.");
         NS.api.post("/bookings/" + encodeURIComponent(booking.apiId) + "/cancel", {
@@ -1411,7 +1440,7 @@
     var allowed = {
       pending: ["confirmed", "rejected"],
       confirmed: ["ongoing", "return_requested"],
-      ongoing: ["return_requested"],
+      ongoing: ["return_requested", "completed"],
       return_requested: ["completed", "ongoing"],
       rejected: [],
       cancelled: [],
@@ -1439,10 +1468,19 @@
       }
     }
     if (
-      (next === "confirmed" || next === "rejected" || next === "ongoing" || next === "completed") &&
+      (next === "confirmed" || next === "rejected" || next === "ongoing") &&
       !NS.auth.hasRole("staff")
     ) {
       throw new Error("Staff must process this status.");
+    }
+    if (next === "completed" && !NS.auth.hasRole("staff")) {
+      var returningDriver = currentDriver();
+      var driverReturning =
+        me.role === "driver" && returningDriver && booking.driverDetailsId === returningDriver.id;
+      var renterReturning = me.role === "customer" && booking.userId === me.id;
+      if (booking.status !== "ongoing" || (!driverReturning && !renterReturning)) {
+        throw new Error("Staff must process this status.");
+      }
     }
     if (next === "confirmed") {
       assertBothPartiesHaveId(booking);
@@ -1457,9 +1495,10 @@
       }
       assertOneCarAtATime(booking.userId, booking.id);
     }
+    var previousStatus = booking.status;
     booking.status = next;
     booking.updatedAt = new Date().toISOString();
-    if (next === "return_requested") {
+    if (next === "return_requested" || (next === "completed" && previousStatus === "ongoing" && !NS.auth.hasRole("staff"))) {
       booking.returnRequestedAt = new Date().toISOString();
       booking.returnRequestedBy = me.id;
     }
@@ -1489,8 +1528,10 @@
           " at " +
           (booking.dropoff || "the return location") +
           ". Please accept the return at the desk.";
+      } else if (next === "completed" && !NS.auth.hasRole("staff")) {
+        note = "Vehicle returned for " + booking.ref + ". The trip is complete.";
       } else if (next === "completed") {
-        note = "Desk accepted vehicle return for " + booking.ref + ". Trip completed.";
+        note = "Desk completed " + booking.ref + ".";
       } else if (NS.auth.hasRole("staff")) {
         note = "Desk updated booking " + booking.ref + " to " + next + ".";
       } else {
@@ -1510,7 +1551,7 @@
       saveThread(statusThread);
     }
     if (next === "return_requested" && booking.apiId == null && NS.ui && NS.ui.toast) {
-      NS.ui.toast("Return saved here, but this booking is not on the server yet. Staff may not see it until it syncs.", "err");
+      NS.ui.toast("Return saved here, but this booking is not synced yet. Staff may not see it until it syncs.", "err");
     }
     booking._statusPush = apiPush;
     return booking;
@@ -1571,7 +1612,7 @@
     if (apiId != null && NS.api) {
       apiPush = NS.api.bookings.update(apiId, { start_requested_at: booking.startRequestedAt }).catch(function (err) {
         console.warn("iDrive: start request was not saved to the server.", err);
-        if (NS.ui && NS.ui.toast) NS.ui.toast("Server did not save the start request: " + apiErrorMessage(err), "err");
+        if (NS.ui && NS.ui.toast) NS.ui.toast("Could not save the start request: " + apiErrorMessage(err), "err");
         return null;
       });
     }
@@ -1605,7 +1646,50 @@
     var list = bookings();
     for (var i = 0; i < list.length; i++) if (list[i].id === booking.id) list[i] = booking;
     saveBookings(list);
-    return setBookingStatus(bookingId, "return_requested", csrf);
+    return setBookingStatus(bookingId, "completed", csrf);
+  }
+
+  function startTrip(bookingId, csrf) {
+    try {
+      if (csrf) NS.security.assertCsrf(csrf);
+      else NS.security.issueCsrf();
+    } catch (csrfErr) {
+      NS.security.issueCsrf();
+    }
+    var booking = getBooking(bookingId);
+    if (!booking) throw new Error("Booking not found.");
+    var me = partyForBooking(booking);
+    var assigned = currentDriver();
+    var chauffeur = booking.driveMode === "chauffeur";
+    if (chauffeur) {
+      if (!(me.role === "driver" && assigned && booking.driverDetailsId === assigned.id)) {
+        throw new Error("Only the assigned driver can start a chauffeur trip.");
+      }
+    } else if (!(me.role === "customer" && booking.userId === me.id)) {
+      throw new Error("Only the renter can start a self-drive trip.");
+    }
+    if (booking.status !== "confirmed") throw new Error("This trip is not ready to start.");
+    if (booking.paymentStatus !== "paid") throw new Error("The trip can start once the booking is paid.");
+    var now = new Date().toISOString();
+    booking.status = "ongoing";
+    booking.startRequestedAt = now;
+    booking.startedAt = now;
+    booking.updatedAt = now;
+    persistBooking(booking);
+    var apiPush = pushBookingStatusToApi(booking);
+    audit("booking-start", me.id, booking.ref);
+    var thread = threads().filter(function (t) { return t.bookingId === booking.id; })[0];
+    if (!thread) {
+      var customer = NS.auth.userById(booking.userId) || me;
+      thread = openReturnThread(booking, customer, false);
+    }
+    if (thread) {
+      pushThreadMessage(thread, "staff", me, "Trip " + booking.ref + " has started.");
+      thread.unreadStaff = true;
+      saveThread(thread);
+    }
+    booking._statusPush = apiPush;
+    return booking;
   }
 
   function acceptVehicleReturn(bookingId, csrf, extras) {
@@ -3630,7 +3714,7 @@
 
   function warnApiFailure(err) {
     console.warn("iDrive: change was not saved to the server.", err);
-    if (NS.ui && NS.ui.toast) NS.ui.toast("Saved here, but the server rejected it: " + apiErrorMessage(err), "err");
+    if (NS.ui && NS.ui.toast) NS.ui.toast("Saved here, but it was not accepted: " + apiErrorMessage(err), "err");
   }
 
   /*
@@ -3782,10 +3866,13 @@
       saveBookings(list);
     }
     var body = { status: toApiStatus(booking.status) };
+    if (booking.status === "ongoing" && booking.startRequestedAt) {
+      body.start_requested_at = booking.startRequestedAt;
+    }
     if (booking.returnNotes) body.return_notes = booking.returnNotes;
     return NS.api.bookings.update(apiId, body).catch(function (err) {
       console.warn("iDrive: booking status was not saved to the server.", err);
-      if (NS.ui && NS.ui.toast) NS.ui.toast("Server did not save the status change: " + apiErrorMessage(err), "err");
+      if (NS.ui && NS.ui.toast) NS.ui.toast("Could not save the status change: " + apiErrorMessage(err), "err");
       return null;
     });
   }
@@ -3815,10 +3902,10 @@
     if (driverIsBusy(driver.id, booking.id)) {
       throw new Error(driver.fullName + " is already assigned to another booking.");
     }
-    if (driver.apiId == null) throw new Error("This driver is not on the server yet.");
+    if (driver.apiId == null) throw new Error("This driver is not ready to assign yet.");
     var apiId = resolveBookingApiId(booking);
     if (apiId == null) {
-      throw new Error("This booking is not synced to the server yet.");
+      throw new Error("This booking is not synced yet.");
     }
     var body = { drive_mode: "chauffeur", driver_id: Number(driver.apiId) };
     return NS.api.bookings.update(apiId, body).then(function () {
@@ -3830,7 +3917,7 @@
       audit("booking-driver", me.id, booking.ref + " → " + (driver ? driver.fullName : "unassigned"));
       return booking;
     }, function (err) {
-      throw new Error(apiErrorMessage(err) || "Server did not save the driver assignment.");
+      throw new Error(apiErrorMessage(err) || "Could not save the driver assignment.");
     });
   }
 
@@ -3964,6 +4051,179 @@
     return RENTAL_TERMS[kind] || RENTAL_TERMS.account;
   }
 
+  var CONTRACT_OWNER = {
+    name: "iDrive CDO Car Rental Services",
+    address: "Capistrano-Montalvan Streets, Cagayan de Oro City",
+    contact: "hello@idrivecdo.ph"
+  };
+
+  function dash(value) {
+    var text = String(value == null ? "" : value).trim();
+    return text || "—";
+  }
+
+  function contractContextFromBooking(booking) {
+    booking = booking || {};
+    var vehicle = booking.vehicleId ? getVehicle(booking.vehicleId) : null;
+    var customer = null;
+    try {
+      customer = NS.auth && NS.auth.userById ? NS.auth.userById(booking.userId) : null;
+    } catch (e) {
+      customer = null;
+    }
+    var info = booking.driverInfo || {};
+    var renterName =
+      info.fullName ||
+      info.licenseName ||
+      (customer ? ((customer.firstName || "") + " " + (customer.lastName || "")).trim() : "") ||
+      "";
+    var destination =
+      booking.driveMode === "chauffeur"
+        ? [booking.pickup, booking.dropoff].filter(Boolean).join(" → ")
+        : booking.handover === "deliver"
+          ? booking.dropoff || booking.pickup || ""
+          : booking.pickup || OFFICE_PICKUP;
+    return {
+      bookingRef: booking.ref || "",
+      renterName: renterName,
+      renterAddress:
+        info.licenseAddress ||
+        info.address ||
+        info.idAddress ||
+        (customer && customer.address) ||
+        "",
+      renterContact: info.emergencyPhone || (customer && customer.phone) || "",
+      renterIdType: info.idType || (booking.driveMode === "chauffeur" ? "Government ID" : "Driver's License"),
+      renterIdNo: info.idNumber || info.license_no || info.licenseNo || "",
+      vehicleLabel: vehicle
+        ? [vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(" ")
+        : "",
+      plate: vehicle ? vehicle.plate : "",
+      dailyRate: vehicle ? vehicle.dailyRate : booking.subtotal && booking.days ? Math.round(booking.subtotal / booking.days) : "",
+      days: booking.days || "",
+      startDate: booking.startDate || "",
+      endDate: booking.endDate || "",
+      pickupTime: booking.pickupTime || "",
+      returnTime: booking.returnTime || "",
+      destination: destination,
+      fuel: booking.fuelBeforeRent || "Full",
+      odometer: vehicle && vehicle.mileage != null ? vehicle.mileage : "",
+      purpose: booking.driveMode === "chauffeur" ? "Chauffeur hire" : "Self-drive rental",
+      driveMode: booking.driveMode || "self",
+      acceptedAt: booking.contractAcceptedAt || ""
+    };
+  }
+
+  function rentalContractHtml(context) {
+    context = context || {};
+    var esc = NS.security.escapeHtml;
+    var fmt = NS.ui && NS.ui.fmtDate ? NS.ui.fmtDate : function (v) { return dash(v); };
+    var money = NS.ui && NS.ui.peso ? NS.ui.peso : function (v) { return "₱" + dash(v); };
+    var rate = context.dailyRate ? money(context.dailyRate) : "—";
+    var accepted = context.acceptedAt
+      ? String(context.acceptedAt).replace("T", " ").slice(0, 16)
+      : "";
+    function line(label, value) {
+      return (
+        '<div class="contract-field"><span>' +
+        esc(label) +
+        "</span><strong>" +
+        esc(dash(value)) +
+        "</strong></div>"
+      );
+    }
+    return (
+      '<div class="rental-contract-doc">' +
+      (context.bookingRef
+        ? '<p class="contract-ref">Booking ' + esc(context.bookingRef) + "</p>"
+        : "") +
+      "<h1>Contract of Lease of Motor Vehicle</h1>" +
+      "<p class=\"contract-lead\">KNOWN ALL MEN BY THESE PRESENTS:</p>" +
+      "<p>This Contract of Lease of Motor Vehicle is made and entered into by and between:</p>" +
+      '<div class="contract-parties">' +
+      '<section><h2>Renter</h2>' +
+      line("Name", context.renterName) +
+      line("Address", context.renterAddress) +
+      line("Contact", context.renterContact) +
+      "</section>" +
+      "<section><h2>Owner</h2>" +
+      line("Name", CONTRACT_OWNER.name) +
+      line("Address", CONTRACT_OWNER.address) +
+      line("Contact", CONTRACT_OWNER.contact) +
+      "</section></div>" +
+      "<h2>Vehicle and rental details</h2>" +
+      '<div class="contract-grid">' +
+      line("Vehicle make and year model", context.vehicleLabel) +
+      line("Plate #", context.plate) +
+      line("Rented from", (context.startDate ? fmt(context.startDate) : "—") + (context.pickupTime ? " · " + context.pickupTime : "")) +
+      line("To", (context.endDate ? fmt(context.endDate) : "—") + (context.returnTime ? " · " + context.returnTime : "")) +
+      line("Rent per day", rate) +
+      line("No. of days", context.days) +
+      line("Destination", context.destination) +
+      line("Fuel", context.fuel) +
+      line("Odometer", context.odometer) +
+      line("Purpose of rental", context.purpose) +
+      "</div>" +
+      '<h2 class="contract-accessories-title">Tools and accessories checklist</h2>' +
+      '<ul class="contract-check">' +
+      "<li><span class=\"contract-box\"></span>OR/CR</li>" +
+      "<li><span class=\"contract-box\"></span>Car Jack</li>" +
+      "<li><span class=\"contract-box\"></span>Tire Wrench</li>" +
+      "<li><span class=\"contract-box\"></span>Seat Cover</li>" +
+      "<li><span class=\"contract-box\"></span>Spare Tire</li>" +
+      "<li><span class=\"contract-box\"></span>Car Matting</li>" +
+      "<li><span class=\"contract-box\"></span>Early Warning Device</li>" +
+      "<li><span class=\"contract-box\"></span>Fire Extinguisher</li>" +
+      "<li><span class=\"contract-box\"></span>Charging Port</li>" +
+      "</ul>" +
+      "<h2>Inspection</h2>" +
+      "<ul><li>The Renter acknowledges that prior to the making of this lease, the renter has examined the vehicle and confirms that it is in good operational condition.</li>" +
+      "<li>Excess hours or a fraction thereof will be charged ₱250.00 per hour. Usage beyond 6 hours will be billed at a rate equivalent to a 1-day or full day's rent.</li>" +
+      "<li>If the vehicle is rented clean, you must return it clean otherwise a carwash fee of ₱300.00 will be charged.</li></ul>" +
+      "<h2>Rules inside the vehicle</h2>" +
+      "<ul><li>Smoking/vaping, drinking of liquor, and using of prohibited drugs inside the vehicle is strictly not allowed. Any damage incurred as a result of such act will be charged accordingly. Penalty is ₱2,000.00.</li>" +
+      "<li>For lost key/locked inside the vehicle: If the renter requests the owner to provide the duplicate key, the Renter will pay the actual expenses incurred to locate the rented vehicle.</li>" +
+      "<li>Strictly NO PETS allowed inside the vehicle. Penalty is ₱2,000.00.</li></ul>" +
+      "<h2>Unauthorized use of vehicle</h2>" +
+      "<ul><li>The renter shall assume all liabilities during the duration of the contract for any illegal activities in the use of the herein described motor vehicle.</li>" +
+      "<li>Undeclared destination will incur additional charge. Rates vary depending on the actual destination.</li>" +
+      "<li>Use of the vehicle is by the renter only and should not be lent, leased, nor sold to any third party.</li>" +
+      "<li>Operation of the vehicle is within Mindanao only. Use of the vehicle outside Mindanao should have a written permission from the owner of the vehicle, otherwise, the vehicle will be declared as carnapped.</li>" +
+      "<li>If the renter intends to extend the rental period, the renter should inform the owner at least 6 hours before the due of the rental period. Failure to do so, the owner has the right to refuse extension of the rental period.</li></ul>" +
+      "<h2>Traffic law violation</h2>" +
+      "<ul><li>Renter will pay for all fines and penalties to any traffic violation plus all costs incurred in the event renter fails to make such. Renter agrees that in connection with claimed violations, any information relating to Renter may be submitted to government authorities.</li></ul>" +
+      "<h2>Fuel</h2>" +
+      "<ul><li>Renter is responsible for returning the vehicle with as much fuel in the tank when received. If the renter returns the vehicle with less fuel than supplied, charges will apply. At the time of the return, the renter will not receive credit/refund for any fuel remaining in the vehicle in excess of the actual fuel level at the time of renting.</li></ul>" +
+      "<h2>Reservation</h2>" +
+      "<ul><li>In case renter cancels the reservation made, the owner has the right to forfeit the reservation fee paid by the renter.</li></ul>" +
+      "<h2>Failure to return vehicle</h2>" +
+      "<ul><li>That in case of damage to the vehicle due to accident, the first ₱10,000 costs of repairs shall be the renter’s liabilities. All repairs due to the abusive use shall be accounted/shouldered by the renter. The owner is not obliged to undertake satisfaction of any claim by Renter or its passenger outside the insurance coverage. Any damage should be reported to the owner immediately.</li>" +
+      "<li>In case of accident, the LESSEE/Renter shall immediately inform the owner. In the event of loss of life of the renter or of his/her passenger, the OWNER shall not be held liable and hereby be released from the case of any criminal or civil liability; the former hereby acknowledge his/her personal liability to any accident that may arise as a consequence of this contract.</li>" +
+      "<li>In the event of loss of foregoing motor vehicle through carnapping, the LESSEE/Renter shall be liable to pay the owner of the current market value of the same vehicle.</li>" +
+      "<li>The LESSEE/Renter shall be liable for the daily rental of foregoing motor vehicle during the time of repair until the day the same vehicle is fully repaired and restored to the original condition.</li></ul>" +
+      "<h2>Use of tracking device</h2>" +
+      "<ul><li>The renter acknowledges that the vehicle has a tracking device (GPS) for the purpose of security and tracking of the rented vehicle. Unauthorized removal of the said device or use of GPS blocking device during the rental period will be charged accordingly and may be reported to the proper authorities for litigation.</li></ul>" +
+      "<p>IN WITNESS WHEREOF, the parties have hereunto set their hands on this date at Cagayan de Oro City, Philippines.</p>" +
+      '<div class="contract-sign">' +
+      "<div><p><strong>Owner</strong></p><p>" +
+      esc(CONTRACT_OWNER.name) +
+      "</p><p class=\"fineprint\">Valid ID presented: Business / company ID</p></div>" +
+      "<div><p><strong>Renter</strong></p><p>" +
+      esc(dash(context.renterName)) +
+      "</p><p class=\"fineprint\">Valid ID presented: " +
+      esc(dash(context.renterIdType)) +
+      "</p><p class=\"fineprint\">ID #: " +
+      esc(dash(context.renterIdNo)) +
+      "</p>" +
+      (accepted
+        ? '<p class="fineprint">Electronically accepted: ' + esc(accepted) + "</p>"
+        : '<p class="fineprint">Pending electronic acceptance on the booking form.</p>') +
+      "</div></div>" +
+      '<p class="fineprint contract-foot">Blank printable form: shared/docs/car-rental-contract.pdf</p>' +
+      "</div>"
+    );
+  }
+
   function isSelfDeliver(booking) {
     if (!booking || booking.driveMode === "chauffeur") return false;
     if (booking.handover === "deliver") return true;
@@ -3975,6 +4235,9 @@
     OFFICE_PICKUP: OFFICE_PICKUP,
     LOCATIONS: LOCATIONS,
     rentalTerms: rentalTerms,
+    rentalContractHtml: rentalContractHtml,
+    contractContextFromBooking: contractContextFromBooking,
+    CONTRACT_OWNER: CONTRACT_OWNER,
     isSelfDeliver: isSelfDeliver,
     ADDONS: ADDONS,
     vehicles: vehicles,
@@ -4017,6 +4280,7 @@
     setBookingDriver: setBookingDriver,
     cancelBooking: cancelBooking,
     requestTripStart: requestTripStart,
+    startTrip: startTrip,
     requestVehicleReturn: requestVehicleReturn,
     acceptVehicleReturn: acceptVehicleReturn,
     pendingReturns: pendingReturns,

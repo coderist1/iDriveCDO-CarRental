@@ -458,6 +458,11 @@ h1, h2, h3, .brand span, .brand-workspace {
   -webkit-backdrop-filter: blur(8px);
 }
 .nav-user { display: flex; gap: 0.55rem; align-items: center; margin-left: 0.5rem; }
+.nav-user > .btn {
+  min-width: 6.75rem;
+  justify-content: center;
+  text-align: center;
+}
 .nav-account {
   display: inline-flex;
   align-items: center;
@@ -589,7 +594,10 @@ h1, h2, h3, .brand span, .brand-workspace {
   max-height: min(90dvh, 820px);
 }
 .booking-desk-dialog .booking-detail-list { margin: 0; }
-.booking-desk-dialog .card-actions { gap: 0.65rem; }
+.booking-desk-dialog .card-actions {
+  gap: 0.5rem;
+  align-items: center;
+}
 .id-check-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(220px, 0.7fr); gap: 1rem; align-items: start; }
 .id-check-photo { margin: 0 0 0.85rem; }
 .id-check-photo figcaption { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 800; }
@@ -775,33 +783,41 @@ button.btn.btn-approve:focus-visible:not(:disabled) {
 }
 .card-actions-secondary,
 .card-actions-primary {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem; /* same as Reject ↔ Approve */
+  display: contents;
 }
-.card-actions-secondary {
-  margin-right: auto;
-}
-.card-actions-primary {
-  margin-left: auto;
+.card-actions .btn,
+.card-actions a.btn {
+  align-self: center;
+  margin: 0;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 10px;
+  border-width: 1px;
+  border-style: solid;
+  box-sizing: border-box;
 }
 .card-actions .btn.btn-ghost,
 .card-actions .btn.btn-reject {
-  box-sizing: border-box;
-  border-width: 1px;
-  border-style: solid;
-}
-.card-actions-secondary .btn.btn-ghost {
   background: #fff;
   border-color: #c8c8c8;
   color: var(--ink);
 }
-.card-actions-secondary .btn.btn-ghost:hover,
-.card-actions-secondary .btn.btn-ghost:focus-visible {
+.card-actions .btn.btn-ghost:hover,
+.card-actions .btn.btn-ghost:focus-visible,
+.card-actions .btn.btn-reject:hover,
+.card-actions .btn.btn-reject:focus-visible {
   background: #f4f4f2;
   border-color: #9f9f9f;
   color: var(--ink);
+}
+.card-actions .btn.btn-approve,
+.card-actions a.btn.btn-approve,
+.card-actions .btn.btn-pay,
+.card-actions a.btn.btn-pay {
+  font-weight: 700;
 }
 .booking-card-stacked > .booking-driver-bar,
 .booking-desk-dialog .booking-driver-bar {
@@ -892,7 +908,18 @@ button.btn.btn-approve:focus-visible:not(:disabled) {
   border-color: var(--primary);
 }
 .btn-block { width: 100%; }
-.btn-row { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 1rem; }
+.btn-row { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 1rem; align-items: center; }
+.btn-row-balanced { gap: 0.5rem; }
+.btn-row-balanced .btn,
+.btn-row-balanced a.btn {
+  align-self: center;
+  margin: 0;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 1rem;
+  font-size: 0.875rem;
+  border-radius: 10px;
+}
 
 /* —— Home hero —— */
 .hero-shell {
@@ -1390,6 +1417,33 @@ label, .field { display: block; margin-bottom: 0.85rem; font-weight: 700; font-s
 }
 .terms-read:hover,
 .terms-read:focus-visible { color: var(--primary-2); }
+.contract-locate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin: 1rem 0 0.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(180, 130, 40, 0.45);
+  border-radius: 12px;
+  background: rgba(212, 168, 67, 0.12);
+}
+.contract-locate .fineprint { margin: 0; }
+.sf-links .sf-contract,
+.desk-footer .sf-contract {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0 0 0 0.35rem;
+  font: inherit;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+.desk-footer .sf-contract:hover { color: var(--primary); }
 .terms-dialog {
   width: min(640px, 100%);
   overflow: hidden;
@@ -2657,7 +2711,7 @@ textarea { min-height: 120px; resize: vertical; }
 .driver-fuel {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 .driver-fuel .field {
@@ -2667,10 +2721,25 @@ textarea { min-height: 120px; resize: vertical; }
 .driver-fuel .form-select {
   min-width: 120px;
 }
+.driver-fuel .btn,
+.driver-actions .btn {
+  align-self: center;
+  margin: 0;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 10px;
+  border-width: 1px;
+  border-style: solid;
+  box-sizing: border-box;
+}
 .driver-actions {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  align-items: center;
 }
 .driver-actions .btn {
   min-width: 0;
@@ -3544,10 +3613,7 @@ textarea { min-height: 120px; resize: vertical; }
 }
 .card-actions-secondary,
 .card-actions-primary {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
+  display: contents;
 }
 @media (max-width: 720px) {
   .booking-card.booking-card-stacked { grid-template-columns: 1fr; grid-template-areas: "badges" "body" "driver" "actions"; }
@@ -3557,13 +3623,12 @@ textarea { min-height: 120px; resize: vertical; }
     flex-direction: column;
     align-items: stretch;
   }
-  .card-actions-secondary,
-  .card-actions-primary {
-    width: 100%;
-    margin: 0;
-  }
-  .card-actions-primary {
-    justify-content: flex-end;
+  .card-actions-primary .btn,
+  .card-actions-primary a.btn,
+  .card-actions-secondary .btn,
+  .card-actions-secondary a.btn {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-width: 9rem;
   }
   #incoming-bookings.panel .card-actions-primary {
     flex-direction: column;
@@ -4176,8 +4241,10 @@ body.site-mode .site-footer {
   color: #fff !important;
 }
 .sf-links { display: flex; gap: 1.6rem; flex-wrap: wrap; }
-.sf-links a { color: #fff; font-weight: 600; font-size: 0.9rem; text-decoration: none; }
-.sf-links a:hover { color: var(--primary); }
+.sf-links a,
+.sf-links .sf-contract { color: #fff; font-weight: 600; font-size: 0.9rem; text-decoration: none; }
+.sf-links a:hover,
+.sf-links .sf-contract:hover { color: var(--primary); }
 .sf-bottom {
   display: flex;
   justify-content: space-between;
@@ -4495,10 +4562,8 @@ body.site-mode .site-footer {
 
 .auth-actions {
   --auth-btn-h: 42px;
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  justify-content: stretch;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   align-items: stretch;
   gap: 0.55rem;
   margin: 0.7rem 0 0.15rem;
@@ -4512,8 +4577,7 @@ body.site-mode .site-footer {
 .auth-dialog .auth-actions > .btn,
 .auth-actions > .btn[type="submit"] {
   display: inline-flex !important;
-  flex: 1 1 0 !important;
-  width: auto !important;
+  width: 100% !important;
   min-width: 0 !important;
   max-width: none !important;
   height: var(--auth-btn-h) !important;
@@ -4524,15 +4588,13 @@ body.site-mode .site-footer {
   border-radius: 8px !important;
   align-items: center !important;
   justify-content: center !important;
-  align-self: stretch !important;
 }
 
 .google-signin-slot {
   position: relative;
-  flex: 1 1 0;
+  width: 100%;
   min-width: 0;
   height: var(--auth-btn-h);
-  align-self: stretch;
 }
 .google-signin-slot .btn.google-custom {
   width: 100% !important;
@@ -4615,11 +4677,7 @@ body .auth-actions .btn.google-fallback,
 }
 @media (max-width: 420px) {
   .auth-actions {
-    flex-wrap: wrap;
-  }
-  .auth-actions > .btn[type="submit"],
-  .google-signin-slot {
-    flex: 1 1 100% !important;
+    grid-template-columns: 1fr;
   }
 }
 
@@ -4745,13 +4803,22 @@ body .auth-actions .btn.google-fallback,
 .book-stepper ol {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.4rem;
   margin: 0;
   padding: 0;
 }
 .book-stepper ol.is-with-consent {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+.contract-step-doc {
+  max-height: min(62vh, 640px);
+  overflow: auto;
+  margin: 0.85rem 0 0.4rem;
+  padding: 0.35rem 1rem 1rem;
+  border: 1px solid #e6e6e6;
+  border-radius: 14px;
+  background: #fff;
 }
 .book-stepper li.is-next {
   background: #fff;
@@ -4766,14 +4833,21 @@ body .auth-actions .btn.google-fallback,
 .book-stepper li {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: center;
+  gap: 0.3rem;
   min-height: 44px;
-  padding: 0.35rem 0.45rem;
+  padding: 0.35rem 0.3rem;
   border-radius: 10px;
   background: #f4f4f4;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
+  line-height: 1.15;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  overflow: hidden;
 }
 .book-stepper li span {
   width: 1.45rem;
@@ -5106,12 +5180,19 @@ body .auth-actions .btn.google-fallback,
 .book-step-actions {
   display: flex;
   gap: 0.65rem;
-  justify-content: flex-end;
+  justify-content: stretch;
+  align-items: stretch;
   margin-top: 1.15rem;
   padding-top: 0.4rem;
   background: #fff;
 }
-.book-step-actions .btn-gold { min-width: 10.5rem; }
+.book-step-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  text-align: center;
+}
+.book-step-actions .btn-gold { min-width: 0; }
 .book-mirror { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .book-review { margin: 0.6rem 0 1rem; }
 .id-upload-field .license-photo-preview {
@@ -5221,6 +5302,134 @@ h3 { font-size: 1.05rem; }
 }
 .notice.ok, .form-alert.ok { background: var(--success-bg); border-color: #86efac; color: var(--success); }
 .notice.err, .form-alert.err { background: var(--danger-bg); border-color: #fca5a5; color: var(--danger); }
+
+.contract-modal .contract-dialog {
+  width: min(820px, 96vw);
+  max-height: 92vh;
+}
+.contract-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+.contract-body {
+  max-height: calc(92vh - 5.5rem);
+  overflow: auto;
+}
+.rental-contract-doc {
+  color: #1a1a1a;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+.rental-contract-doc h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.rental-contract-doc h2 {
+  margin: 1.15rem 0 0.45rem;
+  font-size: 0.95rem;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.rental-contract-doc .contract-ref {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+.rental-contract-doc .contract-lead {
+  font-weight: 700;
+  text-align: center;
+}
+.contract-parties,
+.contract-grid,
+.contract-sign {
+  display: grid;
+  gap: 0.75rem;
+}
+.contract-parties,
+.contract-sign {
+  grid-template-columns: 1fr 1fr;
+}
+.contract-grid {
+  grid-template-columns: 1fr 1fr;
+}
+.contract-field {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #ececec;
+  border-radius: 10px;
+  background: #fafafa;
+}
+.contract-field span {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 650;
+}
+.contract-field strong {
+  font-weight: 650;
+  word-break: break-word;
+}
+.contract-accessories-title {
+  margin: 1.1rem 0 0.65rem;
+  color: #e23b3b;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.contract-check {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem 1.25rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+.rental-contract-doc ul.contract-check {
+  margin: 0 0 1rem;
+  padding: 0;
+}
+.contract-check li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.contract-box {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 1.5px solid #222;
+  flex: 0 0 auto;
+  background: #fff;
+}
+.rental-contract-doc ul {
+  margin: 0.35rem 0 0.7rem;
+  padding-left: 1.15rem;
+}
+.contract-foot { margin-top: 1.25rem; }
+@media (max-width: 720px) {
+  .contract-parties,
+  .contract-grid,
+  .contract-sign,
+  .contract-check {
+    grid-template-columns: 1fr;
+  }
+}
+@media print {
+  .contract-modal .password-dialog-head,
+  .contract-head-actions { display: none !important; }
+  .rental-contract-doc { font-size: 11pt; }
+}
+
 @media (max-width: 720px) {
   .btn-row { flex-direction: column-reverse; align-items: stretch; }
   .btn-row .btn, .form-card > .btn.btn-gold, .form-card > button.btn-gold { width: 100%; align-self: stretch; }
