@@ -11,6 +11,8 @@
 
   var NS = (global.iDrive = global.iDrive || {});
   var SESSION_MS = 30 * 60 * 1000;
+  /* Only show the idle toast when the session just timed out while using the app — not for leftovers from yesterday. */
+  var IDLE_NOTICE_GRACE_MS = 5 * 60 * 1000;
   var ROLES = { driver: 1, customer: 1, staff: 2, admin: 3 };
   var DISABLED_MSG = "Your account has been disabled. Please contact the admin.";
   var ENDED_MSG = "Your session has ended. Please sign in again.";
@@ -176,8 +178,15 @@
       endSession(UPGRADE_MSG);
       return null;
     }
-    if (Date.now() > s.expiresAt) {
-      endSession(IDLE_MSG);
+    var expiresAt = Number(s.expiresAt) || 0;
+    if (!expiresAt || Date.now() > expiresAt) {
+      /*
+       * Stale localStorage sessions (browser reopen after hours/days) used to plant IDLE_MSG on the
+       * first page load, so Sign in looked like an inactivity logout. Only announce idle timeout when
+       * the session expired moments ago; older leftovers are cleared quietly.
+       */
+      var justTimedOut = expiresAt > 0 && Date.now() - expiresAt < IDLE_NOTICE_GRACE_MS;
+      endSession(justTimedOut ? IDLE_MSG : null);
       return null;
     }
     s.expiresAt = Date.now() + SESSION_MS;

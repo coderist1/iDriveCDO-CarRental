@@ -4372,11 +4372,16 @@ body.site-mode .site-footer {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1.1rem;
-  align-items: center;
+  align-items: stretch;
 }
 .hp-steps article {
   position: relative;
-  padding: 1.3rem 1.2rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: 1.3rem 1.2rem 1.85rem;
   border-radius: 14px;
   background: #fff;
   border: 1px solid #ececec;
@@ -4402,7 +4407,13 @@ body.site-mode .site-footer {
   color: var(--primary);
 }
 .hp-steps h3 { margin: 0.7rem 0 0.35rem; font-family: var(--display); font-size: 1rem; font-weight: 650; }
-.hp-steps p { margin: 0 0 0.6rem; font-size: 0.82rem; line-height: 1.55; color: var(--muted); }
+.hp-steps p {
+  margin: 0;
+  flex: 1 1 auto;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
 .hp-steps article.is-featured,
 .hp-steps article:hover {
   background: var(--primary);
