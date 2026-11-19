@@ -7,7 +7,6 @@
   NS.pages.fleet = function fleet() {
     var host = document.getElementById("fleet-grid");
     var empty = document.getElementById("fleet-empty");
-    var summary = document.getElementById("fleet-summary");
     if (!host) return;
 
     var type = document.getElementById("filter-type");
@@ -96,12 +95,6 @@
         return (a.dailyRate || 0) - (b.dailyRate || 0);
       });
 
-      var period = start && end ? " for " + NS.ui.fmtDate(start) + " → " + NS.ui.fmtDate(end) : " today";
-      if (summary) {
-        summary.textContent =
-          counts.available + " of " + counts.all + " car" + (counts.all === 1 ? "" : "s") + " available" + period +
-          " · " + counts.reserved + " reserved";
-      }
       if (legend) {
         legend.innerHTML = [
           ["all", "All"],

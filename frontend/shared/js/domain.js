@@ -3788,6 +3788,9 @@
     if (booking.driveMode !== "chauffeur") {
       throw new Error("This booking is not a chauffeur booking.");
     }
+    if (booking.status === "ongoing" || booking.status === "return_requested") {
+      throw new Error("The assigned driver cannot be changed while the trip is ongoing.");
+    }
     var driver = driverId ? getDriver(driverId) : null;
     if (!driver) throw new Error("Pick an active driver to assign.");
     if (driver.status !== "active") throw new Error("That driver is not active.");

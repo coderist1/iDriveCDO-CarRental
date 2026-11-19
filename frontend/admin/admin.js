@@ -107,14 +107,25 @@
   function driverAssignBarHtml(b) {
     if (b.driveMode !== "chauffeur" || !NS.auth.hasRole || !NS.auth.hasRole("staff")) return "";
     var currentDriver = b.driverDetailsId && NS.domain.getDriver ? NS.domain.getDriver(b.driverDetailsId) : null;
-    var closed = b.status === "completed" || b.status === "cancelled" || b.status === "rejected";
-    if (closed) {
-      var closedName = currentDriver ? currentDriver.fullName : "No driver was assigned";
+    var locked =
+      b.status === "ongoing" ||
+      b.status === "return_requested" ||
+      b.status === "completed" ||
+      b.status === "cancelled" ||
+      b.status === "rejected";
+    if (locked) {
+      var lockedName = currentDriver ? currentDriver.fullName : "No driver was assigned";
+      var lockedNote =
+        b.status === "ongoing" || b.status === "return_requested"
+          ? '<p class="fineprint booking-driver-lock-note">Driver is locked while the trip is ongoing.</p>'
+          : "";
       return (
         '<div class="booking-driver-bar is-readonly">' +
         '<p class="booking-driver-readonly"><span>Assigned driver</span><strong>' +
-        NS.security.escapeHtml(closedName) +
-        "</strong></p></div>"
+        NS.security.escapeHtml(lockedName) +
+        "</strong></p>" +
+        lockedNote +
+        "</div>"
       );
     }
     var driverPicker = NS.domain.availableDrivers ? NS.domain.availableDrivers(b.id).slice() : [];
@@ -163,6 +174,11 @@
       return;
     }
     var current = NS.domain.getBooking(assignId);
+    if (current && (current.status === "ongoing" || current.status === "return_requested")) {
+      NS.ui.toast("The assigned driver cannot be changed while the trip is ongoing.", "err");
+      if (after) after();
+      return;
+    }
     if (current && current.driverDetailsId === driverId) return;
     sel.disabled = true;
     var pending;

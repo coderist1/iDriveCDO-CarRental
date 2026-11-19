@@ -113,11 +113,15 @@
       style.id = "app-loading-style";
       style.textContent =
         ".app-loading{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;background:#f6f6f4;color:#141414;font-family:Inter,Segoe UI,sans-serif}" +
-        ".app-loading.is-done{opacity:0;transition:opacity .18s ease}" +
-        ".app-loading-card{display:flex;flex-direction:column;align-items:center;gap:14px}" +
-        ".app-loading-mark{width:42px;height:42px;border-radius:50%;border:3px solid rgba(196,80,75,.2);border-top-color:#c4504b;animation:app-loading-spin .7s linear infinite}" +
-        ".app-loading p{margin:0;font-size:.95rem;font-weight:700;letter-spacing:.04em}" +
-        "@keyframes app-loading-spin{to{transform:rotate(360deg)}}";
+        ".app-loading.is-done{opacity:0;transition:opacity .22s ease}" +
+        ".app-loading-card{display:flex;flex-direction:column;align-items:center;gap:16px;width:min(280px,72vw)}" +
+        ".app-loading-road{position:relative;width:100%;height:58px;overflow:hidden;border-bottom:4px solid #292929}" +
+        ".app-loading-road::after{content:\"\";position:absolute;left:0;right:0;bottom:8px;height:2px;background:repeating-linear-gradient(90deg,#c4504b 0 24px,transparent 24px 42px);animation:app-loading-road .55s linear infinite}" +
+        ".app-loading-car{position:absolute;z-index:1;left:0;bottom:10px;font-size:2.55rem;line-height:1;filter:drop-shadow(0 5px 5px rgba(20,20,20,.18));animation:app-loading-drive 2.2s cubic-bezier(.45,.02,.55,.98) infinite}" +
+        ".app-loading p{margin:0;font-size:.9rem;font-weight:750;letter-spacing:.08em;text-transform:uppercase}" +
+        "@keyframes app-loading-drive{0%{transform:translateX(-60px) translateY(0) scaleX(-1)}45%{transform:translateX(112px) translateY(-1px) scaleX(-1)}100%{transform:translateX(292px) translateY(0) scaleX(-1)}}" +
+        "@keyframes app-loading-road{to{background-position:-42px 0}}" +
+        "@media (prefers-reduced-motion:reduce){.app-loading-car{left:calc(50% - 24px);animation:none;transform:scaleX(-1)}.app-loading-road::after{animation:none}}";
       document.head.appendChild(style);
     }
 
@@ -129,7 +133,11 @@
       el.className = "app-loading";
       el.setAttribute("role", "status");
       el.setAttribute("aria-live", "polite");
-      el.innerHTML = '<div class="app-loading-card"><span class="app-loading-mark" aria-hidden="true"></span><p>Loading</p></div>';
+      el.innerHTML =
+        '<div class="app-loading-card">' +
+        '<div class="app-loading-road" aria-hidden="true"><span class="app-loading-car">🚗</span></div>' +
+        "<p>Getting your ride ready</p>" +
+        "</div>";
       document.body.appendChild(el);
     }
 
