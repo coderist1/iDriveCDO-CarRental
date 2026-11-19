@@ -641,12 +641,44 @@
     var heroActions = document.getElementById("fleet-hero-actions");
     var filterStatus = document.getElementById("fleet-filter");
     var filterType = document.getElementById("fleet-type-filter");
+    var imageInput = document.getElementById("vehicle-image-input");
+    var imagePreview = document.getElementById("vehicle-image-preview");
+    var imagePick = document.getElementById("vehicle-image-pick");
+    var imageClear = document.getElementById("vehicle-image-clear");
+    var imageStatus = document.getElementById("vehicle-image-status");
 
     if (heroActions) {
       heroActions.innerHTML = canManage
         ? '<button class="btn btn-gold" type="button" id="fleet-add-btn">Add vehicle</button>' +
           '<a class="btn btn-ghost" href="fleet-ops.html">Fleet ops</a>'
         : '<a class="btn btn-ghost" href="fleet-ops.html">View fleet ops</a>';
+    }
+
+    function setImageStatus(message) {
+      if (imageStatus) imageStatus.textContent = message || "";
+    }
+
+    function showVehiclePhoto(src) {
+      if (!form) return;
+      form.image.value = src || "";
+      if (imagePreview) {
+        if (src) {
+          imagePreview.classList.remove("is-empty");
+          imagePreview.innerHTML =
+            '<img src="' + NS.security.escapeHtml(src) + '" alt="Vehicle photo preview">';
+        } else {
+          imagePreview.classList.add("is-empty");
+          imagePreview.textContent = "No photo yet";
+        }
+      }
+      if (imageClear) imageClear.hidden = !src;
+      if (imagePick) imagePick.textContent = src ? "Replace photo" : "Upload photo";
+    }
+
+    function clearVehiclePhoto() {
+      if (imageInput) imageInput.value = "";
+      showVehiclePhoto("");
+      setImageStatus("");
     }
 
     function openEditor(v) {
@@ -669,7 +701,8 @@
         form.luggage.value = v.luggage;
         form.dailyRate.value = v.dailyRate;
         form.plate.value = v.plate;
-        form.image.value = v.image || "";
+        showVehiclePhoto(v.image || "");
+        setImageStatus(v.image ? "Current photo loaded." : "");
         form.description.value = v.description || "";
         form.features.value = (v.features || []).join(", ");
         form.status.value = v.status;
@@ -678,6 +711,7 @@
         form.reset();
         form.vehicleId.value = "";
         form.status.value = "available";
+        clearVehiclePhoto();
         NS.ui.bindCsrf(form);
       }
       editor.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -688,6 +722,7 @@
       editor.hidden = true;
       form.reset();
       form.vehicleId.value = "";
+      clearVehiclePhoto();
       NS.ui.bindCsrf(form);
     }
 
@@ -805,7 +840,41 @@
           form.reset();
           form.vehicleId.value = "";
           formTitle.textContent = "Add vehicle";
+          clearVehiclePhoto();
           NS.ui.bindCsrf(form);
+        });
+      }
+      if (imagePick && imageInput) {
+        imagePick.addEventListener("click", function () {
+          imageInput.click();
+        });
+      }
+      if (imagePreview && imageInput) {
+        imagePreview.addEventListener("click", function () {
+          imageInput.click();
+        });
+      }
+      if (imageClear) {
+        imageClear.addEventListener("click", function () {
+          clearVehiclePhoto();
+          setImageStatus("Photo removed.");
+        });
+      }
+      if (imageInput) {
+        imageInput.addEventListener("change", function () {
+          var file = imageInput.files && imageInput.files[0];
+          if (!file) return;
+          setImageStatus("Reading photo…");
+          var read = NS.ui.readLicensePhoto || NS.ui.readIdPhoto;
+          read(file, function (err, dataUrl) {
+            if (err) {
+              showVehiclePhoto(form.image.value || "");
+              setImageStatus(err.message);
+              return;
+            }
+            showVehiclePhoto(dataUrl);
+            setImageStatus("Photo attached.");
+          });
         });
       }
       form.addEventListener("submit", function (e) {

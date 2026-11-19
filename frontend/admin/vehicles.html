@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="../shared/css/styles.css?v=20261113c">
+  <link rel="stylesheet" href="../shared/css/styles.css?v=20261119k">
 </head>
 <body data-page="adminVehicles" data-auth="staff" data-base="../">
   <div id="app-nav"></div>
@@ -68,7 +68,22 @@
               <div class="col-md-3"><label class="field">Status
                 <select class="form-select" name="status"><option value="available">available</option><option value="maintenance">maintenance</option></select>
               </label></div>
-              <div class="col-md-6"><label class="field">Image URL <input class="form-control" name="image" placeholder="https://"></label></div>
+              <div class="col-12">
+                <div class="id-upload-field vehicle-photo-field">
+                  <p class="eyebrow">Vehicle photo</p>
+                  <p class="fineprint">Upload a clear JPG, PNG, or WebP photo of the car.</p>
+                  <input id="vehicle-image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                  <input type="hidden" name="image" value="">
+                  <div class="license-photo-row">
+                    <div id="vehicle-image-preview" class="license-photo-preview is-empty" aria-hidden="true">No photo yet</div>
+                    <div class="license-photo-actions">
+                      <button class="btn btn-ghost" type="button" id="vehicle-image-pick">Upload photo</button>
+                      <button class="btn btn-ghost" type="button" id="vehicle-image-clear" hidden>Remove</button>
+                      <p class="fineprint" id="vehicle-image-status"></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -89,7 +104,7 @@
               </label></div>
               <div class="col-md-2"><label class="field">Capacity <input class="form-control" name="seats" type="number" min="1"></label></div>
               <div class="col-md-2"><label class="field">Luggage <input class="form-control" name="luggage" type="number" min="0"></label></div>
-              <div class="col-md-2"><label class="field">Daily rate (a???) <input class="form-control" name="dailyRate" type="number" required></label></div>
+              <div class="col-md-2"><label class="field">Daily rate (₱) <input class="form-control" name="dailyRate" type="number" required></label></div>
             </div>
           </div>
 
@@ -115,10 +130,10 @@
   <script src="../shared/js/api.js?v=20261114a"></script>
   <script src="../shared/js/validation.js?v=20261028e"></script>
   <script src="../shared/js/routes.js?v=20261019a"></script>
-  <script src="../shared/js/domain.js?v=20261114a"></script>
+  <script src="../shared/js/domain.js?v=20261119j"></script>
   <script src="../auth/auth.js?v=20261119d"></script>
   <script src="../shared/js/ui.js?v=20261114a"></script>
-  <script src="./admin.js?v=20261030a"></script>
+  <script src="./admin.js?v=20261119j"></script>
   <script src="../shared/js/app.js?v=20261119i"></script>
 </body>
 </html>

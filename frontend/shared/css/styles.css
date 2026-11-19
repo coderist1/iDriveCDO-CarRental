@@ -2701,6 +2701,22 @@ textarea { min-height: 120px; resize: vertical; }
   text-transform: uppercase;
   color: var(--primary);
 }
+.fleet-form .vehicle-photo-field {
+  width: 100%;
+  max-width: 22rem;
+  margin: 0;
+  padding: 0.75rem 0.85rem 0.85rem;
+  box-sizing: border-box;
+}
+.fleet-form .vehicle-photo-field .license-photo-row {
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 0.7rem;
+  margin-top: 0.45rem;
+}
+.fleet-form .vehicle-photo-field .license-photo-preview {
+  width: 120px;
+  min-height: 88px;
+}
 
 .fleet-list-head {
   display: flex;

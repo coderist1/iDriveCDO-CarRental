@@ -1733,6 +1733,20 @@
     return fifoOrder();
   }
 
+  function sanitizeVehicleImage(value) {
+    var raw = String(value == null ? "" : value).trim();
+    if (!raw) return "";
+    if (/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(raw)) {
+      if (raw.length > 900000) throw new Error("Vehicle photo is too large. Choose a smaller photo.");
+      return raw;
+    }
+    var path = NS.security.sanitizeText(raw, 300);
+    if (/^https:\/\//i.test(path) || /^\.?\.?\/?shared\/img\//i.test(path) || path.charAt(0) === "/") {
+      return path;
+    }
+    throw new Error("Use a JPG, PNG, or WebP photo.");
+  }
+
   function saveVehicle(payload, csrf) {
     NS.security.assertCsrf(csrf);
     requireStaff();
@@ -1752,7 +1766,7 @@
       yearPurchased: parseInt(payload.yearPurchased, 10) || parseInt(payload.year, 10) || new Date().getFullYear(),
       dailyRate: Math.max(0, parseInt(payload.dailyRate, 10) || 0),
       plate: NS.security.sanitizeText(payload.plate, 12).toUpperCase(),
-      image: NS.security.sanitizeText(payload.image, 300),
+      image: sanitizeVehicleImage(payload.image),
       description: NS.security.sanitizeText(payload.description, 400),
       features: (payload.features || [])
         .map(function (f) {
@@ -1791,7 +1805,8 @@
       daily_rate: item.dailyRate,
       year_model: item.year,
       year_purchased: item.yearPurchased,
-      image: item.image || null,
+      /* Uploaded photos stay local; the API only keeps short path/URL values. */
+      image: /^data:image\//i.test(item.image || "") ? null : item.image || null,
       description: item.description || null,
       status: item.status,
       features: item.features || []
@@ -3046,7 +3061,10 @@
       luggage: row.luggage != null ? Number(row.luggage) : base.luggage,
       mileage: Number(row.mileage),
       plate: row.plate_number,
-      image: row.image || base.image,
+      image:
+        local && /^data:image\//i.test(local.image || "")
+          ? local.image
+          : row.image || base.image,
       description: row.description || base.description,
       features: (apiFeatures && apiFeatures.length) ? apiFeatures : base.features,
       status: row.status || base.status,
